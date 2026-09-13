@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="docs/icon-preview.png" alt="GameStream" width="120" height="120" />
-</p>
-
 <h1 align="center">GameStream</h1>
 
 <p align="center">
@@ -31,10 +27,11 @@ It wraps the official web experience in a modern **Liquid Glass** interface and 
 - Persistent sign-in (cookies + local session)
 - Search that opens Xbox Cloud results in-app
 - Polished Settings (quality chips, region, account)
+- Branded **GameStream** app name + App Icon asset catalog
 
 ### Better xCloud (always on)
 - 1080p / high-quality streaming options
-- Stream stats HUD (modern glass style)
+- Modern glass stream stats HUD
 - Touch controller layouts
 - Remote Play support
 - Server / region selection
@@ -52,22 +49,33 @@ It wraps the official web experience in a modern **Liquid Glass** interface and 
 | iOS | 26.0+ |
 | Xcode | 26+ |
 | XcodeGen | Latest |
-| Apple Silicon / arm64 device or simulator | Required |
+| Apple Silicon / arm64 | Required |
 
-An **Xbox account** with Cloud Gaming access (e.g. Game Pass Ultimate, where available) is required to play.
+An **Xbox account** with Cloud Gaming access is required to play.
 
 ## Build
 
 ```bash
-# 1. Generate the Xcode project
+# 1. Install the branded App Icon (optional but recommended)
+pip3 install pillow   # only needed for generate_app_icons.py
+python3 scripts/generate_app_icons.py
+
+# 2. Generate the Xcode project
 xcodegen generate
 
-# 2. Open in Xcode
+# 3. Open in Xcode
 open GameStream.xcodeproj
 
-# 3. Select your team / signing (or keep unsigned for local IPA workflow)
-# 4. Run on device or simulator
+# 4. Select your team / signing (or keep unsigned for the IPA workflow)
+# 5. Run on device or simulator
 ```
+
+### App name & icon
+
+- **Display name:** GameStream  
+- **Bundle ID:** `com.gamestream.app`  
+- **App Icon:** `GameStream/Assets.xcassets/AppIcon.appiconset`  
+  Generate PNGs with `scripts/generate_app_icons.py` (Pillow), then rebuild.
 
 ### Unsigned IPA (CI)
 
@@ -80,7 +88,7 @@ Gamestream/
 ├── GameStream/
 │   ├── GameStreamApp.swift
 │   ├── Info.plist
-│   ├── Assets.xcassets/          # App icon & assets
+│   ├── Assets.xcassets/          # App Icon
 │   ├── Services/
 │   │   ├── SessionStore.swift
 │   │   └── SoundManager.swift
@@ -88,10 +96,12 @@ Gamestream/
 │       ├── RootView.swift
 │       ├── LibraryView.swift
 │       ├── SearchView.swift
-│       ├── StreamPlayerView.swift   # WebView + Better xCloud injector
+│       ├── StreamPlayerView.swift
 │       ├── AnimatedBackground.swift
 │       ├── LiquidGlassComponents.swift
 │       └── SignInWebView.swift
+├── scripts/
+│   └── generate_app_icons.py
 ├── project.yml
 ├── LICENSE
 └── README.md
@@ -99,15 +109,14 @@ Gamestream/
 
 ## Better xCloud
 
-The official Better xCloud userscript is downloaded from the  
+The official Better xCloud userscript is downloaded from  
 [redphx/better-xcloud](https://github.com/redphx/better-xcloud) releases, cached on device, and injected into every Xbox Cloud page load.
 
-- Always enabled (no toggle)
-- Modern glass overrides for panels & performance HUD
-- Open **Library → Better xCloud** badge for tips
+- Always enabled  
+- Modern glass overrides for panels & performance HUD  
+- Open **Library → Better xCloud** badge for tips  
 
-Better xCloud is © its authors and used under its license.  
-This project is not affiliated with Microsoft or Xbox.
+Better xCloud is © its authors. This project is not affiliated with Microsoft or Xbox.
 
 ## License
 
