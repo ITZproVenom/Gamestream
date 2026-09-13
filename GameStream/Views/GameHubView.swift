@@ -24,6 +24,7 @@ struct GameHubView: View {
     @EnvironmentObject var session: SessionStore
     @ObservedObject private var artwork = ArtworkStore.shared
     @ObservedObject private var lists = CollectionStore.shared
+    @ObservedObject private var queue = PlayQueueStore.shared
     @State private var featuredIndex = 0
     @State private var hubQuery = ""
     @State private var detailGame: CatalogGame?
@@ -61,6 +62,7 @@ struct GameHubView: View {
                 if isFiltering {
                     liveResults
                 } else {
+                    playNextBanner
                     if filter == .all, let continueGame = session.continueGame {
                         continueHero(GameCatalog.catalog(from: continueGame))
                     }
@@ -134,6 +136,63 @@ struct GameHubView: View {
             }
             .buttonStyle(.glass)
             .accessibilityLabel("Open Xbox Cloud page")
+        }
+    }
+
+    @ViewBuilder
+    private var playNextBanner: some View {
+        if session.offerPlayNext, let next = queue.games.first {
+            let game = GameCatalog.catalog(from: next)
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Up next")
+                    .font(.title3.weight(.semibold))
+                    .lineLimit(1)
+                HStack(spacing: 12) {
+                    GameArtView(url: artwork.url(for: game.id), accent: game.accent, title: game.title)
+                        .frame(width: 56, height: 74)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(game.title)
+                            .font(.headline)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.85)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("Ready when you are")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        HStack(spacing: 8) {
+                            Button {
+                                session.offerPlayNext = false
+                                _ = session.playNextQueued()
+                            } label: {
+                                Text("Play next")
+                                    .font(.subheadline.weight(.semibold))
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 8)
+                            }
+                            .buttonStyle(.glassProminent)
+                            .accessibilityLabel("Play \(game.title) next")
+                            Button {
+                                session.offerPlayNext = false
+                            } label: {
+                                Text("Dismiss")
+                                    .font(.subheadline.weight(.medium))
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                            }
+                            .buttonStyle(.glass)
+                            .accessibilityLabel("Dismiss play next")
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
         }
     }
 
