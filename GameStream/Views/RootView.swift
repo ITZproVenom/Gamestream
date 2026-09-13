@@ -37,6 +37,15 @@ struct RootView: View {
 
             if selectedTab == .search {
                 SearchView()
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                           let game = session.continueGame {
+                            ContinuePlayingCard(game: game)
+                                .padding(.horizontal, 20)
+                                .padding(.top, 8)
+                                .padding(.bottom, 4)
+                        }
+                    }
                     .zIndex(2)
             } else if selectedTab == .settings {
                 SettingsView()
