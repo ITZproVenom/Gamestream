@@ -132,6 +132,9 @@ struct RootView: View {
             let generator = UIImpactFeedbackGenerator(style: .light)
             generator.impactOccurred()
             SoundManager.playTap()
+            if tab == .library {
+                session.returnToHub()
+            }
             withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
                 selectedTab = tab
             }
