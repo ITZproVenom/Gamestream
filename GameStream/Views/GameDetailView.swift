@@ -3,6 +3,7 @@ import SwiftUI
 struct GameDetailView: View {
     @EnvironmentObject var session: SessionStore
     @ObservedObject private var artwork = ArtworkStore.shared
+    @ObservedObject private var lists = CollectionStore.shared
     let game: CatalogGame
     var onClose: () -> Void
 
@@ -94,6 +95,30 @@ struct GameDetailView: View {
                 }
                 .buttonStyle(.glass)
                 .accessibilityLabel(session.isFavorite(game.id) ? "Remove favorite" : "Add favorite")
+            }
+
+            if !lists.collections.isEmpty {
+                Menu {
+                    ForEach(lists.collections) { list in
+                        Button {
+                            lists.toggle(game: game.tracked, inCollection: list.id)
+                        } label: {
+                            Label(
+                                lists.contains(game.id, inCollection: list.id) ? "Remove from \(list.name)" : "Add to \(list.name)",
+                                systemImage: lists.contains(game.id, inCollection: list.id) ? "checkmark" : "plus"
+                            )
+                        }
+                    }
+                } label: {
+                    Text(lists.collections.contains(where: { $0.gameIDs.contains(game.id) }) ? "Manage lists" : "Add to list")
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                }
+                .buttonStyle(.glass)
+                .accessibilityLabel("Add \(game.title) to a list")
             }
 
             Button {
