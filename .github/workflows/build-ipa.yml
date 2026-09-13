@@ -14,11 +14,13 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Need history so we can build a changelog from commits
+          fetch-depth: 0
 
       - name: Install tools
         run: |
           brew install xcodegen
-          # Optional: generate app icon if Pillow is available
           pip3 install pillow || true
           python3 scripts/generate_app_icons.py || true
 
@@ -44,11 +46,60 @@ jobs:
           mkdir -p build/Payload
           cp -R build/GameStream.xcarchive/Products/Applications/GameStream.app build/Payload/
           cd build
-          # .ipa is a zip with a Payload/ folder — this is the installable package
           zip -r GameStream-unsigned.ipa Payload
           ls -lh GameStream-unsigned.ipa
 
-      # Always keep a downloadable workflow artifact
+      - name: Build changelog
+        id: changelog
+        run: |
+          set -euo pipefail
+
+          SHORT_SHA="$(echo '${{ github.sha }}' | cut -c1-7)"
+          DATE_UTC="$(date -u +'%Y-%m-%d %H:%M UTC')"
+
+          # Prefer commits since previous version tag; else last 15 on main
+          PREV_TAG="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)"
+          if [ -n "${PREV_TAG}" ] && [ "${{ github.ref }}" != "refs/tags/${PREV_TAG}" ]; then
+            RANGE="${PREV_TAG}..HEAD"
+            RANGE_LABEL="since ${PREV_TAG}"
+          else
+            # On a new tag, compare to the tag before that one
+            if startsWith=$(echo '${{ github.ref }}' | grep -q '^refs/tags/v' && echo yes); then
+              PREV2="$(git describe --tags --abbrev=0 --match 'v*' --exclude '${{ github.ref_name }}' 2>/dev/null || true)"
+              if [ -n "${PREV2}" ]; then
+                RANGE="${PREV2}..HEAD"
+                RANGE_LABEL="since ${PREV2}"
+              else
+                RANGE="HEAD~15..HEAD"
+                RANGE_LABEL="recent commits"
+              fi
+            else
+              RANGE="HEAD~15..HEAD"
+              RANGE_LABEL="last 15 commits"
+            fi
+          fi
+
+          {
+            echo "## Changelog"
+            echo ""
+            echo "**Build:** \`${SHORT_SHA}\` · **${DATE_UTC}** · ${RANGE_LABEL}"
+            echo ""
+            echo "### What's changed"
+            echo ""
+            git log ${RANGE} --pretty=format:'- %s (%h)' --no-merges 2>/dev/null | head -40 || true
+            echo ""
+            echo ""
+            echo "---"
+            echo ""
+            echo "### Install"
+            echo "Download **GameStream-unsigned.ipa** and install with AltStore, Sideloadly, or TrollStore."
+            echo ""
+            echo "_Unsigned build — not signed for App Store / TestFlight._"
+          } > release_notes.md
+
+          echo "----- release notes -----"
+          cat release_notes.md
+
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
@@ -62,7 +113,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: build/GameStream-unsigned.ipa
-          generate_release_notes: true
+          body_path: release_notes.md
+          generate_release_notes: false
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -75,10 +127,7 @@ jobs:
           tag_name: latest
           name: Latest unsigned build
           prerelease: true
-          body: |
-            Automatic unsigned IPA from `${{ github.sha }}`.
-
-            Install with AltStore / Sideloadly / TrollStore (unsigned — not App Store signed).
+          body_path: release_notes.md
           files: build/GameStream-unsigned.ipa
           fail_on_unmatched_files: true
         env:
