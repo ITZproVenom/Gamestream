@@ -1,34 +1,16 @@
 import SwiftUI
 
 struct SearchView: View {
-    @State private var query = ""
-
     var body: some View {
-        VStack(spacing: 16) {
-            Text("Search")
-                .font(.largeTitle.bold())
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
-
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.white.opacity(0.5))
-                TextField("Search games", text: $query)
-                    .foregroundStyle(.white)
-            }
-            .padding(12)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .padding(.horizontal, 20)
-
-            Spacer()
-        }
-        .padding(.top, 60)
+        XboxCloudWebView()
+            .ignoresSafeArea()
     }
 }
 
 struct SettingsView: View {
     @EnvironmentObject var session: SessionStore
+    @AppStorage("streamQuality") private var streamQuality = "Auto"
+    @AppStorage("serverRegion") private var serverRegion = "Auto"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -37,8 +19,8 @@ struct SettingsView: View {
                 .foregroundStyle(.white)
 
             GlassRow(title: "Account", value: session.accountLabel ?? "Not signed in")
-            GlassRow(title: "Stream quality", value: "Auto")
-            GlassRow(title: "Server region", value: "Auto")
+            GlassRow(title: "Stream quality", value: streamQuality)
+            GlassRow(title: "Server region", value: serverRegion)
 
             if session.isSignedIn {
                 Button("Sign Out", role: .destructive) {
