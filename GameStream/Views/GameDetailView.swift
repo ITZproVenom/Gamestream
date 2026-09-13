@@ -4,6 +4,9 @@ struct GameDetailView: View {
     @EnvironmentObject var session: SessionStore
     @ObservedObject private var artwork = ArtworkStore.shared
     @ObservedObject private var lists = CollectionStore.shared
+    @State private var showingLists = false
+    @State private var newListName = ""
+    @State private var showingNewList = false
     let game: CatalogGame
     var onClose: () -> Void
 
@@ -38,6 +41,26 @@ struct GameDetailView: View {
         .onAppear { artwork.load(game.id) }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .sheet(isPresented: $showingLists) {
+            ListsBrowserView { item in
+                session.playCatalogGame(item)
+                showingLists = false
+                onClose()
+            }
+            .environmentObject(session)
+        }
+        .alert("New list", isPresented: $showingNewList) {
+            TextField("Weekend co-op", text: $newListName)
+            Button("Create") {
+                if let created = lists.create(named: newListName) {
+                    lists.toggle(game: game.tracked, inCollection: created.id)
+                }
+                newListName = ""
+            }
+            Button("Cancel", role: .cancel) { newListName = "" }
+        } message: {
+            Text("Save \(game.title) into a named list.")
+        }
     }
 
     private var hero: some View {
@@ -97,20 +120,15 @@ struct GameDetailView: View {
                 .accessibilityLabel(session.isFavorite(game.id) ? "Remove favorite" : "Add favorite")
             }
 
-            if !lists.collections.isEmpty {
-                Menu {
-                    ForEach(lists.collections) { list in
-                        Button {
-                            lists.toggle(game: game.tracked, inCollection: list.id)
-                        } label: {
-                            Label(
-                                lists.contains(game.id, inCollection: list.id) ? "Remove from \(list.name)" : "Add to \(list.name)",
-                                systemImage: lists.contains(game.id, inCollection: list.id) ? "checkmark" : "plus"
-                            )
-                        }
+            HStack(spacing: 8) {
+                Button {
+                    if lists.collections.isEmpty {
+                        showingNewList = true
+                    } else {
+                        showingLists = true
                     }
                 } label: {
-                    Text(lists.collections.contains(where: { $0.gameIDs.contains(game.id) }) ? "Manage lists" : "Add to list")
+                    Text(lists.collections.isEmpty ? "New list" : "Lists")
                         .font(.subheadline.weight(.medium))
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
@@ -118,7 +136,36 @@ struct GameDetailView: View {
                         .padding(.vertical, 12)
                 }
                 .buttonStyle(.glass)
-                .accessibilityLabel("Add \(game.title) to a list")
+                .accessibilityLabel("Open lists")
+
+                if !lists.collections.isEmpty {
+                    Menu {
+                        ForEach(lists.collections) { list in
+                            Button {
+                                lists.toggle(game: game.tracked, inCollection: list.id)
+                            } label: {
+                                Label(
+                                    lists.contains(game.id, inCollection: list.id) ? "Remove from \(list.name)" : "Add to \(list.name)",
+                                    systemImage: lists.contains(game.id, inCollection: list.id) ? "checkmark" : "plus"
+                                )
+                            }
+                        }
+                        Button {
+                            showingNewList = true
+                        } label: {
+                            Label("New list", systemImage: "plus")
+                        }
+                    } label: {
+                        Text("Add to list")
+                            .font(.subheadline.weight(.medium))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                    }
+                    .buttonStyle(.glass)
+                    .accessibilityLabel("Add \(game.title) to a list")
+                }
             }
 
             Button {
