@@ -120,6 +120,19 @@ struct GameDetailView: View {
                 .accessibilityLabel(session.isFavorite(game.id) ? "Remove favorite" : "Add favorite")
             }
 
+            Button {
+                session.toggleQueue(game.tracked)
+            } label: {
+                Text(session.isQueued(game.id) ? "Remove from Up Next" : "Add to Up Next")
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+            }
+            .buttonStyle(.glass)
+            .accessibilityLabel(session.isQueued(game.id) ? "Remove \(game.title) from Up Next" : "Add \(game.title) to Up Next")
+
             HStack(spacing: 8) {
                 Button {
                     if lists.collections.isEmpty {
