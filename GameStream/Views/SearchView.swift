@@ -68,10 +68,16 @@ struct SearchView: View {
                     )
 
                     if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        if !session.favorites.isEmpty {
+                            gameShelf(title: "Favorites", games: session.favorites, empty: nil)
+                        }
+                        if !session.recents.isEmpty {
+                            gameShelf(title: "Recently played", games: session.recents, empty: nil)
+                        }
                         popularSection
-                        if recent.isEmpty {
+                        if recent.isEmpty && session.favorites.isEmpty && session.recents.isEmpty {
                             emptyState
-                        } else {
+                        } else if !recent.isEmpty {
                             recentSection
                         }
                     } else {
@@ -85,6 +91,61 @@ struct SearchView: View {
             .scrollDismissesKeyboard(.interactively)
         }
         .onAppear { recent = SessionStore.recentSearches }
+    }
+
+    private func gameShelf(title: String, games: [TrackedGame], empty: String?) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.title3.weight(.semibold))
+                .lineLimit(1)
+
+            ForEach(games) { game in
+                HStack(spacing: 10) {
+                    Button {
+                        session.openGame(game)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: title == "Favorites" ? "star.fill" : "clock.fill")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 18)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(game.title)
+                                    .font(.body.weight(.medium))
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                Text("Open in Library")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: 4)
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(14)
+                    }
+                    .buttonStyle(.glass)
+
+                    Button {
+                        session.toggleFavorite(game)
+                    } label: {
+                        Image(systemName: session.isFavorite(game.id) ? "star.fill" : "star")
+                            .font(.system(size: 14, weight: .semibold))
+                            .frame(width: 42, height: 52)
+                    }
+                    .buttonStyle(.glass)
+                    .accessibilityLabel(session.isFavorite(game.id) ? "Remove favorite" : "Add favorite")
+                }
+            }
+
+            if let empty, games.isEmpty {
+                Text(empty)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     private var popularSection: some View {
@@ -125,7 +186,7 @@ struct SearchView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
 
-                Text("Search for any game available on Xbox Cloud Gaming.")
+                Text("Search for any game available on Xbox Cloud Gaming. Pin titles from Library to keep them here.")
                     .font(.subheadline)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
@@ -139,9 +200,10 @@ struct SearchView: View {
     private var recentSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Recent")
+                Text("Recent searches")
                     .font(.title3.weight(.semibold))
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 Spacer()
                 Button("Clear") {
                     SessionStore.clearRecentSearches()
@@ -194,6 +256,21 @@ struct SearchView: View {
             }
             .buttonStyle(.glassProminent)
 
+            let matches = (session.favorites + session.recents)
+                .reduce(into: [TrackedGame]()) { acc, game in
+                    if !acc.contains(where: { $0.id == game.id }),
+                       game.title.localizedCaseInsensitiveContains(session.searchDraft) {
+                        acc.append(game)
+                    }
+                }
+
+            if !matches.isEmpty {
+                Text("From your library")
+                    .font(.title3.weight(.semibold))
+                    .padding(.top, 6)
+                gameShelf(title: "Matches", games: matches, empty: nil)
+            }
+
             Text("Results")
                 .font(.title3.weight(.semibold))
                 .padding(.top, 6)
@@ -230,8 +307,8 @@ struct SettingsView: View {
 
     private var appVersionLabel: String {
         let info = Bundle.main.infoDictionary
-        let short = info?["CFBundleShortVersionString"] as? String ?? "1.0.2"
-        let build = info?["CFBundleVersion"] as? String ?? "3"
+        let short = info?["CFBundleShortVersionString"] as? String ?? "1.0.3"
+        let build = info?["CFBundleVersion"] as? String ?? "4"
         return "\(short) (\(build))"
     }
 
@@ -262,6 +339,24 @@ struct SettingsView: View {
 
                     sectionHeader("Device")
                     keepAwakeRow
+
+                    sectionHeader("Library")
+                    Text("Favorites and recently played stay on this device.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                        .fixedSize(horizontal: false, vertical: true)
+                    GlassRow(title: "Favorites", value: "\(session.favorites.count)")
+                    GlassRow(title: "Recently played", value: "\(session.recents.count)")
+
+                    actionButton(icon: "clock.arrow.circlepath", title: "Clear recently played", tint: .primary) {
+                        session.clearRecents()
+                        flash("Recently played cleared.")
+                    }
+                    actionButton(icon: "star.slash", title: "Clear favorites", tint: .orange) {
+                        session.clearFavorites()
+                        flash("Favorites cleared.")
+                    }
 
                     sectionHeader("Stream")
                     Text("These apply to Better xCloud and take effect after the page reloads.")
