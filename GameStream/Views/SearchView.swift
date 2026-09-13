@@ -228,6 +228,13 @@ struct SettingsView: View {
     private let resolutionOptions = ["Auto", "720p", "1080p", "1080p HQ"]
     private let regionOptions = ["Auto", "North America", "Europe", "Asia", "Australia"]
 
+    private var appVersionLabel: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "1.0.1"
+        let build = info?["CFBundleVersion"] as? String ?? "2"
+        return "\(short) (\(build))"
+    }
+
     var body: some View {
         ZStack {
             AnimatedBackground()
@@ -302,14 +309,18 @@ struct SettingsView: View {
 
                     sectionHeader("About")
                     VStack(alignment: .leading, spacing: 10) {
-                        HStack {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
                             Text("GameStream")
                                 .font(.headline)
                                 .lineLimit(1)
-                            Spacer()
-                            Text("1.0.0")
+                                .layoutPriority(1)
+                            Spacer(minLength: 8)
+                            Text(appVersionLabel)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                                .multilineTextAlignment(.trailing)
                         }
                         Text("Native iOS 26 client for Xbox Cloud Gaming with Better xCloud built in.")
                             .font(.caption)
