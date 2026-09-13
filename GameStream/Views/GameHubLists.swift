@@ -8,6 +8,7 @@ struct GameHubListShelves: View {
 
     var body: some View {
         Group {
+            GameHubQueueShelf(detailGame: $detailGame)
             ForEach(lists.collections) { list in
                 let games = lists.games(inCollection: list.id, favorites: session.favorites, recents: session.recents)
                 if !games.isEmpty {
@@ -49,6 +50,7 @@ struct GameHubListsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            GameHubQueueShelf(detailGame: $detailGame)
             HStack {
                 Text("Your lists")
                     .font(.title3.weight(.semibold))
@@ -132,6 +134,9 @@ struct GameHubListsSection: View {
                                                 lists.toggle(game: game.tracked, inCollection: list.id)
                                             } label: {
                                                 Label("Remove from \(list.name)", systemImage: "minus.circle")
+                                            }
+                                            Button { session.toggleQueue(game.tracked) } label: {
+                                                Label(session.isQueued(game.id) ? "Remove from Up Next" : "Add to Up Next", systemImage: "text.badge.plus")
                                             }
                                         }
                                     }
