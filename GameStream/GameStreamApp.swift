@@ -13,6 +13,7 @@ struct GameStreamApp: App {
                     RootView()
                 } else if showIntro {
                     IntroView {
+                        // Get Started only dismisses intro. It never signs the user in.
                         OnboardingStore.markIntroCompleted()
                         withAnimation(.easeInOut(duration: 0.45)) {
                             showIntro = false
@@ -41,6 +42,9 @@ struct GameStreamApp: App {
                 .presentationDragIndicator(.visible)
                 .interactiveDismissDisabled(false)
                 .environmentObject(session)
+            }
+            .onAppear {
+                session.revalidatePersistedLogin()
             }
             .onChange(of: session.isSignedIn) { _, signedIn in
                 if signedIn { showingMicrosoftLogin = false }
