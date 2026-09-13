@@ -1,9 +1,7 @@
 import SwiftUI
 
 struct WelcomeView: View {
-    @EnvironmentObject var session: SessionStore
-    @State private var showingSignIn = false
-    @Environment(\.horizontalSizeClass) private var sizeClass
+    var onSignIn: () -> Void
 
     var body: some View {
         ZStack {
@@ -12,42 +10,39 @@ struct WelcomeView: View {
             VStack(spacing: 0) {
                 Spacer(minLength: 24)
 
-                VStack(spacing: 18) {
+                VStack(spacing: 16) {
                     Image(systemName: "gamecontroller.fill")
-                        .font(.system(size: 48, weight: .semibold))
+                        .font(.system(size: 48, weight: .medium))
                         .symbolRenderingMode(.hierarchical)
                         .accessibilityHidden(true)
 
                     Text("GameStream")
-                        .font(.system(size: sizeClass == .compact ? 36 : 42, weight: .bold, design: .rounded))
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                        .minimumScaleFactor(0.75)
 
                     Text("Welcome")
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
 
-                    Text("Sign in with Microsoft to open GameHub, stream Xbox Cloud games, and use Better xCloud.")
+                    Text("Sign in with Microsoft to open GameHub, Xbox Cloud Gaming, and Better xCloud.")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
+                        .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 4)
                 }
-                .padding(28)
-                .frame(maxWidth: 560)
+                .padding(26)
+                .frame(maxWidth: 520)
                 .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
                 .padding(.horizontal, 24)
 
-                Button {
-                    showingSignIn = true
-                } label: {
+                Button(action: onSignIn) {
                     HStack(spacing: 10) {
                         Image(systemName: "person.badge.key.fill")
-                            .font(.body.weight(.semibold))
                         Text("Sign in with Microsoft")
-                            .font(.headline)
+                            .fontWeight(.semibold)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                     }
@@ -55,39 +50,21 @@ struct WelcomeView: View {
                     .padding(.vertical, 16)
                 }
                 .buttonStyle(.glassProminent)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, 28)
                 .padding(.top, 22)
                 .frame(maxWidth: 520)
                 .accessibilityLabel("Sign in with Microsoft")
 
-                Text("Uses Microsoft's real sign-in page. GameStream never stores your password.")
+                Text("Uses Microsoft’s real sign-in page. GameStream never stores your password.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 32)
-                    .padding(.top, 12)
+                    .padding(.top, 14)
 
-                Spacer(minLength: 32)
+                Spacer()
             }
-        }
-        .sheet(isPresented: $showingSignIn) {
-            NavigationStack {
-                SignInWebView()
-                    .navigationTitle("Microsoft account")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Close") { showingSignIn = false }
-                        }
-                    }
-            }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-            .environmentObject(session)
-        }
-        .onChange(of: session.isSignedIn) { _, signedIn in
-            if signedIn { showingSignIn = false }
         }
     }
 }
