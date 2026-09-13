@@ -4,6 +4,7 @@ struct SearchView: View {
     @EnvironmentObject var session: SessionStore
     @State private var searchText = ""
     @FocusState private var searchFocused: Bool
+    @State private var recent: [String] = SessionStore.recentSearches
 
     var body: some View {
         ZStack {
@@ -42,6 +43,7 @@ struct SearchView: View {
                                     .foregroundStyle(.secondary)
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel("Clear search")
                         }
                     }
                     .padding(.horizontal, 16)
@@ -52,7 +54,11 @@ struct SearchView: View {
                     )
 
                     if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        emptyState
+                        if recent.isEmpty {
+                            emptyState
+                        } else {
+                            recentSection
+                        }
                     } else {
                         resultsSection
                     }
@@ -63,6 +69,7 @@ struct SearchView: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
         }
+        .onAppear { recent = SessionStore.recentSearches }
     }
 
     private var emptyState: some View {
@@ -83,6 +90,43 @@ struct SearchView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 56)
+    }
+
+    private var recentSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Recent")
+                    .font(.title3.weight(.semibold))
+                Spacer()
+                Button("Clear") {
+                    SessionStore.clearRecentSearches()
+                    recent = []
+                }
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+            }
+
+            ForEach(recent, id: \.self) { item in
+                Button {
+                    searchText = item
+                    performSearch()
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .foregroundStyle(.secondary)
+                        Text(item)
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Image(systemName: "arrow.up.left")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(14)
+                }
+                .buttonStyle(.glass)
+            }
+        }
     }
 
     private var resultsSection: some View {
@@ -115,6 +159,8 @@ struct SearchView: View {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return }
         searchFocused = false
+        SessionStore.rememberSearch(query)
+        recent = SessionStore.recentSearches
         session.openSearch(query: query)
     }
 }
@@ -151,11 +197,9 @@ struct SettingsView: View {
                             .transition(.opacity)
                     }
 
-                    // Account
                     sectionHeader("Account")
                     GlassRow(title: "Signed in as", value: session.accountLabel ?? "Not signed in")
 
-                    // Stream — writes into Better xCloud localStorage
                     sectionHeader("Stream")
                     Text("These apply to Better xCloud and take effect after the page reloads.")
                         .font(.caption)
@@ -180,7 +224,6 @@ struct SettingsView: View {
                         flash("Region set to \(option). Reloading…")
                     }
 
-                    // Actions
                     sectionHeader("Actions")
 
                     actionButton(icon: "house.fill", title: "Open Library", tint: .primary) {
@@ -203,7 +246,6 @@ struct SettingsView: View {
                         }
                     }
 
-                    // About
                     sectionHeader("About")
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
@@ -242,8 +284,6 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) {}
         }
     }
-
-    // MARK: - Building blocks
 
     private func sectionHeader(_ title: String) -> some View {
         Text(title)

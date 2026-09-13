@@ -20,6 +20,11 @@ struct RootView: View {
         }
     }
 
+    /// Hide the tab bar only when the stream is actually on screen.
+    private var hideTabBar: Bool {
+        session.isStreaming && selectedTab == .library
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             // Keep Library (and its WKWebView) mounted so streams and cookies survive tab switches.
@@ -36,8 +41,7 @@ struct RootView: View {
                     .zIndex(2)
             }
 
-            // Hide Liquid Glass tab bar while a game is streaming
-            if !session.isStreaming {
+            if !hideTabBar {
                 glassNavigation
                     .padding(.horizontal, 24)
                     .padding(.bottom, 10)
@@ -47,7 +51,7 @@ struct RootView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AnimatedBackground())
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: session.isStreaming)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: hideTabBar)
         .onChange(of: session.requestedTab) { _, newValue in
             if let tab = newValue {
                 withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
@@ -58,6 +62,12 @@ struct RootView: View {
         }
         .onChange(of: session.isStreaming) { _, streaming in
             UIApplication.shared.isIdleTimerDisabled = streaming
+            // Never leave the user on Search/Settings with no tab bar while a game is running.
+            if streaming && selectedTab != .library {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                    selectedTab = .library
+                }
+            }
         }
         .onAppear {
             BetterXCloudInjector.shared.preload()

@@ -33,6 +33,7 @@ final class SessionStore: ObservableObject {
         static let accountLabel = "GameStream.accountLabel"
         static let streamResolution = "GameStream.streamResolution"
         static let serverRegion = "GameStream.serverRegion"
+        static let recentSearches = "GameStream.recentSearches"
     }
 
     init() {
@@ -116,7 +117,6 @@ final class SessionStore: ObservableObject {
     }
 
     func reloadCurrent() {
-        // Single path: XboxCloudWebView reloads when reloadNonce changes.
         reloadNonce += 1
     }
 
@@ -137,6 +137,25 @@ final class SessionStore: ObservableObject {
             full.contains("/launch?") ||
             full.contains("/stream/") ||
             full.contains("/streaming")
+    }
+
+    // MARK: - Recent searches
+
+    static var recentSearches: [String] {
+        UserDefaults.standard.stringArray(forKey: Keys.recentSearches) ?? []
+    }
+
+    static func rememberSearch(_ query: String) {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        var items = recentSearches.filter { $0.caseInsensitiveCompare(trimmed) != .orderedSame }
+        items.insert(trimmed, at: 0)
+        if items.count > 8 { items = Array(items.prefix(8)) }
+        UserDefaults.standard.set(items, forKey: Keys.recentSearches)
+    }
+
+    static func clearRecentSearches() {
+        UserDefaults.standard.removeObject(forKey: Keys.recentSearches)
     }
 
     // MARK: - Better xCloud preference bridging
