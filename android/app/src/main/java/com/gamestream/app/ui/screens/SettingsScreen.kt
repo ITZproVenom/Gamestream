@@ -91,6 +91,21 @@ fun SettingsScreen(session: SessionStore) {
         }
 
         Spacer(modifier = Modifier.height(24.dp))
+        Text("Lists", style = MaterialTheme.typography.titleMedium, color = Color.White)
+        Text(
+            "${session.collections.size} saved lists on this device.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Color(0xFF808088)
+        )
+        if (session.collections.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { session.clearCollections() },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Clear all lists") }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
         Text("Actions", style = MaterialTheme.typography.titleMedium, color = Color.White)
         Spacer(modifier = Modifier.height(8.dp))
         Button(
