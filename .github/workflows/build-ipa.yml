@@ -1,19 +1,33 @@
 name: Build Unsigned IPA
+
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install XcodeGen
-        run: brew install xcodegen
+
+      - name: Install tools
+        run: |
+          brew install xcodegen
+          # Optional: generate app icon if Pillow is available
+          pip3 install pillow || true
+          python3 scripts/generate_app_icons.py || true
+
       - name: Generate Xcode project
         run: xcodegen generate
+
       - name: Archive (unsigned)
         run: |
+          set -euo pipefail
           xcodebuild archive \
             -project GameStream.xcodeproj \
             -scheme GameStream \
@@ -21,14 +35,51 @@ jobs:
             -destination "generic/platform=iOS" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY=""
+            CODE_SIGN_IDENTITY="" \
+            | xcpretty || true
+
       - name: Package IPA
         run: |
+          set -euo pipefail
           mkdir -p build/Payload
           cp -R build/GameStream.xcarchive/Products/Applications/GameStream.app build/Payload/
-          cd build && zip -r GameStream-unsigned.ipa Payload
-      - name: Upload IPA
+          cd build
+          # .ipa is a zip with a Payload/ folder — this is the installable package
+          zip -r GameStream-unsigned.ipa Payload
+          ls -lh GameStream-unsigned.ipa
+
+      # Always keep a downloadable workflow artifact
+      - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: GameStream-unsigned-ipa
           path: build/GameStream-unsigned.ipa
+          if-no-files-found: error
+
+      # Versioned release when you push a tag like v1.0.0
+      - name: Publish tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/GameStream-unsigned.ipa
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Rolling "latest" prerelease on main / manual runs
+      - name: Publish latest prerelease
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest unsigned build
+          prerelease: true
+          body: |
+            Automatic unsigned IPA from `${{ github.sha }}`.
+
+            Install with AltStore / Sideloadly / TrollStore (unsigned — not App Store signed).
+          files: build/GameStream-unsigned.ipa
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
