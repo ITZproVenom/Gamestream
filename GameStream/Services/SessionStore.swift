@@ -19,6 +19,9 @@ final class SessionStore: ObservableObject {
     @Published var requestedTab: RootView.Tab? = nil
     @Published var isStreaming: Bool = false
 
+    /// Survives Search tab unmount so the field is not wiped when switching tabs.
+    @Published var searchDraft: String = ""
+
     /// JS snippets the webview should evaluate on next opportunity.
     @Published var pendingJavaScript: String?
 
@@ -34,11 +37,18 @@ final class SessionStore: ObservableObject {
         static let streamResolution = "GameStream.streamResolution"
         static let serverRegion = "GameStream.serverRegion"
         static let recentSearches = "GameStream.recentSearches"
+        static let searchDraft = "GameStream.searchDraft"
     }
 
     init() {
         self.isSignedIn = UserDefaults.standard.bool(forKey: Keys.signedIn)
         self.accountLabel = UserDefaults.standard.string(forKey: Keys.accountLabel)
+        self.searchDraft = UserDefaults.standard.string(forKey: Keys.searchDraft) ?? ""
+    }
+
+    func updateSearchDraft(_ value: String) {
+        searchDraft = value
+        UserDefaults.standard.set(value, forKey: Keys.searchDraft)
     }
 
     func markSignedIn(as label: String = "Xbox Account") {
@@ -65,6 +75,8 @@ final class SessionStore: ObservableObject {
     func openSearch(query: String) {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+
+        updateSearchDraft(trimmed)
 
         let escaped = trimmed
             .replacingOccurrences(of: "\\", with: "\\\\")

@@ -2,7 +2,6 @@ import SwiftUI
 
 struct SearchView: View {
     @EnvironmentObject var session: SessionStore
-    @State private var searchText = ""
     @FocusState private var searchFocused: Bool
     @State private var recent: [String] = SessionStore.recentSearches
 
@@ -26,10 +25,13 @@ struct SearchView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Search")
                             .font(.system(size: 34, weight: .bold, design: .rounded))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
 
                         Text("Find your next game")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                     .padding(.top, 8)
 
@@ -38,7 +40,10 @@ struct SearchView: View {
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(.secondary)
 
-                        TextField("Search games", text: $searchText)
+                        TextField("Search games", text: Binding(
+                            get: { session.searchDraft },
+                            set: { session.updateSearchDraft($0) }
+                        ))
                             .focused($searchFocused)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
@@ -46,8 +51,8 @@ struct SearchView: View {
                             .submitLabel(.search)
                             .onSubmit { performSearch() }
 
-                        if !searchText.isEmpty {
-                            Button { searchText = "" } label: {
+                        if !session.searchDraft.isEmpty {
+                            Button { session.updateSearchDraft("") } label: {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundStyle(.secondary)
                             }
@@ -62,7 +67,7 @@ struct SearchView: View {
                         in: RoundedRectangle(cornerRadius: 16, style: .continuous)
                     )
 
-                    if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         popularSection
                         if recent.isEmpty {
                             emptyState
@@ -86,16 +91,18 @@ struct SearchView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Popular on Cloud")
                 .font(.title3.weight(.semibold))
+                .lineLimit(1)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(popularTitles, id: \.self) { title in
                         Button {
-                            searchText = title
+                            session.updateSearchDraft(title)
                             performSearch()
                         } label: {
                             Text(title)
                                 .font(.subheadline.weight(.medium))
+                                .lineLimit(1)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 10)
                         }
@@ -115,11 +122,14 @@ struct SearchView: View {
             VStack(spacing: 6) {
                 Text("What are you playing?")
                     .font(.title3.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
 
                 Text("Search for any game available on Xbox Cloud Gaming.")
                     .font(.subheadline)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: .infinity)
@@ -131,6 +141,7 @@ struct SearchView: View {
             HStack {
                 Text("Recent")
                     .font(.title3.weight(.semibold))
+                    .lineLimit(1)
                 Spacer()
                 Button("Clear") {
                     SessionStore.clearRecentSearches()
@@ -142,7 +153,7 @@ struct SearchView: View {
 
             ForEach(recent, id: \.self) { item in
                 Button {
-                    searchText = item
+                    session.updateSearchDraft(item)
                     performSearch()
                 } label: {
                     HStack(spacing: 12) {
@@ -151,6 +162,8 @@ struct SearchView: View {
                         Text(item)
                             .font(.body.weight(.medium))
                             .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                         Spacer()
                         Image(systemName: "arrow.up.left")
                             .font(.caption.weight(.semibold))
@@ -170,6 +183,8 @@ struct SearchView: View {
                     Image(systemName: "magnifyingglass")
                     Text("Search Xbox Cloud Gaming")
                         .font(.headline)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                     Spacer()
                     Image(systemName: "arrow.up.right")
                         .font(.subheadline.weight(.bold))
@@ -183,14 +198,15 @@ struct SearchView: View {
                 .font(.title3.weight(.semibold))
                 .padding(.top, 6)
 
-            Text("Tap above to search Xbox Cloud Gaming for \"\(searchText)\".")
+            Text("Tap above to search Xbox Cloud Gaming for \"\(session.searchDraft)\".")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private func performSearch() {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return }
         searchFocused = false
         SessionStore.rememberSearch(query)
@@ -221,6 +237,8 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     Text("Settings")
                         .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                         .padding(.top, 8)
 
                     if let statusMessage {
@@ -228,6 +246,7 @@ struct SettingsView: View {
                             .font(.caption.weight(.medium))
                             .foregroundStyle(.green)
                             .padding(.horizontal, 4)
+                            .fixedSize(horizontal: false, vertical: true)
                             .transition(.opacity)
                     }
 
@@ -239,6 +258,7 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 4)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     chipSection(
                         title: "Target resolution",
@@ -285,6 +305,7 @@ struct SettingsView: View {
                         HStack {
                             Text("GameStream")
                                 .font(.headline)
+                                .lineLimit(1)
                             Spacer()
                             Text("1.0.0")
                                 .font(.subheadline)
@@ -293,10 +314,12 @@ struct SettingsView: View {
                         Text("Native iOS 26 client for Xbox Cloud Gaming with Better xCloud built in.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
 
                         Text("Full stream options (stats, touch controls, clarity, Remote Play) live in the Better xCloud menu on the Xbox page — look near your profile for the server button.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(16)
                     .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -322,6 +345,7 @@ struct SettingsView: View {
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
             .font(.title3.weight(.semibold))
+            .lineLimit(1)
             .padding(.top, 4)
     }
 
@@ -336,6 +360,7 @@ struct SettingsView: View {
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
+                .lineLimit(1)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -346,6 +371,7 @@ struct SettingsView: View {
                         } label: {
                             Text(option)
                                 .font(.subheadline.weight(.medium))
+                                .lineLimit(1)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 10)
                         }
@@ -363,6 +389,8 @@ struct SettingsView: View {
                 Image(systemName: icon)
                 Text(title)
                     .font(.body.weight(.medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
@@ -387,13 +415,19 @@ struct GlassRow: View {
     let value: String
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(title)
                 .font(.body.weight(.medium))
-            Spacer()
+                .lineLimit(1)
+                .layoutPriority(1)
+            Spacer(minLength: 8)
             Text(value)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .truncationMode(.tail)
+                .multilineTextAlignment(.trailing)
         }
         .padding(16)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))

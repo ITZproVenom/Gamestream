@@ -88,7 +88,7 @@ struct LibraryView: View {
     // MARK: - Floating chrome
 
     private var libraryChrome: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Button {
                 session.goBack()
             } label: {
@@ -109,7 +109,7 @@ struct LibraryView: View {
             .buttonStyle(.glass)
             .accessibilityLabel("Library home")
 
-            Spacer()
+            Spacer(minLength: 8)
 
             Button {
                 showBetterXCloudInfo = true
@@ -119,13 +119,16 @@ struct LibraryView: View {
                         .font(.system(size: 13, weight: .semibold))
                     Text("Better xCloud")
                         .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
-                .padding(.horizontal, 14)
+                .padding(.horizontal, 12)
                 .padding(.vertical, 9)
             }
             .buttonStyle(.glass)
+            .fixedSize(horizontal: true, vertical: false)
 
-            Spacer()
+            Spacer(minLength: 8)
 
             Button {
                 session.reloadCurrent()
@@ -153,6 +156,7 @@ struct LibraryView: View {
                             .font(.system(size: 12, weight: .bold))
                         Text("Exit stream")
                             .font(.caption.weight(.semibold))
+                            .lineLimit(1)
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -203,9 +207,12 @@ struct LibraryView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Better xCloud is active")
                                 .font(.headline)
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.85)
                             Text("All features run inside the stream")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     .padding(16)
@@ -215,6 +222,7 @@ struct LibraryView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("How to open the full menu")
                             .font(.title3.weight(.semibold))
+                            .fixedSize(horizontal: false, vertical: true)
 
                         tipRow(icon: "server.rack", title: "Server / settings button",
                                text: "On the Xbox Cloud page, look near your profile picture for the server/region button added by Better xCloud. Tap it to open the full settings menu.")
@@ -264,9 +272,11 @@ struct LibraryView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.subheadline.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(text)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(12)
@@ -280,6 +290,8 @@ struct LibraryView: View {
                 .foregroundStyle(.green)
             Text(title)
                 .font(.subheadline)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
             Spacer()
         }
         .padding(.vertical, 4)
@@ -299,12 +311,15 @@ struct LibraryView: View {
                 VStack(spacing: 8) {
                     Text("Your Library")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
 
                     Text("Sign in with your Xbox account to load games from Xbox Cloud Gaming.")
                         .font(.subheadline)
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 8)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(28)
@@ -316,6 +331,7 @@ struct LibraryView: View {
             } label: {
                 Text("Sign In")
                     .font(.headline)
+                    .lineLimit(1)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
             }
@@ -341,6 +357,7 @@ struct LibraryView: View {
                 Text("Loading…")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.white)
+                    .lineLimit(1)
             }
             .padding(28)
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -359,11 +376,14 @@ struct LibraryView: View {
 
                 Text("Something went wrong")
                     .font(.headline)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
 
                 Text(message)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Button("Try Again") {
                     errorMessage = nil
