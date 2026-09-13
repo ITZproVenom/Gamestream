@@ -15,7 +15,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Need history so we can build a changelog from commits
           fetch-depth: 0
 
       - name: Install tools
@@ -57,26 +56,14 @@ jobs:
           SHORT_SHA="$(echo '${{ github.sha }}' | cut -c1-7)"
           DATE_UTC="$(date -u +'%Y-%m-%d %H:%M UTC')"
 
-          # Prefer commits since previous version tag; else last 15 on main
-          PREV_TAG="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)"
-          if [ -n "${PREV_TAG}" ] && [ "${{ github.ref }}" != "refs/tags/${PREV_TAG}" ]; then
+          # Commits since previous v* tag, otherwise last 15
+          if git describe --tags --abbrev=0 --match 'v*' HEAD^ >/tmp/prev_tag 2>/dev/null; then
+            PREV_TAG="$(cat /tmp/prev_tag)"
             RANGE="${PREV_TAG}..HEAD"
             RANGE_LABEL="since ${PREV_TAG}"
           else
-            # On a new tag, compare to the tag before that one
-            if startsWith=$(echo '${{ github.ref }}' | grep -q '^refs/tags/v' && echo yes); then
-              PREV2="$(git describe --tags --abbrev=0 --match 'v*' --exclude '${{ github.ref_name }}' 2>/dev/null || true)"
-              if [ -n "${PREV2}" ]; then
-                RANGE="${PREV2}..HEAD"
-                RANGE_LABEL="since ${PREV2}"
-              else
-                RANGE="HEAD~15..HEAD"
-                RANGE_LABEL="recent commits"
-              fi
-            else
-              RANGE="HEAD~15..HEAD"
-              RANGE_LABEL="last 15 commits"
-            fi
+            RANGE="--max-count=15 HEAD"
+            RANGE_LABEL="recent commits"
           fi
 
           {
@@ -86,7 +73,11 @@ jobs:
             echo ""
             echo "### What's changed"
             echo ""
-            git log ${RANGE} --pretty=format:'- %s (%h)' --no-merges 2>/dev/null | head -40 || true
+            if [ "${RANGE}" = "--max-count=15 HEAD" ]; then
+              git log --max-count=15 --pretty=format:'- %s (%h)' --no-merges
+            else
+              git log ${RANGE} --pretty=format:'- %s (%h)' --no-merges | head -40
+            fi
             echo ""
             echo ""
             echo "---"
@@ -107,7 +98,6 @@ jobs:
           path: build/GameStream-unsigned.ipa
           if-no-files-found: error
 
-      # Versioned release when you push a tag like v1.0.0
       - name: Publish tagged release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
@@ -119,7 +109,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Rolling "latest" prerelease on main / manual runs
       - name: Publish latest prerelease
         if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
