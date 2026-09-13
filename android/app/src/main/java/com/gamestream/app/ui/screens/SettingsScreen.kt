@@ -40,7 +40,7 @@ fun SettingsScreen(session: SessionStore) {
             color = Color.White
         )
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(20.dp))
         Text("Account", style = MaterialTheme.typography.titleMedium, color = Color.White)
         Text(
             session.accountLabel ?: "Not signed in",
@@ -48,7 +48,7 @@ fun SettingsScreen(session: SessionStore) {
             color = Color(0xFFB0B0B8)
         )
 
-        Spacer(modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(20.dp))
         Text("Stream", style = MaterialTheme.typography.titleMedium, color = Color.White)
         Text(
             "Applied to Better xCloud and reloads the page.",
@@ -56,10 +56,10 @@ fun SettingsScreen(session: SessionStore) {
             color = Color(0xFF808088)
         )
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         Text("Target resolution", style = MaterialTheme.typography.labelLarge, color = Color(0xFFB0B0B8))
         Row(
-            Modifier
+            modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -73,10 +73,10 @@ fun SettingsScreen(session: SessionStore) {
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         Text("Server region", style = MaterialTheme.typography.labelLarge, color = Color(0xFFB0B0B8))
         Row(
-            Modifier
+            modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -90,27 +90,27 @@ fun SettingsScreen(session: SessionStore) {
             }
         }
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(24.dp))
         Text("Actions", style = MaterialTheme.typography.titleMedium, color = Color.White)
-        Spacer(Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         Button(
             onClick = { session.openHome() },
             modifier = Modifier.fillMaxWidth()
         ) { Text("Open Library") }
-        Spacer(Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         OutlinedButton(
             onClick = { session.refreshBetterXCloud() },
             modifier = Modifier.fillMaxWidth()
         ) { Text("Refresh Better xCloud script") }
         if (session.isSignedIn) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             OutlinedButton(
                 onClick = { session.signOut() },
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Sign Out") }
         }
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(24.dp))
         Text("About", style = MaterialTheme.typography.titleMedium, color = Color.White)
         Text(
             "GameStream Android 1.0.0 — native WebView client for Xbox Cloud Gaming with Better xCloud.",
