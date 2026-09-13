@@ -210,6 +210,14 @@ final class SessionStore: ObservableObject {
         favorites.contains(where: { $0.id == id })
     }
 
+    func removeRecent(_ game: TrackedGame) {
+        recents.removeAll { $0.id == game.id }
+        persistRecents()
+        if currentGame?.id == game.id {
+            currentGame = recents.first
+        }
+    }
+
     func clearRecents() {
         recents = []
         persistRecents()
