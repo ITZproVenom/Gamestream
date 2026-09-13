@@ -31,15 +31,28 @@ jobs:
             ~/Library/Caches/Homebrew
             /opt/homebrew/Cellar/xcodegen
             /usr/local/Cellar/xcodegen
-          key: brew-xcodegen-${{ runner.os }}-v1
+          key: brew-xcodegen-${{ runner.os }}-v2
 
       - name: Install XcodeGen
         run: |
+          set -euo pipefail
           if ! command -v xcodegen >/dev/null 2>&1; then
-            brew install xcodegen
-          else
-            echo "xcodegen already available"
+            brew install xcodegen || true
+            brew link --overwrite --force xcodegen || true
           fi
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            for bin in /opt/homebrew/opt/xcodegen/bin/xcodegen /usr/local/opt/xcodegen/bin/xcodegen; do
+              if [ -x "$bin" ]; then
+                echo "$PATH" | grep -q "$(dirname "$bin")" || echo "$(dirname "$bin")" >> "$GITHUB_PATH"
+                sudo ln -sf "$bin" /usr/local/bin/xcodegen || ln -sf "$bin" "$HOME/bin/xcodegen" || true
+              fi
+            done
+            mkdir -p "$HOME/bin"
+            echo "$HOME/bin" >> "$GITHUB_PATH"
+          fi
+          hash -r || true
+          command -v xcodegen
+          xcodegen --version
 
       - name: App icon
         run: python3 scripts/install_icons.py
