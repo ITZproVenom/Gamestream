@@ -72,8 +72,6 @@ struct SearchView: View {
         }
     }
 
-    // MARK: - Empty state
-
     private var emptyState: some View {
         VStack(spacing: 16) {
             Image(systemName: "magnifyingglass")
@@ -93,8 +91,6 @@ struct SearchView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 56)
     }
-
-    // MARK: - Results
 
     private var resultsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -154,6 +150,24 @@ struct SettingsView: View {
                     Text("Settings")
                         .font(.system(size: 34, weight: .bold, design: .rounded))
                         .padding(.top, 8)
+
+                    // Better xCloud status
+                    HStack(spacing: 12) {
+                        Image(systemName: "sparkles")
+                            .foregroundStyle(.yellow)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Better xCloud")
+                                .font(.body.weight(.medium))
+                            Text("Always active — all features enabled")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
+                    .padding(16)
+                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
 
                     // Account
                     GlassRow(title: "Account", value: session.accountLabel ?? "Not signed in")
