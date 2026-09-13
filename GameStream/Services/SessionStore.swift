@@ -3,8 +3,13 @@ import Combine
 
 @MainActor
 final class SessionStore: ObservableObject {
-    @Published var isSignedIn: Bool = false
-    @Published var accountLabel: String?
+    @Published var isSignedIn: Bool {
+        didSet { UserDefaults.standard.set(isSignedIn, forKey: Keys.signedIn) }
+    }
+
+    @Published var accountLabel: String? {
+        didSet { UserDefaults.standard.set(accountLabel, forKey: Keys.accountLabel) }
+    }
 
     /// Current URL loaded in the Xbox Cloud webview.
     @Published var webURL: URL = URL(string: "https://www.xbox.com/play")!
@@ -14,6 +19,16 @@ final class SessionStore: ObservableObject {
 
     /// True while an actual game stream is running (hides native chrome).
     @Published var isStreaming: Bool = false
+
+    private enum Keys {
+        static let signedIn = "GameStream.isSignedIn"
+        static let accountLabel = "GameStream.accountLabel"
+    }
+
+    init() {
+        self.isSignedIn = UserDefaults.standard.bool(forKey: Keys.signedIn)
+        self.accountLabel = UserDefaults.standard.string(forKey: Keys.accountLabel)
+    }
 
     func markSignedIn(as label: String = "Xbox Account") {
         self.accountLabel = label
@@ -25,6 +40,15 @@ final class SessionStore: ObservableObject {
         accountLabel = nil
         isStreaming = false
         webURL = URL(string: "https://www.xbox.com/play")!
+
+        // Clear web cookies so Xbox session is also ended
+        let store = WKWebsiteDataStore.default()
+        store.fetchDataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes()) { records in
+            let xboxRecords = records.filter {
+                $0.displayName.contains("xbox") || $0.displayName.contains("microsoft") || $0.displayName.contains("live")
+            }
+            store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), for: xboxRecords) {}
+        }
     }
 
     func openSearch(query: String) {
@@ -46,14 +70,14 @@ final class SessionStore: ObservableObject {
         webURL = current
     }
 
-    /// Called by the webview when the page URL changes.
     func updateFromWebURL(_ url: URL) {
         webURL = url
         let path = url.path.lowercased()
-        // Typical stream paths: /play/launch/..., /play/consoles/launch/...
         let streaming = path.contains("/launch") || path.contains("/play/game")
         if isStreaming != streaming {
             isStreaming = streaming
         }
     }
 }
+
+import WebKit
