@@ -12,30 +12,16 @@ final class SessionStore: ObservableObject {
         didSet { UserDefaults.standard.set(accountLabel, forKey: Keys.accountLabel) }
     }
 
-    /// App-driven destination only. Do not write this from in-page navigation
-    /// or the webview will hard-reload on every SPA route change.
     @Published var webURL: URL = URL(string: "https://www.xbox.com/play")!
-
     @Published var requestedTab: RootView.Tab? = nil
     @Published var isStreaming: Bool = false
-
-    /// JS snippets the webview should evaluate on next opportunity.
     @Published var pendingJavaScript: String?
-
-    /// Bumped to force webview re-injection / reload of Better xCloud script.
     @Published var betterXCloudRefreshToken: Int = 0
-
-    /// Bumped to force a hard reload even when URL is unchanged.
     @Published var reloadNonce: Int = 0
-
-    /// Survives Search tab unmount so the field is not wiped when switching tabs.
     @Published var searchDraft: String = ""
-
-    /// When true, the idle timer stays disabled even outside an active stream.
     @Published var keepScreenAwake: Bool {
         didSet { UserDefaults.standard.set(keepScreenAwake, forKey: Keys.keepScreenAwake) }
     }
-
     @Published var favorites: [TrackedGame] = []
     @Published var recents: [TrackedGame] = []
     @Published var currentGame: TrackedGame?
@@ -53,8 +39,17 @@ final class SessionStore: ObservableObject {
     }
 
     init() {
-        self.isSignedIn = UserDefaults.standard.bool(forKey: Keys.signedIn)
-        self.accountLabel = UserDefaults.standard.string(forKey: Keys.accountLabel)
+        let proof = UserDefaults.standard.integer(forKey: MicrosoftAuth.proofKey)
+        let storedSignedIn = UserDefaults.standard.bool(forKey: Keys.signedIn)
+        if storedSignedIn && proof != MicrosoftAuth.proofVersion {
+            UserDefaults.standard.set(false, forKey: Keys.signedIn)
+            UserDefaults.standard.removeObject(forKey: Keys.accountLabel)
+            self.isSignedIn = false
+            self.accountLabel = nil
+        } else {
+            self.isSignedIn = storedSignedIn && proof == MicrosoftAuth.proofVersion
+            self.accountLabel = UserDefaults.standard.string(forKey: Keys.accountLabel)
+        }
         self.searchDraft = UserDefaults.standard.string(forKey: Keys.searchDraft) ?? ""
         self.keepScreenAwake = UserDefaults.standard.bool(forKey: Keys.keepScreenAwake)
         self.favorites = Self.loadGames(key: Keys.favorites)
@@ -66,18 +61,34 @@ final class SessionStore: ObservableObject {
         UserDefaults.standard.set(value, forKey: Keys.searchDraft)
     }
 
-    func markSignedIn(as label: String = "Xbox Account") {
+    func markSignedInAfterMicrosoftAuth(as label: String = "Xbox Account") {
+        UserDefaults.standard.set(MicrosoftAuth.proofVersion, forKey: MicrosoftAuth.proofKey)
         self.accountLabel = label
         self.isSignedIn = true
     }
 
-    func signOut() {
+    func revalidatePersistedLogin() {
+        guard isSignedIn else { return }
+        MicrosoftAuth.fetchAuthCookies { cookies in
+            Task { @MainActor in
+                if !MicrosoftAuth.cookiesIndicateMicrosoftAuth(cookies) {
+                    self.clearLocalAuthFlag()
+                }
+            }
+        }
+    }
+
+    private func clearLocalAuthFlag() {
         isSignedIn = false
         accountLabel = nil
+        UserDefaults.standard.removeObject(forKey: MicrosoftAuth.proofKey)
+    }
+
+    func signOut() {
+        clearLocalAuthFlag()
         isStreaming = false
         currentGame = nil
         webURL = URL(string: "https://www.xbox.com/play")!
-
         let store = WKWebsiteDataStore.default()
         store.fetchDataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes()) { records in
             let xboxRecords = records.filter {
@@ -91,26 +102,19 @@ final class SessionStore: ObservableObject {
     func openSearch(query: String) {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-
         updateSearchDraft(trimmed)
-
-        let escaped = trimmed
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "'", with: "\\'")
-            .replacingOccurrences(of: "\n", with: " ")
-
-        // Stay on /play so we do not bounce through a non-existent /play/search route.
+        let escaped = trimmed.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'").replacingOccurrences(of: "\n", with: " ")
         webURL = URL(string: "https://www.xbox.com/play")!
         isStreaming = false
         pendingJavaScript = """
         (function() {
             var q = '\(escaped)';
             function findInput() {
-                return document.querySelector('input[type="search"], input[placeholder*="Search" i], input[aria-label*="Search" i], input[name="q"]');
+                return document.querySelector('input[type=\"search\"], input[placeholder*=\"Search\" i], input[aria-label*=\"Search\" i], input[name=\"q\"]');
             }
             var input = findInput();
             if (!input) {
-                var btn = document.querySelector('button[aria-label*="Search" i], [role="search"] button, a[href*="search"]');
+                var btn = document.querySelector('button[aria-label*=\"Search\" i], [role=\"search\"] button, a[href*=\"search\"]');
                 if (btn) { try { btn.click(); } catch (e) {} }
             }
             setTimeout(function() {
@@ -152,7 +156,6 @@ final class SessionStore: ObservableObject {
         noteGame(id: game.id, slug: game.slug, title: game.title, markRecent: true)
     }
 
-    /// SPA-safe back: prefer history, fall back to Library home.
     func goBack() {
         isStreaming = false
         pendingJavaScript = """
@@ -166,17 +169,11 @@ final class SessionStore: ObservableObject {
         requestedTab = .library
     }
 
-    func reloadCurrent() {
-        reloadNonce += 1
-    }
+    func reloadCurrent() { reloadNonce += 1 }
 
-    /// Called from the webview bridge. Updates streaming state only — never webURL.
     func updateFromWebURL(_ url: URL, pageTitle: String? = nil) {
         let streaming = Self.isStreamingURL(url.absoluteString)
-        if isStreaming != streaming {
-            isStreaming = streaming
-        }
-
+        if isStreaming != streaming { isStreaming = streaming }
         if let parsed = GameURLParser.parse(url.absoluteString) {
             let title = GameURLParser.displayTitle(fromPageTitle: pageTitle, slug: parsed.slug, productId: parsed.productId)
             noteGame(id: parsed.productId, slug: parsed.slug, title: title, markRecent: streaming)
@@ -185,10 +182,7 @@ final class SessionStore: ObservableObject {
         }
     }
 
-    func toggleFavoriteCurrent() {
-        guard let game = currentGame else { return }
-        toggleFavorite(game)
-    }
+    func toggleFavoriteCurrent() { guard let game = currentGame else { return }; toggleFavorite(game) }
 
     func toggleFavorite(_ game: TrackedGame) {
         if let index = favorites.firstIndex(where: { $0.id == game.id }) {
@@ -199,45 +193,23 @@ final class SessionStore: ObservableObject {
             pinned.lastSeen = Date()
             favorites.insert(pinned, at: 0)
         }
-        if favorites.count > 24 {
-            favorites = Array(favorites.prefix(24))
-        }
+        if favorites.count > 24 { favorites = Array(favorites.prefix(24)) }
         persistFavorites()
         refreshCurrentFavoriteFlag()
     }
 
-    func isFavorite(_ id: String) -> Bool {
-        favorites.contains(where: { $0.id == id })
-    }
-
+    func isFavorite(_ id: String) -> Bool { favorites.contains(where: { $0.id == id }) }
     func removeRecent(_ game: TrackedGame) {
         recents.removeAll { $0.id == game.id }
         persistRecents()
-        if currentGame?.id == game.id {
-            currentGame = recents.first
-        }
+        if currentGame?.id == game.id { currentGame = recents.first }
     }
-
-    func clearRecents() {
-        recents = []
-        persistRecents()
-    }
-
-    func clearFavorites() {
-        favorites = []
-        persistFavorites()
-        refreshCurrentFavoriteFlag()
-    }
+    func clearRecents() { recents = []; persistRecents() }
+    func clearFavorites() { favorites = []; persistFavorites(); refreshCurrentFavoriteFlag() }
 
     private func noteGame(id: String, slug: String, title: String, markRecent: Bool) {
         guard !id.isEmpty else { return }
-        var game = TrackedGame(
-            id: id,
-            slug: slug,
-            title: title,
-            lastSeen: Date(),
-            isFavorite: isFavorite(id)
-        )
+        var game = TrackedGame(id: id, slug: slug, title: title, lastSeen: Date(), isFavorite: isFavorite(id))
         if let existingFav = favorites.first(where: { $0.id == id }) {
             game.isFavorite = true
             if title.count >= existingFav.title.count {
@@ -252,13 +224,10 @@ final class SessionStore: ObservableObject {
             }
         }
         currentGame = game
-
         guard markRecent else { return }
         recents.removeAll { $0.id == id }
         recents.insert(game, at: 0)
-        if recents.count > 12 {
-            recents = Array(recents.prefix(12))
-        }
+        if recents.count > 12 { recents = Array(recents.prefix(12)) }
         persistRecents()
     }
 
@@ -267,43 +236,23 @@ final class SessionStore: ObservableObject {
         game.isFavorite = isFavorite(game.id)
         currentGame = game
     }
-
-    private func persistFavorites() {
-        Self.saveGames(favorites, key: Keys.favorites)
-    }
-
-    private func persistRecents() {
-        Self.saveGames(recents, key: Keys.recents)
-    }
-
+    private func persistFavorites() { Self.saveGames(favorites, key: Keys.favorites) }
+    private func persistRecents() { Self.saveGames(recents, key: Keys.recents) }
     private static func loadGames(key: String) -> [TrackedGame] {
         guard let data = UserDefaults.standard.data(forKey: key) else { return [] }
         return (try? JSONDecoder().decode([TrackedGame].self, from: data)) ?? []
     }
-
     private static func saveGames(_ games: [TrackedGame], key: String) {
-        if let data = try? JSONEncoder().encode(games) {
-            UserDefaults.standard.set(data, forKey: key)
-        }
+        if let data = try? JSONEncoder().encode(games) { UserDefaults.standard.set(data, forKey: key) }
     }
 
-    /// Catalog pages like /play/games/... are not an active stream.
     static func isStreamingURL(_ raw: String) -> Bool {
         let full = raw.lowercased()
         if full.contains("/play/games") { return false }
-        return full.contains("/play/launch") ||
-            full.contains("/launch/") ||
-            full.contains("/launch?") ||
-            full.contains("/stream/") ||
-            full.contains("/streaming")
+        return full.contains("/play/launch") || full.contains("/launch/") || full.contains("/launch?") || full.contains("/stream/") || full.contains("/streaming")
     }
 
-    // MARK: - Recent searches
-
-    static var recentSearches: [String] {
-        UserDefaults.standard.stringArray(forKey: Keys.recentSearches) ?? []
-    }
-
+    static var recentSearches: [String] { UserDefaults.standard.stringArray(forKey: Keys.recentSearches) ?? [] }
     static func rememberSearch(_ query: String) {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -312,20 +261,12 @@ final class SessionStore: ObservableObject {
         if items.count > 8 { items = Array(items.prefix(8)) }
         UserDefaults.standard.set(items, forKey: Keys.recentSearches)
     }
-
-    static func clearRecentSearches() {
-        UserDefaults.standard.removeObject(forKey: Keys.recentSearches)
-    }
-
-    // MARK: - Better xCloud preference bridging
+    static func clearRecentSearches() { UserDefaults.standard.removeObject(forKey: Keys.recentSearches) }
 
     func applyBetterXCloudPref(_ prefKey: String, value: String) {
-        let escapedKey = prefKey.replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "'", with: "\\'")
-        let escapedValue = value.replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "'", with: "\\'")
-
-        let js = """
+        let escapedKey = prefKey.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
+        let escapedValue = value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
+        pendingJavaScript = """
         (function() {
             try {
                 var storageKey = 'BetterXcloud';
@@ -338,8 +279,6 @@ final class SessionStore: ObservableObject {
             } catch (e) {}
         })();
         """
-
-        pendingJavaScript = js
         requestedTab = .library
         isStreaming = false
         if !webURL.absoluteString.contains("xbox.com/play") {
@@ -382,13 +321,9 @@ final class SessionStore: ObservableObject {
 
     func clearWebData() {
         let store = WKWebsiteDataStore.default()
-        store.removeData(
-            ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
-            modifiedSince: .distantPast
-        ) { [weak self] in
+        store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) { [weak self] in
             Task { @MainActor in
-                self?.isSignedIn = false
-                self?.accountLabel = nil
+                self?.clearLocalAuthFlag()
                 self?.webURL = URL(string: "https://www.xbox.com/play")!
                 self?.isStreaming = false
                 self?.currentGame = nil
@@ -398,11 +333,6 @@ final class SessionStore: ObservableObject {
         }
     }
 
-    static var storedResolution: String {
-        UserDefaults.standard.string(forKey: Keys.streamResolution) ?? "Auto"
-    }
-
-    static var storedRegion: String {
-        UserDefaults.standard.string(forKey: Keys.serverRegion) ?? "Auto"
-    }
+    static var storedResolution: String { UserDefaults.standard.string(forKey: Keys.streamResolution) ?? "Auto" }
+    static var storedRegion: String { UserDefaults.standard.string(forKey: Keys.serverRegion) ?? "Auto" }
 }
