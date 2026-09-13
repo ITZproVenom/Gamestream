@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 
 struct SearchView: View {
     @State private var searchText = ""
@@ -12,7 +13,6 @@ struct SearchView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
 
-                    // Header
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Search")
                             .font(.system(size: 36, weight: .bold, design: .rounded))
@@ -24,21 +24,17 @@ struct SearchView: View {
                     }
                     .padding(.top, 12)
 
-                    // Search field
                     HStack(spacing: 12) {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.6))
 
-                        TextField(
-                            "Search games",
-                            text: $searchText
-                        )
-                        .focused($searchFocused)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .foregroundStyle(.white)
-                        .font(.system(size: 17, weight: .medium))
+                        TextField("Search games", text: $searchText)
+                            .focused($searchFocused)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .foregroundStyle(.white)
+                            .font(.system(size: 17, weight: .medium))
 
                         if !searchText.isEmpty {
                             Button {
@@ -69,22 +65,12 @@ struct SearchView: View {
                             lineWidth: 1
                         )
                     }
-                    .shadow(
-                        color: .black.opacity(0.15),
-                        radius: 20,
-                        y: 10
-                    )
-                    .animation(
-                        .easeInOut(duration: 0.2),
-                        value: searchFocused
-                    )
 
-                    // Empty state
                     if searchText.isEmpty {
                         VStack(spacing: 18) {
-                            Image(systemName: "sparkle.magnifyingglass")
+                            Image(systemName: "magnifyingglass")
                                 .font(.system(size: 42, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.7))
+                                .foregroundStyle(.white.opacity(0.65))
 
                             VStack(spacing: 6) {
                                 Text("What are you playing?")
@@ -100,7 +86,6 @@ struct SearchView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 70)
                     } else {
-                        // Search action
                         Button {
                             openXboxSearch()
                         } label: {
@@ -143,7 +128,7 @@ struct SearchView: View {
                             .foregroundStyle(.white)
                             .padding(.top, 8)
 
-                        Text("Xbox's search results will open here.")
+                        Text("Search Xbox Cloud Gaming for \"\(searchText)\".")
                             .font(.subheadline)
                             .foregroundStyle(.white.opacity(0.5))
                     }
@@ -156,22 +141,138 @@ struct SearchView: View {
     }
 
     private func openXboxSearch() {
-        guard let encoded = searchText
-            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(
-                string: "https://www.xbox.com/en-IN/play#search?query=\(encoded)"
-              )
-        else {
+        guard let encoded = searchText.addingPercentEncoding(
+            withAllowedCharacters: .urlQueryAllowed
+        ) else {
+            return
+        }
+
+        guard let url = URL(
+            string: "https://www.xbox.com/en-IN/play#search?query=\(encoded)"
+        ) else {
             return
         }
 
         searchFocused = false
 
-        // Open the Xbox search page in the existing streaming web view.
         NotificationCenter.default.post(
             name: .openXboxSearch,
             object: url
         )
+    }
+}
+
+struct SettingsView: View {
+    @EnvironmentObject var session: SessionStore
+
+    @AppStorage("streamQuality")
+    private var streamQuality = "Auto"
+
+    @AppStorage("serverRegion")
+    private var serverRegion = "Auto"
+
+    var body: some View {
+        ZStack {
+            AnimatedBackground()
+                .ignoresSafeArea()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("Settings")
+                        .font(.system(size: 36, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.top, 12)
+
+                    GlassRow(
+                        title: "Account",
+                        value: session.accountLabel ?? "Not signed in"
+                    )
+
+                    GlassRow(
+                        title: "Stream quality",
+                        value: streamQuality
+                    )
+
+                    GlassRow(
+                        title: "Server region",
+                        value: serverRegion
+                    )
+
+                    if session.isSignedIn {
+                        Button {
+                            session.signOut()
+                        } label: {
+                            HStack {
+                                Image(systemName: "rectangle.portrait.and.arrow.right")
+                                Text("Sign Out")
+                                Spacer()
+                            }
+                            .foregroundStyle(.red)
+                            .padding(16)
+                            .background(
+                                .ultraThinMaterial,
+                                in: RoundedRectangle(
+                                    cornerRadius: 18,
+                                    style: .continuous
+                                )
+                            )
+                            .overlay {
+                                RoundedRectangle(
+                                    cornerRadius: 18,
+                                    style: .continuous
+                                )
+                                .strokeBorder(
+                                    .white.opacity(0.1),
+                                    lineWidth: 1
+                                )
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, 8)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 120)
+            }
+            .scrollIndicators(.hidden)
+        }
+    }
+}
+
+struct GlassRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .foregroundStyle(.white)
+                .font(.body.weight(.medium))
+
+            Spacer()
+
+            Text(value)
+                .foregroundStyle(.white.opacity(0.5))
+                .font(.subheadline)
+        }
+        .padding(16)
+        .background(
+            .ultraThinMaterial,
+            in: RoundedRectangle(
+                cornerRadius: 18,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: 18,
+                style: .continuous
+            )
+            .strokeBorder(
+                .white.opacity(0.1),
+                lineWidth: 1
+            )
+        }
     }
 }
 
