@@ -36,4 +36,21 @@ object GameCatalog {
     )
 
     val featured: List<CatalogGame> get() = games.filter { it.featured }
+
+    fun matches(query: String): List<CatalogGame> {
+        val q = query.trim()
+        if (q.isEmpty()) return games
+        val slugQ = q.replace(" ", "-")
+        return games.filter {
+            it.title.contains(q, ignoreCase = true) ||
+                it.genre.contains(q, ignoreCase = true) ||
+                it.tagline.contains(q, ignoreCase = true) ||
+                it.slug.contains(slugQ, ignoreCase = true)
+        }
+    }
+
+    fun related(to: CatalogGame, limit: Int = 6): List<CatalogGame> {
+        val same = games.filter { it.genre == to.genre && it.id != to.id }
+        return if (same.size >= 2) same.take(limit) else games.filter { it.id != to.id }.take(limit)
+    }
 }
