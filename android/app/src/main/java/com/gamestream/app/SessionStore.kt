@@ -33,34 +33,34 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
     var bxRefreshToken by mutableIntStateOf(0)
         private set
 
+    var showNativeHub by mutableStateOf(true)
+
+    var favoriteIds by mutableStateOf(prefs.getStringSet(KEY_FAVS, emptySet())?.toSet() ?: emptySet())
+        private set
+    var recentIds by mutableStateOf(prefs.getString("recent_ids", "")?.split(",")?.filter { it.isNotBlank() } ?: emptyList())
+        private set
+
     var streamResolution by mutableStateOf(prefs.getString(KEY_RES, "Auto") ?: "Auto")
         private set
 
     var serverRegion by mutableStateOf(prefs.getString(KEY_REGION, "Auto") ?: "Auto")
         private set
 
-    fun clearPendingJs() {
-        pendingJs = null
-    }
+    fun clearPendingJs() { pendingJs = null }
 
     fun markSignedIn(label: String = "Xbox Account") {
         accountLabel = label
         isSignedIn = true
-        prefs.edit()
-            .putBoolean(KEY_SIGNED_IN, true)
-            .putString(KEY_ACCOUNT, label)
-            .apply()
+        prefs.edit().putBoolean(KEY_SIGNED_IN, true).putString(KEY_ACCOUNT, label).apply()
     }
 
     fun signOut() {
         isSignedIn = false
         accountLabel = null
         isStreaming = false
+        showNativeHub = true
         webUrl = HOME_URL
-        prefs.edit()
-            .putBoolean(KEY_SIGNED_IN, false)
-            .remove(KEY_ACCOUNT)
-            .apply()
+        prefs.edit().putBoolean(KEY_SIGNED_IN, false).remove(KEY_ACCOUNT).apply()
         pendingJs = "try { localStorage.clear(); sessionStorage.clear(); location.href='$HOME_URL'; } catch(e){}"
         reloadNonce++
     }
@@ -68,8 +68,57 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
     fun openHome() {
         webUrl = HOME_URL
         isStreaming = false
+        showNativeHub = true
         requestedTab = "library"
     }
+
+    fun openXboxCloud() {
+        webUrl = HOME_URL
+        isStreaming = false
+        showNativeHub = false
+        requestedTab = "library"
+    }
+
+    fun openGame(game: CatalogGame) {
+        webUrl = game.catalogUrl
+        isStreaming = false
+        showNativeHub = false
+        requestedTab = "library"
+        rememberRecent(game.id)
+    }
+
+    fun playGame(game: CatalogGame) {
+        webUrl = game.launchUrl
+        isStreaming = false
+        showNativeHub = false
+        requestedTab = "library"
+        rememberRecent(game.id)
+    }
+
+    fun returnToHub() {
+        isStreaming = false
+        showNativeHub = true
+        requestedTab = "library"
+    }
+
+    fun isFavorite(id: String) = favoriteIds.contains(id)
+
+    fun toggleFavorite(game: CatalogGame) {
+        favoriteIds = if (favoriteIds.contains(game.id)) favoriteIds - game.id else setOf(game.id) + favoriteIds
+        prefs.edit().putStringSet(KEY_FAVS, favoriteIds).apply()
+    }
+
+    fun rememberRecent(id: String) {
+        recentIds = listOf(id) + recentIds.filter { it != id }
+        if (recentIds.size > 12) recentIds = recentIds.take(12)
+        prefs.edit().putString("recent_ids", recentIds.joinToString(",")).apply()
+    }
+
+    fun favoriteGames(): List<CatalogGame> =
+        favoriteIds.mapNotNull { id -> GameCatalog.games.find { it.id == id } }
+
+    fun recentGames(): List<CatalogGame> =
+        recentIds.mapNotNull { id -> GameCatalog.games.find { it.id == id } }
 
     fun openSearch(query: String) {
         val q = query.trim()
@@ -77,6 +126,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         val escaped = q.replace("\\", "\\\\").replace("'", "\\'").replace("\n", " ")
         webUrl = HOME_URL
         isStreaming = false
+        showNativeHub = false
         pendingJs = """
             (function(){
               var q='$escaped';
@@ -118,6 +168,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
     fun updateStreamingFromUrl(url: String) {
         val streaming = isStreamingUrl(url)
         if (isStreaming != streaming) isStreaming = streaming
+        if (streaming) showNativeHub = false
     }
 
     fun applyResolution(option: String) {
@@ -169,6 +220,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         """.trimIndent()
         requestedTab = "library"
         isStreaming = false
+        showNativeHub = false
         if (!webUrl.contains("xbox.com/play")) webUrl = HOME_URL
     }
 
@@ -178,6 +230,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         private const val KEY_ACCOUNT = "account"
         private const val KEY_RES = "resolution"
         private const val KEY_REGION = "region"
+        private const val KEY_FAVS = "favorite_ids"
 
         fun isStreamingUrl(url: String): Boolean {
             val lower = url.lowercase()

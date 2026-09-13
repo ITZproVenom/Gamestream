@@ -42,7 +42,9 @@ fun LibraryScreen(session: SessionStore) {
     Box(Modifier.fillMaxSize()) {
         XboxWebView(session = session, modifier = Modifier.fillMaxSize())
 
-        if (!session.isStreaming) {
+        if (session.showNativeHub && !session.isStreaming) {
+            GameHub(session = session, modifier = Modifier.fillMaxSize())
+        } else if (!session.isStreaming) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -52,18 +54,14 @@ fun LibraryScreen(session: SessionStore) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
-                    onClick = { session.openHome() },
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xCC1C1C24))
+                    onClick = { session.returnToHub() },
+                    modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xCC1C1C24))
                 ) {
-                    Icon(Icons.Default.Home, contentDescription = "Home", tint = Color.White)
+                    Icon(Icons.Default.Home, contentDescription = "Hub", tint = Color.White)
                 }
                 IconButton(
                     onClick = { session.reloadCurrent() },
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xCC1C1C24))
+                    modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xCC1C1C24))
                 ) {
                     Icon(Icons.Default.Refresh, contentDescription = "Reload", tint = Color.White)
                 }
@@ -75,41 +73,18 @@ fun LibraryScreen(session: SessionStore) {
 @Composable
 private fun SignInPrompt(onSignIn: () -> Unit) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(28.dp),
+        modifier = Modifier.fillMaxSize().padding(28.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Icon(
-            Icons.Default.SportsEsports,
-            contentDescription = null,
-            tint = Color(0xFF8B7CFF),
-            modifier = Modifier.size(56.dp)
-        )
+        Icon(Icons.Default.SportsEsports, contentDescription = null, tint = Color(0xFF8B7CFF), modifier = Modifier.size(56.dp))
         Spacer(Modifier.height(16.dp))
-        Text(
-            "Your Library",
-            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-            color = Color.White
-        )
+        Text("Your Library", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold), color = Color.White)
         Spacer(Modifier.height(8.dp))
-        Text(
-            "Sign in with your Xbox account to load games from Xbox Cloud Gaming.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFFB0B0B8),
-            textAlign = TextAlign.Center
-        )
+        Text("Sign in with your Xbox account to load games from Xbox Cloud Gaming.", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFB0B0B8), textAlign = TextAlign.Center)
         Spacer(Modifier.height(24.dp))
-        Button(onClick = onSignIn) {
-            Text("Continue to Xbox Cloud")
-        }
+        Button(onClick = onSignIn) { Text("Continue to Xbox Cloud") }
         Spacer(Modifier.height(8.dp))
-        Text(
-            "You'll sign in inside the web session. Cookies stay on this device.",
-            style = MaterialTheme.typography.labelSmall,
-            color = Color(0xFF808088),
-            textAlign = TextAlign.Center
-        )
+        Text("You'll sign in inside the web session. Cookies stay on this device.", style = MaterialTheme.typography.labelSmall, color = Color(0xFF808088), textAlign = TextAlign.Center)
     }
 }
