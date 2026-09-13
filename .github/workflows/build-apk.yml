@@ -15,6 +15,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: android
@@ -22,26 +23,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 30
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
 
+      # Uses Gradle from the action (cached) — no need to bootstrap wrapper from scratch every run
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+          cache-read-only: false
 
       - name: Build debug APK
         run: |
-          chmod +x gradlew 2>/dev/null || true
-          if [ ! -f gradlew ]; then
-            (command -v gradle >/dev/null && gradle wrapper --gradle-version 8.9) || \
-              (curl -sL https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/gradle.zip && \
-               unzip -q /tmp/gradle.zip -d /tmp && /tmp/gradle-8.9/bin/gradle wrapper --gradle-version 8.9)
+          set -euo pipefail
+          # Prefer project wrapper if present; else use gradle from setup-gradle
+          if [ -x ./gradlew ]; then
+            ./gradlew :app:assembleDebug --no-daemon --build-cache --parallel
+          else
+            gradle :app:assembleDebug --no-daemon --build-cache --parallel
           fi
-          ./gradlew :app:assembleDebug --no-daemon
 
       - name: Locate APK
         run: |
@@ -64,13 +70,8 @@ jobs:
           DATE_UTC="$(date -u +'%Y-%m-%d %H:%M UTC')"
           STAMP="$(date -u +'%Y%m%d-%H%M')"
           RUN="${{ github.run_number }}"
-
-          TAG="android-build-${STAMP}-${SHORT_SHA}"
-          NAME="Android build #${RUN} (${SHORT_SHA})"
-
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
-
+          echo "tag=android-build-${STAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "name=Android build #${RUN} (${SHORT_SHA})" >> "$GITHUB_OUTPUT"
           {
             echo "## Changelog"
             echo ""
@@ -84,7 +85,7 @@ jobs:
             echo "---"
             echo ""
             echo "### Install"
-            echo "Download **GameStream-debug.apk** and install (allow unknown sources)."
+            echo "Download **GameStream-debug.apk** (allow unknown sources)."
           } > android_release_notes.md
 
       - name: Publish new Android build release

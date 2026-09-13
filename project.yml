@@ -5,10 +5,7 @@ options:
     iOS: "26.0"
   xcodeVersion: "26"
 
-packages:
-  WebRTC:
-    url: https://github.com/stasel/WebRTC
-    from: 120.0.0
+# No SPM packages — pure WebView client (faster CI resolve/archive)
 
 targets:
   GameStream:
@@ -18,9 +15,6 @@ targets:
       - path: GameStream
     resources:
       - path: GameStream/Assets.xcassets
-    dependencies:
-      - package: WebRTC
-        product: WebRTC
     info:
       path: GameStream/Info.plist
       properties:
