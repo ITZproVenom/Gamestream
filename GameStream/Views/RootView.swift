@@ -66,7 +66,7 @@ struct RootView: View {
             }
         }
         .onChange(of: session.isStreaming) { _, streaming in
-            UIApplication.shared.isIdleTimerDisabled = streaming
+            syncIdleTimer()
             // Never leave the user on Search/Settings with no tab bar while a game is running.
             if streaming && selectedTab != .library {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
@@ -74,10 +74,17 @@ struct RootView: View {
                 }
             }
         }
+        .onChange(of: session.keepScreenAwake) { _, _ in
+            syncIdleTimer()
+        }
         .onAppear {
             BetterXCloudInjector.shared.preload()
-            UIApplication.shared.isIdleTimerDisabled = session.isStreaming
+            syncIdleTimer()
         }
+    }
+
+    private func syncIdleTimer() {
+        UIApplication.shared.isIdleTimerDisabled = session.isStreaming || session.keepScreenAwake
     }
 
     private static func restoredTab() -> Tab {
