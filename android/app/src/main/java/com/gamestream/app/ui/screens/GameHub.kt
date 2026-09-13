@@ -40,9 +40,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import com.gamestream.app.ArtworkStore
 import com.gamestream.app.CatalogGame
 import com.gamestream.app.GameCatalog
 import com.gamestream.app.SessionStore
@@ -153,6 +156,7 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
 @Composable
 private fun FeaturedCard(game: CatalogGame, favorite: Boolean, onPlay: () -> Unit, onFav: () -> Unit, onOpen: () -> Unit) {
     Box(Modifier.width(280.dp).height(168.dp).clip(RoundedCornerShape(20.dp)).background(Color(game.accent)).clickable(onClick = onOpen)) {
+        Artwork(game, Modifier.fillMaxSize())
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)))))
         Column(Modifier.align(Alignment.BottomStart).padding(14.dp)) {
             Text(game.provider, color = Color.White.copy(alpha = 0.85f), style = MaterialTheme.typography.labelSmall, maxLines = 1)
@@ -172,7 +176,7 @@ private fun FeaturedCard(game: CatalogGame, favorite: Boolean, onPlay: () -> Uni
 private fun PosterCard(game: CatalogGame, favorite: Boolean, onOpen: () -> Unit, onPlay: () -> Unit, onFav: () -> Unit) {
     Column(Modifier.width(120.dp)) {
         Box(Modifier.size(120.dp, 156.dp).clip(RoundedCornerShape(14.dp)).background(Color(game.accent)).clickable(onClick = onOpen)) {
-            Text(game.title.take(1), color = Color.White, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.align(Alignment.Center))
+            Artwork(game, Modifier.fillMaxSize())
             IconButton(onClick = onFav, modifier = Modifier.align(Alignment.TopEnd).background(Color.Black.copy(alpha = 0.35f), CircleShape)) {
                 Icon(if (favorite) Icons.Filled.Star else Icons.Outlined.StarBorder, contentDescription = "Favorite", tint = Color.White)
             }
@@ -181,5 +185,22 @@ private fun PosterCard(game: CatalogGame, favorite: Boolean, onOpen: () -> Unit,
         Text(game.title, color = Color.White, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Text(game.provider, color = Color(0xFF808088), style = MaterialTheme.typography.labelSmall, maxLines = 1)
         TextButton(onClick = onPlay) { Text("Play") }
+    }
+}
+
+@Composable
+private fun Artwork(game: CatalogGame, modifier: Modifier = Modifier) {
+    val url = ArtworkStore.urlFor(game)
+    if (url != null) {
+        AsyncImage(
+            model = url,
+            contentDescription = game.title,
+            modifier = modifier,
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        Box(modifier.background(Color(game.accent)), contentAlignment = Alignment.Center) {
+            Text(game.title.take(1), color = Color.White, style = MaterialTheme.typography.headlineLarge)
+        }
     }
 }
