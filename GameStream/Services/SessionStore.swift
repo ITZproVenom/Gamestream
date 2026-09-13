@@ -19,9 +19,6 @@ final class SessionStore: ObservableObject {
     @Published var requestedTab: RootView.Tab? = nil
     @Published var isStreaming: Bool = false
 
-    /// Survives Search tab unmount so the field is not wiped when switching tabs.
-    @Published var searchDraft: String = ""
-
     /// JS snippets the webview should evaluate on next opportunity.
     @Published var pendingJavaScript: String?
 
@@ -31,10 +28,17 @@ final class SessionStore: ObservableObject {
     /// Bumped to force a hard reload even when URL is unchanged.
     @Published var reloadNonce: Int = 0
 
+    /// Survives Search tab unmount so the field is not wiped when switching tabs.
+    @Published var searchDraft: String = ""
+
     /// When true, the idle timer stays disabled even outside an active stream.
     @Published var keepScreenAwake: Bool {
         didSet { UserDefaults.standard.set(keepScreenAwake, forKey: Keys.keepScreenAwake) }
     }
+
+    @Published var favorites: [TrackedGame] = []
+    @Published var recents: [TrackedGame] = []
+    @Published var currentGame: TrackedGame?
 
     private enum Keys {
         static let signedIn = "GameStream.isSignedIn"
@@ -44,6 +48,8 @@ final class SessionStore: ObservableObject {
         static let recentSearches = "GameStream.recentSearches"
         static let searchDraft = "GameStream.searchDraft"
         static let keepScreenAwake = "GameStream.keepScreenAwake"
+        static let favorites = "GameStream.favorites.v1"
+        static let recents = "GameStream.recents.v1"
     }
 
     init() {
@@ -51,6 +57,8 @@ final class SessionStore: ObservableObject {
         self.accountLabel = UserDefaults.standard.string(forKey: Keys.accountLabel)
         self.searchDraft = UserDefaults.standard.string(forKey: Keys.searchDraft) ?? ""
         self.keepScreenAwake = UserDefaults.standard.bool(forKey: Keys.keepScreenAwake)
+        self.favorites = Self.loadGames(key: Keys.favorites)
+        self.recents = Self.loadGames(key: Keys.recents)
     }
 
     func updateSearchDraft(_ value: String) {
@@ -67,6 +75,7 @@ final class SessionStore: ObservableObject {
         isSignedIn = false
         accountLabel = nil
         isStreaming = false
+        currentGame = nil
         webURL = URL(string: "https://www.xbox.com/play")!
 
         let store = WKWebsiteDataStore.default()
@@ -135,6 +144,14 @@ final class SessionStore: ObservableObject {
         requestedTab = .library
     }
 
+    func openGame(_ game: TrackedGame) {
+        guard let url = game.catalogURL else { return }
+        webURL = url
+        isStreaming = false
+        requestedTab = .library
+        noteGame(id: game.id, slug: game.slug, title: game.title, markRecent: true)
+    }
+
     /// SPA-safe back: prefer history, fall back to Library home.
     func goBack() {
         isStreaming = false
@@ -154,10 +171,111 @@ final class SessionStore: ObservableObject {
     }
 
     /// Called from the webview bridge. Updates streaming state only — never webURL.
-    func updateFromWebURL(_ url: URL) {
+    func updateFromWebURL(_ url: URL, pageTitle: String? = nil) {
         let streaming = Self.isStreamingURL(url.absoluteString)
         if isStreaming != streaming {
             isStreaming = streaming
+        }
+
+        if let parsed = GameURLParser.parse(url.absoluteString) {
+            let title = GameURLParser.displayTitle(fromPageTitle: pageTitle, slug: parsed.slug, productId: parsed.productId)
+            noteGame(id: parsed.productId, slug: parsed.slug, title: title, markRecent: streaming)
+        } else if !streaming {
+            currentGame = nil
+        }
+    }
+
+    func toggleFavoriteCurrent() {
+        guard let game = currentGame else { return }
+        toggleFavorite(game)
+    }
+
+    func toggleFavorite(_ game: TrackedGame) {
+        if let index = favorites.firstIndex(where: { $0.id == game.id }) {
+            favorites.remove(at: index)
+        } else {
+            var pinned = game
+            pinned.isFavorite = true
+            pinned.lastSeen = Date()
+            favorites.insert(pinned, at: 0)
+        }
+        if favorites.count > 24 {
+            favorites = Array(favorites.prefix(24))
+        }
+        persistFavorites()
+        refreshCurrentFavoriteFlag()
+    }
+
+    func isFavorite(_ id: String) -> Bool {
+        favorites.contains(where: { $0.id == id })
+    }
+
+    func clearRecents() {
+        recents = []
+        persistRecents()
+    }
+
+    func clearFavorites() {
+        favorites = []
+        persistFavorites()
+        refreshCurrentFavoriteFlag()
+    }
+
+    private func noteGame(id: String, slug: String, title: String, markRecent: Bool) {
+        guard !id.isEmpty else { return }
+        var game = TrackedGame(
+            id: id,
+            slug: slug,
+            title: title,
+            lastSeen: Date(),
+            isFavorite: isFavorite(id)
+        )
+        if let existingFav = favorites.first(where: { $0.id == id }) {
+            game.isFavorite = true
+            if title.count >= existingFav.title.count {
+                var updated = existingFav
+                updated.title = title
+                updated.slug = slug.isEmpty ? existingFav.slug : slug
+                updated.lastSeen = Date()
+                if let idx = favorites.firstIndex(where: { $0.id == id }) {
+                    favorites[idx] = updated
+                    persistFavorites()
+                }
+            }
+        }
+        currentGame = game
+
+        guard markRecent else { return }
+        recents.removeAll { $0.id == id }
+        recents.insert(game, at: 0)
+        if recents.count > 12 {
+            recents = Array(recents.prefix(12))
+        }
+        persistRecents()
+    }
+
+    private func refreshCurrentFavoriteFlag() {
+        guard var game = currentGame else { return }
+        game.isFavorite = isFavorite(game.id)
+        currentGame = game
+    }
+
+    private func persistFavorites() {
+        Self.saveGames(favorites, key: Keys.favorites)
+    }
+
+    private func persistRecents() {
+        Self.saveGames(recents, key: Keys.recents)
+    }
+
+    private static func loadGames(key: String) -> [TrackedGame] {
+        guard let data = UserDefaults.standard.data(forKey: key) else { return [] }
+        return (try? JSONDecoder().decode([TrackedGame].self, from: data)) ?? []
+    }
+
+    private static func saveGames(_ games: [TrackedGame], key: String) {
+        if let data = try? JSONEncoder().encode(games) {
+            UserDefaults.standard.set(data, forKey: key)
         }
     }
 
@@ -265,6 +383,7 @@ final class SessionStore: ObservableObject {
                 self?.accountLabel = nil
                 self?.webURL = URL(string: "https://www.xbox.com/play")!
                 self?.isStreaming = false
+                self?.currentGame = nil
                 self?.reloadNonce += 1
                 self?.requestedTab = .library
             }
