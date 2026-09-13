@@ -116,6 +116,20 @@ final class SessionStore: ObservableObject {
         requestedTab = .library
     }
 
+    /// SPA-safe back: prefer history, fall back to Library home.
+    func goBack() {
+        isStreaming = false
+        pendingJavaScript = """
+        (function() {
+            try {
+                if (history.length > 1) { history.back(); return; }
+            } catch (e) {}
+            location.href = 'https://www.xbox.com/play';
+        })();
+        """
+        requestedTab = .library
+    }
+
     func reloadCurrent() {
         reloadNonce += 1
     }
