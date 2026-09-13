@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 30
+          fetch-depth: 40
 
       - name: Cache Homebrew XcodeGen
         uses: actions/cache@v4
@@ -93,23 +93,141 @@ jobs:
           echo "tag=ios-build-${STAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           echo "name=iOS build #${RUN} (${SHORT_SHA})" >> "$GITHUB_OUTPUT"
 
-          {
-            echo "## Changelog"
-            echo ""
-            echo "**Platform:** iOS · **Build:** \`${SHORT_SHA}\` · **${DATE_UTC}**"
-            echo ""
-            echo "### What's changed"
-            echo ""
-            git log --max-count=15 --pretty=format:'- %s (%h)' --no-merges
-            echo ""
-            echo ""
-            echo "---"
-            echo ""
-            echo "### Install"
-            echo "Download **GameStream-unsigned.ipa** (AltStore / Sideloadly / TrollStore)."
-            echo ""
-            echo "_Unsigned — not App Store signed._"
-          } > release_notes.md
+          python3 - <<'PY'
+          import subprocess
+          from pathlib import Path
+
+          raw = subprocess.check_output(
+              ["git", "log", "--max-count=40", "--name-only", "--pretty=format:COMMIT\t%h\t%s", "--no-merges"],
+              text=True,
+          )
+
+          def classify(paths):
+              ios = False
+              android = False
+              shared = False
+              for p in paths:
+                  if p.startswith("android/"):
+                      android = True
+                  elif (
+                      p.startswith("GameStream/")
+                      or p.startswith("scripts/")
+                      or p == "project.yml"
+                      or p == ".github/workflows/build-ipa.yml"
+                  ):
+                      ios = True
+                  elif p.startswith(".github/workflows/build-apk.yml"):
+                      android = True
+                  else:
+                      # README, LICENSE, root docs, shared CI helpers
+                      shared = True
+              if ios or (shared and not android):
+                  return True
+              if shared and ios:
+                  return True
+              if shared and android and ios:
+                  return True
+              if shared and not android:
+                  return True
+              if shared and android and not ios:
+                  return False
+              return ios
+
+          entries = []
+          sha = subject = None
+          files = []
+          for line in raw.splitlines():
+              if line.startswith("COMMIT\t"):
+                  if sha is not None and classify(files):
+                      entries.append((sha, subject))
+                  _, sha, subject = line.split("\t", 2)
+                  files = []
+              elif line.strip():
+                  files.append(line.strip())
+          if sha is not None and classify(files):
+              entries.append((sha, subject))
+
+          entries = entries[:12]
+          notes = [
+              "## Changelog",
+              "",
+              f"**Platform:** iOS · **Build:** `{SHORT}` · **{DATE}**".replace("{SHORT}", "__SHORT__"),
+          ]
+          PY
+
+          SHORT_SHA="$(echo '${{ github.sha }}' | cut -c1-7)"
+          DATE_UTC="$(date -u +'%Y-%m-%d %H:%M UTC')"
+
+          python3 - "$SHORT_SHA" "$DATE_UTC" <<'PY'
+          import subprocess, sys
+
+          short, date = sys.argv[1], sys.argv[2]
+          raw = subprocess.check_output(
+              ["git", "log", "--max-count=50", "--name-only", "--pretty=format:COMMIT\t%h\t%s", "--no-merges"],
+              text=True,
+          )
+
+          def include(paths):
+              ios = android = other = False
+              for p in paths:
+                  if p.startswith("android/") or p == ".github/workflows/build-apk.yml":
+                      android = True
+                  elif (
+                      p.startswith("GameStream/")
+                      or p.startswith("scripts/")
+                      or p == "project.yml"
+                      or p == ".github/workflows/build-ipa.yml"
+                  ):
+                      ios = True
+                  else:
+                      other = True
+              if ios:
+                  return True
+              if android and not ios and not other:
+                  return False
+              if android and not ios:
+                  return False
+              return True
+
+          items = []
+          sha = subject = None
+          files = []
+          for line in raw.splitlines():
+              if line.startswith("COMMIT\t"):
+                  if sha is not None and include(files):
+                      items.append(f"- {subject} ({sha})")
+                  _, sha, subject = line.split("\t", 2)
+                  files = []
+              elif line.strip():
+                  files.append(line.strip())
+          if sha is not None and include(files):
+              items.append(f"- {subject} ({sha})")
+
+          items = items[:12]
+          if not items:
+              items = ["- No iOS-relevant commits in recent history."]
+
+          body = [
+              "## Changelog",
+              "",
+              f"**Platform:** iOS · **Build:** `{short}` · **{date}**",
+              "",
+              "### What's changed",
+              "",
+              *items,
+              "",
+              "---",
+              "",
+              "### Install",
+              "Download **GameStream-unsigned.ipa** (AltStore / Sideloadly / TrollStore).",
+              "",
+              "_Unsigned — not App Store signed._",
+              "",
+          ]
+          Path = __import__("pathlib").Path
+          Path("release_notes.md").write_text("\n".join(body))
+          print("\n".join(items))
+          PY
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
