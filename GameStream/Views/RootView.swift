@@ -34,17 +34,14 @@ struct RootView: View {
 
             glassTabBar
         }
-        .task {
-            if !session.isSignedIn {
-                await session.signIn(provider: .geforceNow)
-            }
-        }
     }
 
     private var glassTabBar: some View {
         HStack(spacing: 0) {
             ForEach(Tab.allCases, id: \.self) { tab in
                 Button {
+                    let generator = UIImpactFeedbackGenerator(style: .light)
+                    generator.impactOccurred()
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                         selectedTab = tab
                     }
@@ -61,10 +58,7 @@ struct RootView: View {
             }
         }
         .padding(.vertical, 10)
-        .background(
-            .ultraThinMaterial,
-            in: RoundedRectangle(cornerRadius: 28, style: .continuous)
-        )
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .strokeBorder(.white.opacity(0.15), lineWidth: 1)
