@@ -12,7 +12,10 @@ final class SessionStore: ObservableObject {
         didSet { UserDefaults.standard.set(accountLabel, forKey: Keys.accountLabel) }
     }
 
+    /// App-driven destination only. Do not write this from in-page navigation
+    /// or the webview will hard-reload on every SPA route change.
     @Published var webURL: URL = URL(string: "https://www.xbox.com/play")!
+
     @Published var requestedTab: RootView.Tab? = nil
     @Published var isStreaming: Bool = false
 
@@ -21,6 +24,9 @@ final class SessionStore: ObservableObject {
 
     /// Bumped to force webview re-injection / reload of Better xCloud script.
     @Published var betterXCloudRefreshToken: Int = 0
+
+    /// Bumped to force a hard reload even when URL is unchanged.
+    @Published var reloadNonce: Int = 0
 
     private enum Keys {
         static let signedIn = "GameStream.isSignedIn"
@@ -70,17 +76,22 @@ final class SessionStore: ObservableObject {
     }
 
     func reloadCurrent() {
-        let current = webURL
-        webURL = current
-        // Force a reload by re-assigning after a tick is handled in webview via URL equality;
-        // use pending JS location.reload as backup.
+        reloadNonce += 1
         pendingJavaScript = "try { location.reload(); } catch (e) {}"
     }
 
+    /// Called from the webview bridge. Updates streaming state only — never webURL.
     func updateFromWebURL(_ url: URL) {
-        webURL = url
         let path = url.path.lowercased()
-        let streaming = path.contains("/launch") || path.contains("/play/game")
+        let full = url.absoluteString.lowercased()
+        let streaming =
+            path.contains("/launch") ||
+            path.contains("/play/game") ||
+            path.contains("/play/launch") ||
+            full.contains("/launch/") ||
+            full.contains("streaming") ||
+            full.contains("/stream")
+
         if isStreaming != streaming {
             isStreaming = streaming
         }
@@ -88,7 +99,6 @@ final class SessionStore: ObservableObject {
 
     // MARK: - Better xCloud preference bridging
 
-    /// Writes a Better xCloud preference into localStorage and reloads the page.
     func applyBetterXCloudPref(_ prefKey: String, value: String) {
         let escapedKey = prefKey.replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "'", with: "\\'")
@@ -103,7 +113,6 @@ final class SessionStore: ObservableObject {
                 try { data = JSON.parse(localStorage.getItem(storageKey) || '{}') || {}; } catch (e) { data = {}; }
                 data['\(escapedKey)'] = '\(escapedValue)';
                 localStorage.setItem(storageKey, JSON.stringify(data));
-                // Also set flat key some builds use
                 try { localStorage.setItem('BetterXcloud.\(escapedKey)', '\(escapedValue)'); } catch (e) {}
                 setTimeout(function() { location.reload(); }, 120);
             } catch (e) {}
@@ -113,7 +122,6 @@ final class SessionStore: ObservableObject {
         pendingJavaScript = js
         requestedTab = .library
         isStreaming = false
-        // Ensure library is on xbox play home so prefs apply on next load
         if !webURL.absoluteString.contains("xbox.com/play") {
             webURL = URL(string: "https://www.xbox.com/play")!
         }
@@ -121,8 +129,6 @@ final class SessionStore: ObservableObject {
 
     func applyStreamResolution(_ resolution: String) {
         UserDefaults.standard.set(resolution, forKey: Keys.streamResolution)
-        // Better xCloud PrefKey.STREAM_RESOLUTION = 'stream.video.resolution'
-        // Values commonly: auto | 720p | 1080p | 1080p-hq (HQ)
         let mapped: String
         switch resolution {
         case "720p": mapped = "720p"
@@ -135,7 +141,6 @@ final class SessionStore: ObservableObject {
 
     func applyServerRegion(_ region: String) {
         UserDefaults.standard.set(region, forKey: Keys.serverRegion)
-        // PrefKey.SERVER_REGION = 'server.region' — empty/auto lets xCloud choose
         let mapped: String
         switch region {
         case "North America": mapped = "us"
@@ -148,7 +153,6 @@ final class SessionStore: ObservableObject {
     }
 
     func refreshBetterXCloudScript() {
-        // Drop cached userscript so next load re-fetches latest
         UserDefaults.standard.removeObject(forKey: "BetterXCloud.Script.v2")
         UserDefaults.standard.removeObject(forKey: "BetterXCloud.Script.Date.v2")
         betterXCloudRefreshToken += 1

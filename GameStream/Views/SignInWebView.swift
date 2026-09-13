@@ -1,19 +1,33 @@
 import SwiftUI
 import WebKit
 
-/// Sign-in surface — same Xbox login page used by the official app/website.
+/// Sign-in surface — same Xbox login page, shared cookie store with Library webview.
 struct SignInWebView: View {
     var body: some View {
-        WebViewRepresentable(url: URL(string: "https://www.xbox.com/play")!)
+        SignInWebViewRepresentable(url: URL(string: "https://www.xbox.com/play")!)
             .ignoresSafeArea()
     }
 }
 
-struct WebViewRepresentable: UIViewRepresentable {
+struct SignInWebViewRepresentable: UIViewRepresentable {
     let url: URL
 
+    /// Shared with XboxCloudWebView so Microsoft login cookies survive into Library.
+    private static let sharedProcessPool = WKProcessPool()
+
+    static var processPool: WKProcessPool { sharedProcessPool }
+
     func makeUIView(context: Context) -> WKWebView {
-        let webView = WKWebView()
+        let config = WKWebViewConfiguration()
+        config.websiteDataStore = .default()
+        config.processPool = Self.sharedProcessPool
+
+        let prefs = WKWebpagePreferences()
+        prefs.allowsContentJavaScript = true
+        config.defaultWebpagePreferences = prefs
+
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.allowsBackForwardNavigationGestures = true
         webView.load(URLRequest(url: url))
         return webView
     }
