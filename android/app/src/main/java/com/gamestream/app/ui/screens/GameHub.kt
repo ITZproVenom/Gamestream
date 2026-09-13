@@ -117,10 +117,34 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
                 Text("Search Xbox Cloud for \"${query.trim()}\"")
             }
         } else {
-            if (session.queuedGames().isNotEmpty()) {
+            if (session.offerPlayNext) {
+                session.queuedGames().firstOrNull()?.let { next ->
+                    Spacer(Modifier.height(12.dp))
+                    Text("Up next", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFF16161E)).padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(Modifier.size(56.dp, 74.dp).clip(RoundedCornerShape(10.dp)).background(Color(next.accent))) {
+                            Artwork(next, Modifier.fillMaxSize())
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(next.title, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text("Ready when you are", color = Color(0xFFB0B0B8), style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                            Spacer(Modifier.height(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = { session.offerPlayNext = false; session.playNextQueued() }) { Text("Play next", maxLines = 1) }
+                                TextButton(onClick = { session.offerPlayNext = false }) { Text("Dismiss", maxLines = 1) }
+                            }
+                        }
+                    }
+                }
+            } else if (session.queuedGames().isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
                 Button(onClick = { session.playNextQueued() }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Play next in queue")
+                    Text("Play next in queue", maxLines = 1)
                 }
             }
             recents.firstOrNull()?.let { last ->
