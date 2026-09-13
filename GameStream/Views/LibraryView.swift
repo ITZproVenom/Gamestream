@@ -87,8 +87,6 @@ struct LibraryView: View {
         }
     }
 
-    // MARK: - Floating chrome
-
     private var libraryChrome: some View {
         HStack(spacing: 6) {
             Button {
@@ -102,14 +100,14 @@ struct LibraryView: View {
             .accessibilityLabel("Back")
 
             Button {
-                session.openHome()
+                session.returnToHub()
             } label: {
                 Image(systemName: "house.fill")
                     .font(.system(size: 15, weight: .semibold))
                     .frame(width: 38, height: 38)
             }
             .buttonStyle(.glass)
-            .accessibilityLabel("Library home")
+            .accessibilityLabel("GameHub")
 
             Spacer(minLength: 4)
 
@@ -155,37 +153,75 @@ struct LibraryView: View {
         .padding(.horizontal, 12)
     }
 
-    /// Tiny edge control so a stream can be left without fighting Xbox page chrome.
     private var streamExitChrome: some View {
-        HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
             if showStreamExit {
-                Button {
-                    session.openHome()
-                    showStreamExit = false
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .bold))
-                        Text("Exit stream")
-                            .font(.caption.weight(.semibold))
-                            .lineLimit(1)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                }
-                .buttonStyle(.glass)
-                .accessibilityLabel("Exit stream")
-
-                if session.currentGame != nil {
+                HStack(spacing: 8) {
                     Button {
-                        session.toggleFavoriteCurrent()
+                        session.exitStreamToHub()
+                        showStreamExit = false
                     } label: {
-                        Image(systemName: session.currentGame?.isFavorite == true ? "star.fill" : "star")
-                            .font(.system(size: 12, weight: .bold))
-                            .frame(width: 32, height: 28)
+                        HStack(spacing: 6) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 12, weight: .bold))
+                            Text("Exit")
+                                .font(.caption.weight(.semibold))
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
                     }
                     .buttonStyle(.glass)
-                    .accessibilityLabel(session.currentGame?.isFavorite == true ? "Remove favorite" : "Add favorite")
+                    .accessibilityLabel("Exit stream")
+
+                    if session.nextQueuedGame != nil {
+                        Button {
+                            session.playNextFromStream()
+                            showStreamExit = false
+                        } label: {
+                            Text("Play next")
+                                .font(.caption.weight(.semibold))
+                                .lineLimit(1)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.glassProminent)
+                        .accessibilityLabel("Play next queued game")
+                    }
+
+                    Button {
+                        session.returnToHub()
+                        showStreamExit = false
+                    } label: {
+                        Text("Hub")
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.glass)
+                    .accessibilityLabel("Open GameHub")
+
+                    if session.currentGame != nil {
+                        Button {
+                            session.toggleFavoriteCurrent()
+                        } label: {
+                            Image(systemName: session.currentGame?.isFavorite == true ? "star.fill" : "star")
+                                .font(.system(size: 12, weight: .bold))
+                                .frame(width: 32, height: 28)
+                        }
+                        .buttonStyle(.glass)
+                        .accessibilityLabel(session.currentGame?.isFavorite == true ? "Remove favorite" : "Add favorite")
+                    }
+                    Spacer(minLength: 0)
+                }
+                if let title = session.currentGame?.title, !title.isEmpty {
+                    Text(title)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .padding(.horizontal, 4)
                 }
             } else {
                 Button {
@@ -199,7 +235,6 @@ struct LibraryView: View {
                 .opacity(0.55)
                 .accessibilityLabel("Show stream controls")
             }
-            Spacer()
         }
         .padding(.horizontal, 16)
     }
@@ -210,15 +245,13 @@ struct LibraryView: View {
             showStreamExit = true
         }
         streamExitHideTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 3_500_000_000)
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
             guard !Task.isCancelled else { return }
             withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
                 showStreamExit = false
             }
         }
     }
-
-    // MARK: - Better xCloud sheet
 
     private var betterXCloudSheet: some View {
         NavigationStack {
@@ -321,8 +354,6 @@ struct LibraryView: View {
         .padding(.vertical, 4)
     }
 
-    // MARK: - Sign-in
-
     private var signInSurface: some View {
         VStack(spacing: 28) {
             Spacer()
@@ -367,8 +398,6 @@ struct LibraryView: View {
             Spacer()
         }
     }
-
-    // MARK: - Overlays
 
     private var loadingOverlay: some View {
         ZStack {
