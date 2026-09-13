@@ -25,10 +25,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.gamestream.app.BetterXCloudInjector
+import com.gamestream.app.OnboardingPrefs
 import com.gamestream.app.SessionStore
 import com.gamestream.app.ui.screens.IntroScreen
 import com.gamestream.app.ui.screens.LibraryScreen
-import com.gamestream.app.ui.screens.MicrosoftSignInScreen
 import com.gamestream.app.ui.screens.SearchScreen
 import com.gamestream.app.ui.screens.SettingsScreen
 import com.gamestream.app.ui.screens.WelcomeScreen
@@ -43,9 +43,7 @@ enum class Tab(val label: String) {
 fun GameStreamApp(session: SessionStore = viewModel()) {
     var tab by remember { mutableStateOf(Tab.Library) }
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("gamestream", android.content.Context.MODE_PRIVATE) }
-    var introCompleted by remember { mutableStateOf(prefs.getBoolean("intro_completed", false)) }
-    var showingMicrosoftSignIn by remember { mutableStateOf(false) }
+    var introCompleted by remember { mutableStateOf(OnboardingPrefs.isIntroDone(context)) }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -64,18 +62,13 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
 
     if (!introCompleted) {
         IntroScreen {
-            prefs.edit().putBoolean("intro_completed", true).apply()
             introCompleted = true
         }
         return
     }
 
     if (!session.isSignedIn) {
-        if (showingMicrosoftSignIn) {
-            MicrosoftSignInScreen(session = session, onClose = { showingMicrosoftSignIn = false })
-        } else {
-            WelcomeScreen(onSignIn = { showingMicrosoftSignIn = true })
-        }
+        WelcomeScreen(session)
         return
     }
 
