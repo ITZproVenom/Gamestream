@@ -39,6 +39,8 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         private set
     var recentIds by mutableStateOf(prefs.getString("recent_ids", "")?.split(",")?.filter { it.isNotBlank() } ?: emptyList())
         private set
+    var queueIds by mutableStateOf(prefs.getString("queue_ids", "")?.split(",")?.filter { it.isNotBlank() } ?: emptyList())
+        private set
 
     var streamResolution by mutableStateOf(prefs.getString(KEY_RES, "Auto") ?: "Auto")
         private set
@@ -112,6 +114,28 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         recentIds = listOf(id) + recentIds.filter { it != id }
         if (recentIds.size > 12) recentIds = recentIds.take(12)
         prefs.edit().putString("recent_ids", recentIds.joinToString(",")).apply()
+    }
+
+    fun isQueued(id: String) = queueIds.contains(id)
+
+    fun toggleQueue(game: CatalogGame) {
+        queueIds = if (queueIds.contains(game.id)) queueIds.filter { it != game.id } else (queueIds + game.id).take(16)
+        prefs.edit().putString("queue_ids", queueIds.joinToString(",")).apply()
+    }
+
+    fun dequeue(id: String) {
+        queueIds = queueIds.filter { it != id }
+        prefs.edit().putString("queue_ids", queueIds.joinToString(",")).apply()
+    }
+
+    fun queuedGames(): List<CatalogGame> =
+        queueIds.mapNotNull { id -> GameCatalog.games.find { it.id == id } }
+
+    fun playNextQueued(): Boolean {
+        val next = queuedGames().firstOrNull() ?: return false
+        dequeue(next.id)
+        playGame(next)
+        return true
     }
 
     fun favoriteGames(): List<CatalogGame> =
