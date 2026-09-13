@@ -6,6 +6,8 @@ struct LibraryView: View {
     @State private var showingSignIn = false
     @State private var errorMessage: String?
     @State private var showBetterXCloudInfo = false
+    @State private var showStreamExit = false
+    @State private var streamExitHideTask: Task<Void, Never>?
 
     var body: some View {
         ZStack {
@@ -22,14 +24,18 @@ struct LibraryView: View {
                         errorOverlay(errorMessage)
                     }
 
-                    // Hide floating chrome while streaming a game
-                    if !session.isStreaming && !isLoading {
+                    if session.isStreaming && !isLoading {
+                        streamExitChrome
+                            .padding(.top, 8)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    } else if !session.isStreaming && !isLoading {
                         libraryChrome
                             .padding(.top, 8)
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
                 .animation(.spring(response: 0.35, dampingFraction: 0.85), value: session.isStreaming)
+                .animation(.spring(response: 0.32, dampingFraction: 0.86), value: showStreamExit)
                 .onReceive(NotificationCenter.default.publisher(for: .webViewLoadingChanged)) { note in
                     if let loading = note.object as? Bool {
                         withAnimation(.easeInOut(duration: 0.25)) {
@@ -44,6 +50,12 @@ struct LibraryView: View {
                             errorMessage = message
                             isLoading = false
                         }
+                    }
+                }
+                .onChange(of: session.isStreaming) { _, streaming in
+                    if !streaming {
+                        showStreamExit = false
+                        streamExitHideTask?.cancel()
                     }
                 }
             } else {
@@ -78,6 +90,16 @@ struct LibraryView: View {
     private var libraryChrome: some View {
         HStack(spacing: 10) {
             Button {
+                session.goBack()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 40, height: 40)
+            }
+            .buttonStyle(.glass)
+            .accessibilityLabel("Back")
+
+            Button {
                 session.openHome()
             } label: {
                 Image(systemName: "house.fill")
@@ -85,6 +107,7 @@ struct LibraryView: View {
                     .frame(width: 40, height: 40)
             }
             .buttonStyle(.glass)
+            .accessibilityLabel("Library home")
 
             Spacer()
 
@@ -112,8 +135,59 @@ struct LibraryView: View {
                     .frame(width: 40, height: 40)
             }
             .buttonStyle(.glass)
+            .accessibilityLabel("Reload")
         }
         .padding(.horizontal, 16)
+    }
+
+    /// Tiny edge control so a stream can be left without fighting Xbox page chrome.
+    private var streamExitChrome: some View {
+        HStack {
+            if showStreamExit {
+                Button {
+                    session.openHome()
+                    showStreamExit = false
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .bold))
+                        Text("Exit stream")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                }
+                .buttonStyle(.glass)
+                .accessibilityLabel("Exit stream")
+            } else {
+                Button {
+                    revealStreamExit()
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .bold))
+                        .frame(width: 28, height: 22)
+                }
+                .buttonStyle(.glass)
+                .opacity(0.55)
+                .accessibilityLabel("Show stream controls")
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+    }
+
+    private func revealStreamExit() {
+        streamExitHideTask?.cancel()
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+            showStreamExit = true
+        }
+        streamExitHideTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_500_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                showStreamExit = false
+            }
+        }
     }
 
     // MARK: - Better xCloud sheet
