@@ -43,7 +43,7 @@ jobs:
         working-directory: .
         run: |
           set -euo pipefail
-          python3 -m pip install --user 'pillow>=10'
+          python3 -m pip install --user 'pillow>=10' || python3 -m pip install --user --break-system-packages 'pillow>=10'
           python3 scripts/install_icons.py
           test -f android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           python3 - <<'PY'
@@ -67,13 +67,11 @@ jobs:
 
       - name: Locate APK
         run: |
+          set -euo pipefail
           APK=$(find app/build/outputs/apk -name "*.apk" | head -1)
+          test -n "$APK"
           ls -lh "$APK"
           cp "$APK" "$GITHUB_WORKSPACE/GameStream-debug.apk"
-          python3 - <<'PY'
-          import zipfile, sys
-          z = zipfile.ZipFile("/home/runner/work/Gamestream/Gamestream/GameStream-debug.apk" if False else None)
-          PY
           python3 - "$GITHUB_WORKSPACE/GameStream-debug.apk" <<'PY'
           import sys, zipfile
           path = sys.argv[1]
