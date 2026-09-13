@@ -26,6 +26,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
     var bxRefreshToken by mutableIntStateOf(0)
         private set
     var showNativeHub by mutableStateOf(true)
+    var offerPlayNext by mutableStateOf(false)
     var favoriteIds by mutableStateOf(prefs.getStringSet(KEY_FAVS, emptySet())?.toSet() ?: emptySet())
         private set
     var recentIds by mutableStateOf(prefs.getString("recent_ids", "")?.split(",")?.filter { it.isNotBlank() } ?: emptyList())
@@ -61,6 +62,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         isSignedIn = false
         accountLabel = null
         isStreaming = false
+        offerPlayNext = false
         showNativeHub = true
         webUrl = HOME_URL
         prefs.edit().putBoolean(KEY_SIGNED_IN, false).remove(KEY_ACCOUNT).remove(KEY_AUTH_PROOF).apply()
@@ -68,11 +70,22 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         reloadNonce++
     }
 
-    fun openHome() { webUrl = HOME_URL; isStreaming = false; showNativeHub = true; requestedTab = "library" }
-    fun openXboxCloud() { webUrl = HOME_URL; isStreaming = false; showNativeHub = false; requestedTab = "library" }
-    fun openGame(game: CatalogGame) { webUrl = game.catalogUrl; isStreaming = false; showNativeHub = false; requestedTab = "library"; rememberRecent(game.id) }
-    fun playGame(game: CatalogGame) { webUrl = game.launchUrl; isStreaming = false; showNativeHub = false; requestedTab = "library"; rememberRecent(game.id) }
+    fun openHome() { webUrl = HOME_URL; isStreaming = false; offerPlayNext = queuedGames().isNotEmpty(); showNativeHub = true; requestedTab = "library" }
+    fun openXboxCloud() { webUrl = HOME_URL; isStreaming = false; offerPlayNext = false; showNativeHub = false; requestedTab = "library" }
+    fun openGame(game: CatalogGame) { webUrl = game.catalogUrl; isStreaming = false; offerPlayNext = false; showNativeHub = false; requestedTab = "library"; rememberRecent(game.id) }
+    fun playGame(game: CatalogGame) { webUrl = game.launchUrl; isStreaming = false; offerPlayNext = false; showNativeHub = false; requestedTab = "library"; rememberRecent(game.id) }
     fun returnToHub() { isStreaming = false; showNativeHub = true; requestedTab = "library" }
+    fun exitStreamToHub() {
+        offerPlayNext = queuedGames().isNotEmpty()
+        webUrl = HOME_URL
+        isStreaming = false
+        showNativeHub = true
+        requestedTab = "library"
+    }
+    fun playNextFromStream() {
+        offerPlayNext = false
+        if (!playNextQueued()) exitStreamToHub()
+    }
     fun isFavorite(id: String) = favoriteIds.contains(id)
     fun toggleFavorite(game: CatalogGame) {
         favoriteIds = if (favoriteIds.contains(game.id)) favoriteIds - game.id else setOf(game.id) + favoriteIds
@@ -107,6 +120,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         val escaped = q.replace("\\", "\\\\").replace("'", "\\'").replace("\n", " ")
         webUrl = HOME_URL
         isStreaming = false
+        offerPlayNext = false
         showNativeHub = false
         pendingJs = """
             (function(){
@@ -143,8 +157,12 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
     fun reloadCurrent() { reloadNonce++; pendingJs = "try { location.reload(); } catch(e){}" }
     fun updateStreamingFromUrl(url: String) {
         val streaming = isStreamingUrl(url)
+        if (isStreaming && !streaming) offerPlayNext = queuedGames().isNotEmpty()
         if (isStreaming != streaming) isStreaming = streaming
-        if (streaming) showNativeHub = false
+        if (streaming) {
+            showNativeHub = false
+            offerPlayNext = false
+        }
     }
     fun applyResolution(option: String) {
         streamResolution = option
