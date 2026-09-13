@@ -31,6 +31,11 @@ final class SessionStore: ObservableObject {
     /// Bumped to force a hard reload even when URL is unchanged.
     @Published var reloadNonce: Int = 0
 
+    /// When true, the idle timer stays disabled even outside an active stream.
+    @Published var keepScreenAwake: Bool {
+        didSet { UserDefaults.standard.set(keepScreenAwake, forKey: Keys.keepScreenAwake) }
+    }
+
     private enum Keys {
         static let signedIn = "GameStream.isSignedIn"
         static let accountLabel = "GameStream.accountLabel"
@@ -38,12 +43,14 @@ final class SessionStore: ObservableObject {
         static let serverRegion = "GameStream.serverRegion"
         static let recentSearches = "GameStream.recentSearches"
         static let searchDraft = "GameStream.searchDraft"
+        static let keepScreenAwake = "GameStream.keepScreenAwake"
     }
 
     init() {
         self.isSignedIn = UserDefaults.standard.bool(forKey: Keys.signedIn)
         self.accountLabel = UserDefaults.standard.string(forKey: Keys.accountLabel)
         self.searchDraft = UserDefaults.standard.string(forKey: Keys.searchDraft) ?? ""
+        self.keepScreenAwake = UserDefaults.standard.bool(forKey: Keys.keepScreenAwake)
     }
 
     func updateSearchDraft(_ value: String) {
@@ -254,6 +261,8 @@ final class SessionStore: ObservableObject {
             modifiedSince: .distantPast
         ) { [weak self] in
             Task { @MainActor in
+                self?.isSignedIn = false
+                self?.accountLabel = nil
                 self?.webURL = URL(string: "https://www.xbox.com/play")!
                 self?.isStreaming = false
                 self?.reloadNonce += 1
