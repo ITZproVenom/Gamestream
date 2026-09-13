@@ -65,20 +65,22 @@ struct LibraryView: View {
         .sheet(isPresented: $showingSignIn) {
             NavigationStack {
                 SignInWebView()
-                    .navigationTitle("Sign in")
+                    .navigationTitle("Microsoft account")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") {
-                                session.markSignedIn()
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Close") {
                                 showingSignIn = false
                             }
-                            .buttonStyle(.glassProminent)
                         }
                     }
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
+            .environmentObject(session)
+        }
+        .onChange(of: session.isSignedIn) { _, signedIn in
+            if signedIn { showingSignIn = false }
         }
         .sheet(isPresented: $showBetterXCloudInfo) {
             betterXCloudSheet
