@@ -43,7 +43,18 @@ fun LibraryScreen(session: SessionStore) {
         XboxWebView(session = session, modifier = Modifier.fillMaxSize())
 
         if (session.showNativeHub && !session.isStreaming) {
-            GameHub(session = session, modifier = Modifier.fillMaxSize())
+            Column(Modifier.fillMaxSize()) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Start
+                ) {
+                    GameHubListsButton(session)
+                }
+                GameHub(session = session, modifier = Modifier.fillMaxSize())
+            }
         } else if (!session.isStreaming) {
             Row(
                 modifier = Modifier
