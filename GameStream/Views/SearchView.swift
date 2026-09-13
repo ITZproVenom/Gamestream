@@ -6,6 +6,15 @@ struct SearchView: View {
     @FocusState private var searchFocused: Bool
     @State private var recent: [String] = SessionStore.recentSearches
 
+    private let popularTitles = [
+        "Fortnite",
+        "Minecraft",
+        "Call of Duty",
+        "Forza Horizon",
+        "Roblox",
+        "Sea of Thieves"
+    ]
+
     var body: some View {
         ZStack {
             AnimatedBackground()
@@ -54,6 +63,7 @@ struct SearchView: View {
                     )
 
                     if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        popularSection
                         if recent.isEmpty {
                             emptyState
                         } else {
@@ -70,6 +80,30 @@ struct SearchView: View {
             .scrollDismissesKeyboard(.interactively)
         }
         .onAppear { recent = SessionStore.recentSearches }
+    }
+
+    private var popularSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Popular on Cloud")
+                .font(.title3.weight(.semibold))
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(popularTitles, id: \.self) { title in
+                        Button {
+                            searchText = title
+                            performSearch()
+                        } label: {
+                            Text(title)
+                                .font(.subheadline.weight(.medium))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.glass)
+                    }
+                }
+            }
+        }
     }
 
     private var emptyState: some View {
@@ -89,7 +123,7 @@ struct SearchView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 56)
+        .padding(.vertical, 40)
     }
 
     private var recentSection: some View {

@@ -77,10 +77,37 @@ jobs:
       - name: Package IPA
         run: |
           set -euo pipefail
+          APP="build/GameStream.xcarchive/Products/Applications/GameStream.app"
+          BIN="$APP/GameStream"
+          if [ ! -d "$APP" ]; then
+            echo "Missing GameStream.app in archive" >&2
+            find build -maxdepth 5 -print || true
+            exit 1
+          fi
+          if [ ! -f "$BIN" ]; then
+            echo "Missing GameStream binary inside GameStream.app" >&2
+            ls -la "$APP" || true
+            exit 1
+          fi
+          BIN_SIZE=$(stat -f%z "$BIN")
+          if [ "$BIN_SIZE" -lt 50000 ]; then
+            echo "GameStream binary is only ${BIN_SIZE} bytes — incomplete archive" >&2
+            exit 1
+          fi
           mkdir -p build/Payload
-          cp -R build/GameStream.xcarchive/Products/Applications/GameStream.app build/Payload/
+          rm -rf build/Payload/GameStream.app
+          cp -R "$APP" build/Payload/
           cd build && zip -qr GameStream-unsigned.ipa Payload
           ls -lh GameStream-unsigned.ipa
+          echo "App payload:"
+          unzip -l GameStream-unsigned.ipa
+          IPA_SIZE=$(stat -f%z GameStream-unsigned.ipa)
+          # Pure SwiftUI WebView client (no WebRTC) is ~130KB. Fail only if
+          # the zip is empty/truncated, not because it is no longer ~20MB.
+          if [ "$IPA_SIZE" -lt 80000 ]; then
+            echo "IPA is only ${IPA_SIZE} bytes — packaging regression" >&2
+            exit 1
+          fi
 
       - name: Build changelog + release identity
         id: meta
