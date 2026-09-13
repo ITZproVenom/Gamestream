@@ -25,10 +25,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.gamestream.app.BetterXCloudInjector
-import com.gamestream.app.OnboardingPrefs
 import com.gamestream.app.SessionStore
 import com.gamestream.app.ui.screens.IntroScreen
 import com.gamestream.app.ui.screens.LibraryScreen
+import com.gamestream.app.ui.screens.MicrosoftSignInScreen
 import com.gamestream.app.ui.screens.SearchScreen
 import com.gamestream.app.ui.screens.SettingsScreen
 import com.gamestream.app.ui.screens.WelcomeScreen
@@ -43,7 +43,9 @@ enum class Tab(val label: String) {
 fun GameStreamApp(session: SessionStore = viewModel()) {
     var tab by remember { mutableStateOf(Tab.Library) }
     val context = LocalContext.current
-    var showIntro by remember { mutableStateOf(!OnboardingPrefs.hasCompletedIntro(context)) }
+    val prefs = remember { context.getSharedPreferences("gamestream", android.content.Context.MODE_PRIVATE) }
+    var introCompleted by remember { mutableStateOf(prefs.getBoolean("intro_completed", false)) }
+    var showingMicrosoftSignIn by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -60,13 +62,20 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
         session.requestedTab = null
     }
 
-    if (showIntro) {
-        IntroScreen(onFinished = { showIntro = false })
+    if (!introCompleted) {
+        IntroScreen {
+            prefs.edit().putBoolean("intro_completed", true).apply()
+            introCompleted = true
+        }
         return
     }
 
     if (!session.isSignedIn) {
-        WelcomeScreen(session)
+        if (showingMicrosoftSignIn) {
+            MicrosoftSignInScreen(session = session, onClose = { showingMicrosoftSignIn = false })
+        } else {
+            WelcomeScreen(onSignIn = { showingMicrosoftSignIn = true })
+        }
         return
     }
 
@@ -78,20 +87,20 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
                     NavigationBarItem(
                         selected = tab == Tab.Library,
                         onClick = { tab = Tab.Library },
-                        icon = { Icon(Icons.Default.GridView, contentDescription = "Library") },
-                        label = { Text("Library", maxLines = 1) }
+                        icon = { Icon(Icons.Default.GridView, contentDescription = null) },
+                        label = { Text("Library") }
                     )
                     NavigationBarItem(
                         selected = tab == Tab.Search,
                         onClick = { tab = Tab.Search },
-                        icon = { Icon(Icons.Default.Search, contentDescription = "Search") },
-                        label = { Text("Search", maxLines = 1) }
+                        icon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        label = { Text("Search") }
                     )
                     NavigationBarItem(
                         selected = tab == Tab.Settings,
                         onClick = { tab = Tab.Settings },
-                        icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
-                        label = { Text("Settings", maxLines = 1) }
+                        icon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                        label = { Text("Settings") }
                     )
                 }
             }
@@ -109,7 +118,9 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
             }
 
             when (tab) {
-                Tab.Library -> { }
+                Tab.Library -> {
+                    if (!session.isSignedIn) LibraryScreen(session)
+                }
                 Tab.Search -> SearchScreen(session)
                 Tab.Settings -> SettingsScreen(session)
             }
