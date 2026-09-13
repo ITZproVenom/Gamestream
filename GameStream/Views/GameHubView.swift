@@ -2,6 +2,7 @@ import SwiftUI
 
 enum HubBrowseFilter: Hashable {
     case all
+    case forYou
     case favorites
     case recents
     case lists
@@ -10,6 +11,7 @@ enum HubBrowseFilter: Hashable {
     var title: String {
         switch self {
         case .all: return "All"
+        case .forYou: return "For You"
         case .favorites: return "Favorites"
         case .recents: return "Recents"
         case .lists: return "Lists"
@@ -30,7 +32,7 @@ struct GameHubView: View {
 
     private var featured: [CatalogGame] { GameCatalog.featured }
     private var shelves: [(String, [CatalogGame])] {
-        GameCatalog.shelves(favorites: session.favorites, recents: session.recents)
+        GameCatalog.hubShelves(favorites: session.favorites, recents: session.recents)
     }
     private var liveMatches: [CatalogGame] { GameCatalog.matches(hubQuery) }
     private var isFiltering: Bool {
@@ -40,6 +42,7 @@ struct GameHubView: View {
     private var filteredGames: [CatalogGame] {
         switch filter {
         case .all: return GameCatalog.games
+        case .forYou: return GameCatalog.forYou(favorites: session.favorites, recents: session.recents)
         case .favorites: return session.favorites.map { GameCatalog.catalog(from: $0) }
         case .recents: return session.recents.map { GameCatalog.catalog(from: $0) }
         case .lists:
@@ -159,6 +162,7 @@ struct GameHubView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 chip(.all)
+                chip(.forYou)
                 chip(.favorites)
                 chip(.recents)
                 chip(.lists)
@@ -198,6 +202,12 @@ struct GameHubView: View {
                 .accessibilityLabel("Open \(game.title) details")
                 VStack(alignment: .leading, spacing: 8) {
                     Text(game.title).font(.headline).lineLimit(2).minimumScaleFactor(0.85).fixedSize(horizontal: false, vertical: true)
+                    if let tracked = session.continueGame {
+                        Text(GameCatalog.relativePlayLabel(for: tracked.lastSeen))
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                     Text(game.tagline).font(.caption).foregroundStyle(.secondary).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 8) {
                         Button { session.playCatalogGame(game) } label: {
@@ -257,7 +267,7 @@ struct GameHubView: View {
                     }
                 }
             }
-            if filter == .favorites || filter == .recents { xboxCloudRow }
+            if filter == .favorites || filter == .recents || filter == .forYou { xboxCloudRow }
         }
     }
 
@@ -275,6 +285,7 @@ struct GameHubView: View {
         switch filter {
         case .favorites: return "No favorites yet"
         case .recents: return "Nothing played yet"
+        case .forYou: return "Play a few games first"
         default: return "No titles here"
         }
     }
@@ -283,6 +294,7 @@ struct GameHubView: View {
         switch filter {
         case .favorites: return "Star a game from the hub, search, or stream chrome to pin it here."
         case .recents: return "Launch a title and it will appear in Recents so you can resume quickly."
+        case .forYou: return "Favorites and recently played titles teach For You which genres to surface."
         default: return "Try another filter or search Xbox Cloud for more games."
         }
     }
