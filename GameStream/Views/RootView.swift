@@ -3,7 +3,7 @@ import UIKit
 
 struct RootView: View {
     @EnvironmentObject var session: SessionStore
-    @State private var selectedTab: Tab = .library
+    @State private var selectedTab: Tab = RootView.restoredTab()
     @Namespace private var navNamespace
 
     enum Tab: String, CaseIterable {
@@ -19,6 +19,8 @@ struct RootView: View {
             }
         }
     }
+
+    private static let tabStorageKey = "GameStream.selectedTab"
 
     /// Hide the tab bar only when the stream is actually on screen.
     private var hideTabBar: Bool {
@@ -52,6 +54,9 @@ struct RootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AnimatedBackground())
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: hideTabBar)
+        .onChange(of: selectedTab) { _, newValue in
+            UserDefaults.standard.set(newValue.rawValue, forKey: Self.tabStorageKey)
+        }
         .onChange(of: session.requestedTab) { _, newValue in
             if let tab = newValue {
                 withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
@@ -73,6 +78,14 @@ struct RootView: View {
             BetterXCloudInjector.shared.preload()
             UIApplication.shared.isIdleTimerDisabled = session.isStreaming
         }
+    }
+
+    private static func restoredTab() -> Tab {
+        if let raw = UserDefaults.standard.string(forKey: tabStorageKey),
+           let tab = Tab(rawValue: raw) {
+            return tab
+        }
+        return .library
     }
 
     private var glassNavigation: some View {
@@ -102,6 +115,8 @@ struct RootView: View {
                     .font(.system(size: 18, weight: .semibold))
                 Text(tab.rawValue)
                     .font(.system(size: 10, weight: .medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .foregroundStyle(selectedTab == tab ? .primary : .secondary)
             .frame(maxWidth: .infinity)
@@ -109,6 +124,7 @@ struct RootView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(tab.rawValue)
         .background {
             if selectedTab == tab {
                 Capsule()
