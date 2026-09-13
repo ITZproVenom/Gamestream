@@ -5,11 +5,7 @@ struct RootView: View {
     @EnvironmentObject var session: SessionStore
     @ObservedObject private var hub = HubState.shared
     @State private var selectedTab: Tab = RootView.restoredTab()
-    @State private var introCompleted = UserDefaults.standard.bool(forKey: RootView.introKey)
-    @State private var showingMicrosoftSignIn = false
     @Namespace private var navNamespace
-
-    private static let introKey = "GameStream.introCompleted"
 
     enum Tab: String, CaseIterable {
         case library = "Library"
@@ -36,41 +32,7 @@ struct RootView: View {
     }
 
     var body: some View {
-        Group {
-            if !introCompleted {
-                IntroView {
-                    UserDefaults.standard.set(true, forKey: Self.introKey)
-                    withAnimation(.easeInOut(duration: 0.35)) {
-                        introCompleted = true
-                    }
-                }
-            } else if !session.isSignedIn {
-                WelcomeView {
-                    showingMicrosoftSignIn = true
-                }
-                .sheet(isPresented: $showingMicrosoftSignIn) {
-                    NavigationStack {
-                        SignInWebView()
-                            .navigationTitle("Microsoft")
-                            .navigationBarTitleDisplayMode(.inline)
-                            .toolbar {
-                                ToolbarItem(placement: .cancellationAction) {
-                                    Button("Close") { showingMicrosoftSignIn = false }
-                                        .buttonStyle(.glass)
-                                }
-                            }
-                    }
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                    .environmentObject(session)
-                }
-                .onChange(of: session.isSignedIn) { _, signedIn in
-                    if signedIn { showingMicrosoftSignIn = false }
-                }
-            } else {
-                signedInRoot
-            }
-        }
+        signedInRoot
     }
 
     private var signedInRoot: some View {
