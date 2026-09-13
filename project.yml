@@ -1,0 +1,47 @@
+name: GameStream
+options:
+  bundleIdPrefix: com.gamestream
+  deploymentTarget:
+    iOS: "17.0"
+
+packages:
+  WebRTC:
+    url: https://github.com/stasel/WebRTC
+    from: 120.0.0
+
+targets:
+  GameStream:
+    type: application
+    platform: iOS
+    sources:
+      - path: GameStream
+    resources:
+      - path: GameStream/Resources
+    dependencies:
+      - package: WebRTC
+        product: WebRTC
+    info:
+      path: GameStream/Info.plist
+      properties:
+        CFBundleDisplayName: GameStream
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSCameraUsageDescription: "Not used."
+        NSMicrophoneUsageDescription: "Used for in-session voice chat."
+        NSLocalNetworkUsageDescription: "Used to discover and connect to streaming sessions."
+        UIRequiredDeviceCapabilities:
+          - arm64
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gamestream.app
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
