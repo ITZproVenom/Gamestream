@@ -3,7 +3,6 @@ import SwiftUI
 struct GameHubView: View {
     @EnvironmentObject var session: SessionStore
     @ObservedObject private var artwork = ArtworkStore.shared
-    @ObservedObject private var hub = HubState.shared
     @State private var featuredIndex = 0
     @State private var hubQuery = ""
 
@@ -29,7 +28,8 @@ struct GameHubView: View {
         }
         .scrollIndicators(.hidden)
         .onAppear {
-            artwork.prefetch(GameCatalog.games.map(\ .id) + session.favorites.map(\ .id) + session.recents.map(\ .id))
+            let ids = GameCatalog.games.map { $0.id } + session.favorites.map { $0.id } + session.recents.map { $0.id }
+            artwork.prefetch(ids)
         }
     }
 
@@ -86,8 +86,8 @@ struct GameHubView: View {
             TabView(selection: $featuredIndex) {
                 ForEach(Array(featured.enumerated()), id: \.element.id) { index, game in
                     FeaturedGameCard(game: game, artworkURL: artwork.url(for: game.id), play: { session.playCatalogGame(game) }, favorite: { session.toggleFavorite(game.tracked) }, isFavorite: { session.isFavorite(game.id) })
-                    .padding(.horizontal, 2)
-                    .tag(index)
+                        .padding(.horizontal, 2)
+                        .tag(index)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .automatic))
