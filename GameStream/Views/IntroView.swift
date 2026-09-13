@@ -9,7 +9,7 @@ struct IntroView: View {
     @State private var artShift: CGFloat = 0
 
     private var posters: [URL] {
-        Array(GameCatalog.games.compactMap(\ .posterURL).prefix(12))
+        Array(GameCatalog.games.compactMap(\.posterURL).prefix(12))
     }
 
     var body: some View {
@@ -60,7 +60,7 @@ struct IntroView: View {
                             .minimumScaleFactor(0.7)
                             .accessibilityAddTraits(.isHeader)
 
-                        Text("Xbox Cloud Gaming with Better xCloud and a native GameHub \u2014 play instantly.")
+                        Text("Xbox Cloud Gaming with Better xCloud and a native GameHub — play instantly.")
                             .font(.subheadline)
                             .multilineTextAlignment(.center)
                             .foregroundStyle(.white.opacity(0.84))
