@@ -18,4 +18,8 @@ extension SessionStore {
     var continueGame: TrackedGame? {
         recents.first
     }
+
+    var nextQueuedGame: TrackedGame? {
+        playQueue.first
+    }
 }
