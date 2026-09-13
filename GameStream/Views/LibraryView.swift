@@ -331,12 +331,12 @@ struct LibraryView: View {
                     .symbolRenderingMode(.hierarchical)
 
                 VStack(spacing: 8) {
-                    Text("Your Library")
+                    Text("GameStream")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
 
-                    Text("Sign in with your Xbox account to load games from Xbox Cloud Gaming.")
+                    Text("Sign in with Microsoft to load GameHub and Xbox Cloud Gaming.")
                         .font(.subheadline)
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.secondary)
@@ -351,9 +351,10 @@ struct LibraryView: View {
             Button {
                 showingSignIn = true
             } label: {
-                Text("Sign In")
+                Text("Sign in with Microsoft")
                     .font(.headline)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
             }
