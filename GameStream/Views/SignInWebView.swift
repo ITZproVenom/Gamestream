@@ -1,10 +1,10 @@
 import SwiftUI
 import WebKit
 
-/// Sign-in surface — same Xbox login page, shared cookie store with Library webview.
+/// Sign-in surface — Microsoft's real hosted login, shared cookie store with Library webview.
 struct SignInWebView: View {
     var body: some View {
-        SignInWebViewRepresentable(url: URL(string: "https://www.xbox.com/play")!)
+        SignInWebViewRepresentable(url: MicrosoftAuth.loginURL)
             .ignoresSafeArea()
     }
 }
@@ -43,19 +43,52 @@ struct SignInWebViewRepresentable: UIViewRepresentable {
 
     class Coordinator: NSObject, WKNavigationDelegate {
         private weak var session: SessionStore?
+        private var sawMicrosoftLoginHost = false
+        private var completing = false
 
         init(session: SessionStore) {
             self.session = session
         }
 
+        func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+            note(url: webView.url)
+        }
+
+        func webView(_ webView: WKWebView, didReceiveServerRedirectForProvisionalNavigation navigation: WKNavigation!) {
+            note(url: webView.url)
+        }
+
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            guard let href = webView.url?.absoluteString.lowercased() else { return }
-            // After Microsoft login, Xbox Cloud lands back on /play (not login.live.com).
-            let onXboxPlay = href.contains("xbox.com") && href.contains("/play")
-            let onLoginHost = href.contains("login.live.com") || href.contains("login.microsoftonline.com")
-            if onXboxPlay && !onLoginHost {
+            note(url: webView.url)
+            considerComplete(webView: webView)
+        }
+
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            note(url: navigationAction.request.url ?? webView.url)
+            decisionHandler(.allow)
+        }
+
+        private func note(url: URL?) {
+            guard let raw = url?.absoluteString else { return }
+            if MicrosoftAuth.isLoginHost(raw) {
+                sawMicrosoftLoginHost = true
+            }
+        }
+
+        private func considerComplete(webView: WKWebView) {
+            guard !completing else { return }
+            guard let href = webView.url?.absoluteString else { return }
+            // Landing on /play without visiting Microsoft login is not authentication.
+            guard sawMicrosoftLoginHost, MicrosoftAuth.isXboxDestination(href) else { return }
+            completing = true
+            MicrosoftAuth.fetchAuthCookies { cookies in
+                let ok = MicrosoftAuth.cookiesIndicateMicrosoftAuth(cookies)
                 Task { @MainActor in
-                    session?.markSignedIn()
+                    if ok {
+                        self.session?.markSignedInAfterMicrosoftAuth()
+                    } else {
+                        self.completing = false
+                    }
                 }
             }
         }
