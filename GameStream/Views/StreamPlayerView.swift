@@ -60,7 +60,8 @@ struct XboxCloudWebView: UIViewRepresentable {
                     window.webkit.messageHandlers.gamestreamBridge.postMessage({
                         type: 'url',
                         href: href,
-                        streaming: streaming
+                        streaming: streaming,
+                        title: document.title || ''
                     });
                 } catch (e) {}
             }
@@ -156,9 +157,10 @@ struct XboxCloudWebView: UIViewRepresentable {
 
             if let href = body["href"] as? String,
                let url = URL(string: href) {
+                let title = body["title"] as? String
                 Task { @MainActor in
                     // Streaming state only — must not rewrite session.webURL
-                    session?.updateFromWebURL(url)
+                    session?.updateFromWebURL(url, pageTitle: title)
                 }
             }
 
@@ -182,7 +184,7 @@ struct XboxCloudWebView: UIViewRepresentable {
 
             if let url = webView.url {
                 Task { @MainActor in
-                    session?.updateFromWebURL(url)
+                    session?.updateFromWebURL(url, pageTitle: webView.title)
                 }
             }
 
@@ -204,221 +206,4 @@ struct XboxCloudWebView: UIViewRepresentable {
             NotificationCenter.default.post(name: .webViewDidFail, object: error.localizedDescription)
         }
     }
-}
-
-// MARK: - Better xCloud Injector + modern glass UI
-
-final class BetterXCloudInjector {
-    static let shared = BetterXCloudInjector()
-
-    private let scriptURL = URL(string: "https://github.com/redphx/better-xcloud/releases/latest/download/better-xcloud.user.js")!
-    private let cacheKey = "BetterXCloud.Script.v2"
-    private let cacheDateKey = "BetterXCloud.Script.Date.v2"
-    private var cachedScript: String?
-    private var isFetching = false
-    private let lock = NSLock()
-
-    static let bootstrapJS = """
-    (function() {
-        if (window.__bxInjected) return;
-        window.__bxInjected = true;
-        window.BetterXCloud = window.BetterXCloud || { injectedBy: 'GameStream' };
-    })();
-    """
-
-    static let modernUIOverridesJS = """
-    (function() {
-        const CSS_ID = 'gamestream-bx-modern-v3';
-        const css = `
-        html {
-            --bx-bg: rgba(16, 16, 18, 0.92);
-            --bx-border: rgba(255,255,255,0.10);
-            --bx-text: #f5f5f7;
-            --bx-muted: rgba(255,255,255,0.55);
-            --bx-radius: 18px;
-        }
-        [class*="bx-"], [id*="bx-"],
-        .bx-settings, .bx-dialog, .bx-menu, .bx-stats-bar, .bx-toast,
-        [class*="BxSettings"], [class*="BxDialog"], [class*="BxMenu"] {
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif !important;
-            -webkit-font-smoothing: antialiased !important;
-            color: var(--bx-text) !important;
-        }
-        .bx-settings, .bx-dialog,
-        [class*="bx-modal"], [class*="bx-panel"], [class*="bx-settings"],
-        [class*="BxSettings"], [class*="bx-overlay"] > div {
-            background: var(--bx-bg) !important;
-            backdrop-filter: blur(40px) saturate(180%) !important;
-            -webkit-backdrop-filter: blur(40px) saturate(180%) !important;
-            border: 1px solid var(--bx-border) !important;
-            border-radius: var(--bx-radius) !important;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06) !important;
-            color: var(--bx-text) !important;
-            padding: 16px !important;
-        }
-        [class*="bx-"] button, .bx-settings button, .bx-dialog button {
-            border-radius: 12px !important;
-            font-weight: 600 !important;
-            border: 1px solid rgba(255,255,255,0.08) !important;
-            background: rgba(255,255,255,0.08) !important;
-            color: var(--bx-text) !important;
-            padding: 8px 14px !important;
-        }
-        [class*="bx-"] input, [class*="bx-"] select, [class*="bx-"] textarea {
-            background: rgba(255,255,255,0.06) !important;
-            border: 1px solid rgba(255,255,255,0.10) !important;
-            border-radius: 12px !important;
-            color: var(--bx-text) !important;
-            padding: 8px 12px !important;
-        }
-        .bx-stats-bar, [class*="bx-stats"], [class*="BxStats"], [id*="bx-stats"] {
-            background: rgba(10, 10, 12, 0.78) !important;
-            backdrop-filter: blur(28px) saturate(180%) !important;
-            -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
-            border: 1px solid rgba(255,255,255,0.10) !important;
-            border-radius: 16px !important;
-            padding: 8px 12px !important;
-            font-size: 11px !important;
-            font-weight: 600 !important;
-            font-variant-numeric: tabular-nums !important;
-            color: rgba(255,255,255,0.92) !important;
-            box-shadow: 0 10px 32px rgba(0,0,0,0.45) !important;
-            display: flex !important;
-            flex-wrap: wrap !important;
-            gap: 6px !important;
-        }
-        .bx-stats-bar > *, [class*="bx-stats"] > * {
-            background: rgba(255,255,255,0.07) !important;
-            border-radius: 8px !important;
-            padding: 3px 8px !important;
-        }
-        [class*="bx-server"], [class*="bx-region"] {
-            border-radius: 14px !important;
-            background: rgba(255,255,255,0.10) !important;
-            border: 1px solid rgba(255,255,255,0.12) !important;
-            font-weight: 600 !important;
-        }
-        .bx-toast, [class*="bx-toast"] {
-            background: rgba(20, 20, 22, 0.94) !important;
-            backdrop-filter: blur(32px) !important;
-            -webkit-backdrop-filter: blur(32px) !important;
-            border-radius: 16px !important;
-            border: 1px solid rgba(255,255,255,0.10) !important;
-        }
-        `;
-
-        function apply() {
-            let style = document.getElementById(CSS_ID);
-            if (!style) {
-                style = document.createElement('style');
-                style.id = CSS_ID;
-                (document.head || document.documentElement).appendChild(style);
-            }
-            if (style.textContent !== css) style.textContent = css;
-        }
-        apply();
-        const obs = new MutationObserver(function() { apply(); });
-        obs.observe(document.documentElement, { childList: true, subtree: true });
-        setInterval(apply, 2000);
-    })();
-    """
-
-    private init() {
-        if let cached = UserDefaults.standard.string(forKey: cacheKey) {
-            cachedScript = Self.stripUserScriptHeader(cached)
-        }
-    }
-
-    func preload() {
-        if cachedScript == nil || cachedScript?.isEmpty == true {
-            fetchScript { _ in }
-        } else {
-            refreshIfNeeded()
-        }
-    }
-
-    func currentScriptSource() -> String? { cachedScript }
-
-    func invalidateCache() {
-        lock.lock()
-        cachedScript = nil
-        lock.unlock()
-        UserDefaults.standard.removeObject(forKey: cacheKey)
-        UserDefaults.standard.removeObject(forKey: cacheDateKey)
-    }
-
-    func ensureInjected(into webView: WKWebView) {
-        if let script = cachedScript, !script.isEmpty {
-            webView.evaluateJavaScript(script, completionHandler: nil)
-            webView.evaluateJavaScript(Self.modernUIOverridesJS, completionHandler: nil)
-            return
-        }
-
-        fetchScript { [weak webView] source in
-            guard let webView, let source, !source.isEmpty else { return }
-            DispatchQueue.main.async {
-                webView.evaluateJavaScript(source, completionHandler: nil)
-                webView.evaluateJavaScript(Self.modernUIOverridesJS, completionHandler: nil)
-            }
-        }
-    }
-
-    private static func stripUserScriptHeader(_ source: String) -> String {
-        if let end = source.range(of: "// ==/UserScript==") {
-            return String(source[end.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        return source
-    }
-
-    private func refreshIfNeeded() {
-        let lastDate = UserDefaults.standard.object(forKey: cacheDateKey) as? Date ?? .distantPast
-        if Date().timeIntervalSince(lastDate) > 7 * 24 * 3600 {
-            fetchScript { _ in }
-        }
-    }
-
-    private func fetchScript(completion: @escaping (String?) -> Void) {
-        lock.lock()
-        if isFetching {
-            lock.unlock()
-            completion(cachedScript)
-            return
-        }
-        isFetching = true
-        lock.unlock()
-
-        var request = URLRequest(url: scriptURL)
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            defer {
-                self?.lock.lock()
-                self?.isFetching = false
-                self?.lock.unlock()
-            }
-
-            guard let self,
-                  error == nil,
-                  let data,
-                  let http = response as? HTTPURLResponse,
-                  (200...299).contains(http.statusCode),
-                  var source = String(data: data, encoding: .utf8),
-                  source.count > 1000 else {
-                DispatchQueue.main.async { completion(self?.cachedScript) }
-                return
-            }
-
-            source = Self.stripUserScriptHeader(source)
-            self.cachedScript = source
-            UserDefaults.standard.set(source, forKey: self.cacheKey)
-            UserDefaults.standard.set(Date(), forKey: self.cacheDateKey)
-
-            DispatchQueue.main.async { completion(source) }
-        }.resume()
-    }
-}
-
-extension Notification.Name {
-    static let webViewLoadingChanged = Notification.Name("webViewLoadingChanged")
-    static let webViewDidFail = Notification.Name("webViewDidFail")
 }
