@@ -3,6 +3,7 @@ import UIKit
 
 struct RootView: View {
     @EnvironmentObject var session: SessionStore
+    @ObservedObject private var hub = HubState.shared
     @State private var selectedTab: Tab = RootView.restoredTab()
     @Namespace private var navNamespace
 
@@ -22,18 +23,25 @@ struct RootView: View {
 
     private static let tabStorageKey = "GameStream.selectedTab"
 
-    /// Hide the tab bar only when the stream is actually on screen.
     private var hideTabBar: Bool {
         session.isStreaming && selectedTab == .library
     }
 
+    private var showingHub: Bool {
+        selectedTab == .library && hub.showNativeHub && !session.isStreaming
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Keep Library (and its WKWebView) mounted so streams and cookies survive tab switches.
             LibraryView()
-                .opacity(selectedTab == .library ? 1 : 0)
-                .allowsHitTesting(selectedTab == .library)
-                .zIndex(selectedTab == .library ? 1 : 0)
+                .opacity(selectedTab == .library && !showingHub ? 1 : 0)
+                .allowsHitTesting(selectedTab == .library && !showingHub)
+                .zIndex(selectedTab == .library && !showingHub ? 1 : 0)
+
+            if showingHub {
+                GameHubView()
+                    .zIndex(3)
+            }
 
             if selectedTab == .search {
                 SearchView()
@@ -63,6 +71,7 @@ struct RootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AnimatedBackground())
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: hideTabBar)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showingHub)
         .onChange(of: selectedTab) { _, newValue in
             UserDefaults.standard.set(newValue.rawValue, forKey: Self.tabStorageKey)
         }
@@ -76,10 +85,12 @@ struct RootView: View {
         }
         .onChange(of: session.isStreaming) { _, streaming in
             syncIdleTimer()
-            // Never leave the user on Search/Settings with no tab bar while a game is running.
-            if streaming && selectedTab != .library {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                    selectedTab = .library
+            if streaming {
+                hub.showNativeHub = false
+                if selectedTab != .library {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        selectedTab = .library
+                    }
                 }
             }
         }
@@ -121,7 +132,6 @@ struct RootView: View {
             let generator = UIImpactFeedbackGenerator(style: .light)
             generator.impactOccurred()
             SoundManager.playTap()
-
             withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
                 selectedTab = tab
             }
