@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.GameStream" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">#FF0A0A12</item>
+        <item name="android:windowBackground">#FF0A0A12</item>
+        <item name="android:colorPrimary">#FF8B7CFF</item>
+    </style>
+</resources>
