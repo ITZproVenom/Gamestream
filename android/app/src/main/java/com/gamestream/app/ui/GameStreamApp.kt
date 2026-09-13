@@ -25,10 +25,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.gamestream.app.BetterXCloudInjector
+import com.gamestream.app.OnboardingPrefs
 import com.gamestream.app.SessionStore
+import com.gamestream.app.ui.screens.IntroScreen
 import com.gamestream.app.ui.screens.LibraryScreen
 import com.gamestream.app.ui.screens.SearchScreen
 import com.gamestream.app.ui.screens.SettingsScreen
+import com.gamestream.app.ui.screens.WelcomeScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -40,6 +43,7 @@ enum class Tab(val label: String) {
 fun GameStreamApp(session: SessionStore = viewModel()) {
     var tab by remember { mutableStateOf(Tab.Library) }
     val context = LocalContext.current
+    var showIntro by remember { mutableStateOf(!OnboardingPrefs.hasCompletedIntro(context)) }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -56,6 +60,16 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
         session.requestedTab = null
     }
 
+    if (showIntro) {
+        IntroScreen(onFinished = { showIntro = false })
+        return
+    }
+
+    if (!session.isSignedIn) {
+        WelcomeScreen(session)
+        return
+    }
+
     Scaffold(
         containerColor = Color(0xFF0A0A12),
         bottomBar = {
@@ -64,27 +78,26 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
                     NavigationBarItem(
                         selected = tab == Tab.Library,
                         onClick = { tab = Tab.Library },
-                        icon = { Icon(Icons.Default.GridView, contentDescription = null) },
-                        label = { Text("Library") }
+                        icon = { Icon(Icons.Default.GridView, contentDescription = "Library") },
+                        label = { Text("Library", maxLines = 1) }
                     )
                     NavigationBarItem(
                         selected = tab == Tab.Search,
                         onClick = { tab = Tab.Search },
-                        icon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        label = { Text("Search") }
+                        icon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                        label = { Text("Search", maxLines = 1) }
                     )
                     NavigationBarItem(
                         selected = tab == Tab.Settings,
                         onClick = { tab = Tab.Settings },
-                        icon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                        label = { Text("Settings") }
+                        icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
+                        label = { Text("Settings", maxLines = 1) }
                     )
                 }
             }
         }
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
-            // Keep the Xbox WebView mounted across tabs so the session is not torn down.
             if (session.isSignedIn) {
                 Box(
                     Modifier
@@ -96,9 +109,7 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
             }
 
             when (tab) {
-                Tab.Library -> {
-                    if (!session.isSignedIn) LibraryScreen(session)
-                }
+                Tab.Library -> { }
                 Tab.Search -> SearchScreen(session)
                 Tab.Settings -> SettingsScreen(session)
             }
