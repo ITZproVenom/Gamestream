@@ -25,6 +25,7 @@ final class SessionStore: ObservableObject {
     @Published var favorites: [TrackedGame] = []
     @Published var recents: [TrackedGame] = []
     @Published var currentGame: TrackedGame?
+    @Published var offerPlayNext: Bool = false
 
     private enum Keys {
         static let signedIn = "GameStream.isSignedIn"
@@ -87,6 +88,7 @@ final class SessionStore: ObservableObject {
     func signOut() {
         clearLocalAuthFlag()
         isStreaming = false
+        offerPlayNext = false
         currentGame = nil
         webURL = URL(string: "https://www.xbox.com/play")!
         let store = WKWebsiteDataStore.default()
@@ -106,6 +108,7 @@ final class SessionStore: ObservableObject {
         let escaped = trimmed.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'").replacingOccurrences(of: "\n", with: " ")
         webURL = URL(string: "https://www.xbox.com/play")!
         isStreaming = false
+        offerPlayNext = false
         pendingJavaScript = """
         (function() {
             var q = '\(escaped)';
@@ -145,6 +148,7 @@ final class SessionStore: ObservableObject {
     func openHome() {
         webURL = URL(string: "https://www.xbox.com/play")!
         isStreaming = false
+        offerPlayNext = nextQueuedGame != nil
         requestedTab = .library
     }
 
@@ -152,6 +156,7 @@ final class SessionStore: ObservableObject {
         guard let url = game.catalogURL else { return }
         webURL = url
         isStreaming = false
+        offerPlayNext = false
         requestedTab = .library
         noteGame(id: game.id, slug: game.slug, title: game.title, markRecent: true)
     }
@@ -173,7 +178,11 @@ final class SessionStore: ObservableObject {
 
     func updateFromWebURL(_ url: URL, pageTitle: String? = nil) {
         let streaming = Self.isStreamingURL(url.absoluteString)
+        if isStreaming && !streaming {
+            offerPlayNext = nextQueuedGame != nil
+        }
         if isStreaming != streaming { isStreaming = streaming }
+        if streaming { offerPlayNext = false }
         if let parsed = GameURLParser.parse(url.absoluteString) {
             let title = GameURLParser.displayTitle(fromPageTitle: pageTitle, slug: parsed.slug, productId: parsed.productId)
             noteGame(id: parsed.productId, slug: parsed.slug, title: title, markRecent: streaming)
@@ -326,6 +335,7 @@ final class SessionStore: ObservableObject {
                 self?.clearLocalAuthFlag()
                 self?.webURL = URL(string: "https://www.xbox.com/play")!
                 self?.isStreaming = false
+                self?.offerPlayNext = false
                 self?.currentGame = nil
                 self?.reloadNonce += 1
                 self?.requestedTab = .library
