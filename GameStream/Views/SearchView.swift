@@ -230,8 +230,8 @@ struct SettingsView: View {
 
     private var appVersionLabel: String {
         let info = Bundle.main.infoDictionary
-        let short = info?["CFBundleShortVersionString"] as? String ?? "1.0.1"
-        let build = info?["CFBundleVersion"] as? String ?? "2"
+        let short = info?["CFBundleShortVersionString"] as? String ?? "1.0.2"
+        let build = info?["CFBundleVersion"] as? String ?? "3"
         return "\(short) (\(build))"
     }
 
@@ -259,6 +259,9 @@ struct SettingsView: View {
 
                     sectionHeader("Account")
                     GlassRow(title: "Signed in as", value: session.accountLabel ?? "Not signed in")
+
+                    sectionHeader("Device")
+                    keepAwakeRow
 
                     sectionHeader("Stream")
                     Text("These apply to Better xCloud and take effect after the page reloads.")
@@ -351,6 +354,28 @@ struct SettingsView: View {
             }
             Button("Cancel", role: .cancel) {}
         }
+    }
+
+    private var keepAwakeRow: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Keep screen awake")
+                    .font(.body.weight(.medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                Text("Prevents sleep while GameStream is open, not only during a stream.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Toggle("Keep screen awake", isOn: $session.keepScreenAwake)
+                .labelsHidden()
+                .tint(.green)
+                .accessibilityLabel("Keep screen awake")
+        }
+        .padding(16)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private func sectionHeader(_ title: String) -> some View {
