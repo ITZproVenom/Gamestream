@@ -5,7 +5,6 @@ struct LibraryView: View {
     @State private var isLoading = true
     @State private var showingSignIn = false
     @State private var errorMessage: String?
-    @State private var showChrome = true
     @State private var showBetterXCloudInfo = false
 
     var body: some View {
@@ -23,12 +22,14 @@ struct LibraryView: View {
                         errorOverlay(errorMessage)
                     }
 
-                    if showChrome && !isLoading {
+                    // Hide floating chrome while streaming a game
+                    if !session.isStreaming && !isLoading {
                         libraryChrome
                             .padding(.top, 8)
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
+                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: session.isStreaming)
                 .onReceive(NotificationCenter.default.publisher(for: .webViewLoadingChanged)) { note in
                     if let loading = note.object as? Bool {
                         withAnimation(.easeInOut(duration: 0.25)) {
@@ -72,7 +73,7 @@ struct LibraryView: View {
         }
     }
 
-    // MARK: - Floating chrome (native integration)
+    // MARK: - Floating chrome
 
     private var libraryChrome: some View {
         HStack(spacing: 10) {
@@ -87,7 +88,6 @@ struct LibraryView: View {
 
             Spacer()
 
-            // Better xCloud badge / entry point
             Button {
                 showBetterXCloudInfo = true
             } label: {
@@ -116,13 +116,12 @@ struct LibraryView: View {
         .padding(.horizontal, 16)
     }
 
-    // MARK: - Better xCloud native sheet
+    // MARK: - Better xCloud sheet
 
     private var betterXCloudSheet: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Status
                     HStack(spacing: 12) {
                         Image(systemName: "checkmark.seal.fill")
                             .font(.title2)
@@ -130,7 +129,7 @@ struct LibraryView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Better xCloud is active")
                                 .font(.headline)
-                            Text("All features are running inside the stream")
+                            Text("All features run inside the stream")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
@@ -139,25 +138,20 @@ struct LibraryView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
 
-                    // How to use
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("How to use")
+                        Text("How to open the full menu")
                             .font(.title3.weight(.semibold))
 
-                        tipRow(icon: "server.rack", title: "Server & settings",
-                               text: "Look for the server/region button near your profile picture on the Xbox page. Tap it to open Better xCloud settings.")
+                        tipRow(icon: "server.rack", title: "Server / settings button",
+                               text: "On the Xbox Cloud page, look near your profile picture for the server/region button added by Better xCloud. Tap it to open the full settings menu.")
 
-                        tipRow(icon: "chart.bar.fill", title: "Stream stats",
-                               text: "While playing, open the system menu (…) and enable Stream Stats for live ping, FPS, bitrate and more.")
+                        tipRow(icon: "ellipsis.circle", title: "While playing",
+                               text: "Open the in-game system menu (…) to access Stream Stats, video options, touch controls and more.")
 
-                        tipRow(icon: "hand.tap.fill", title: "Touch controls",
-                               text: "Better xCloud can show touch controls for games that don’t have them by default.")
-
-                        tipRow(icon: "tv.fill", title: "Remote Play",
-                               text: "Remote Play support is enabled. You can stream from your console when available.")
+                        tipRow(icon: "arrow.clockwise", title: "If the menu is missing",
+                               text: "Tap the refresh button in the top bar, or leave and re-enter Library. The script is re-injected on every load.")
                     }
 
-                    // Feature list
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Included features")
                             .font(.title3.weight(.semibold))
@@ -217,7 +211,7 @@ struct LibraryView: View {
         .padding(.vertical, 4)
     }
 
-    // MARK: - Sign-in surface
+    // MARK: - Sign-in
 
     private var signInSurface: some View {
         VStack(spacing: 28) {

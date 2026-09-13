@@ -34,11 +34,16 @@ struct RootView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(AnimatedBackground())
 
-            glassNavigation
-                .padding(.horizontal, 24)
-                .padding(.bottom, 10)
-                .zIndex(10)
+            // Hide Liquid Glass tab bar while a game is streaming
+            if !session.isStreaming {
+                glassNavigation
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 10)
+                    .zIndex(10)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: session.isStreaming)
         .onChange(of: session.requestedTab) { _, newValue in
             if let tab = newValue {
                 withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
@@ -46,6 +51,10 @@ struct RootView: View {
                 }
                 session.requestedTab = nil
             }
+        }
+        .onAppear {
+            // Preload Better xCloud as early as possible
+            BetterXCloudInjector.shared.preload()
         }
     }
 
