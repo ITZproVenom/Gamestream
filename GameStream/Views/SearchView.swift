@@ -1,7 +1,7 @@
 import SwiftUI
-import Foundation
 
 struct SearchView: View {
+    @EnvironmentObject var session: SessionStore
     @State private var searchText = ""
     @FocusState private var searchFocused: Bool
 
@@ -11,10 +11,10 @@ struct SearchView: View {
                 .ignoresSafeArea()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 22) {
 
                     // Header
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text("Search")
                             .font(.system(size: 34, weight: .bold, design: .rounded))
 
@@ -22,9 +22,9 @@ struct SearchView: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.top, 12)
+                    .padding(.top, 8)
 
-                    // Search field — real glass
+                    // Search field
                     HStack(spacing: 12) {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 17, weight: .semibold))
@@ -35,6 +35,10 @@ struct SearchView: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .font(.system(size: 17, weight: .medium))
+                            .submitLabel(.search)
+                            .onSubmit {
+                                performSearch()
+                            }
 
                         if !searchText.isEmpty {
                             Button {
@@ -46,15 +50,15 @@ struct SearchView: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    .padding(.horizontal, 18)
-                    .frame(height: 54)
+                    .padding(.horizontal, 16)
+                    .frame(height: 52)
                     .glassEffect(
                         searchFocused ? .regular.interactive() : .regular,
-                        in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        in: RoundedRectangle(cornerRadius: 16, style: .continuous)
                     )
 
                     // Content
-                    if searchText.isEmpty {
+                    if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         emptyState
                     } else {
                         resultsSection
@@ -64,13 +68,14 @@ struct SearchView: View {
                 .padding(.bottom, 130)
             }
             .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.interactively)
         }
     }
 
     // MARK: - Empty state
 
     private var emptyState: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 16) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 40, weight: .medium))
                 .foregroundStyle(.secondary)
@@ -79,22 +84,22 @@ struct SearchView: View {
                 Text("What are you playing?")
                     .font(.title3.weight(.semibold))
 
-                Text("Search for games available on Xbox Cloud Gaming.")
+                Text("Search for any game available on Xbox Cloud Gaming.")
                     .font(.subheadline)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 64)
+        .padding(.vertical, 56)
     }
 
     // MARK: - Results
 
     private var resultsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             Button {
-                openXboxSearch()
+                performSearch()
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "magnifyingglass")
@@ -104,36 +109,27 @@ struct SearchView: View {
                     Image(systemName: "arrow.up.right")
                         .font(.subheadline.weight(.bold))
                 }
-                .padding(.horizontal, 18)
-                .frame(height: 54)
+                .padding(.horizontal, 16)
+                .frame(height: 52)
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.glassProminent)
 
             Text("Results")
                 .font(.title3.weight(.semibold))
-                .padding(.top, 4)
+                .padding(.top, 6)
 
-            Text("Search Xbox Cloud Gaming for \"\(searchText)\".")
+            Text("Tap above to search Xbox Cloud Gaming for \"\(searchText)\".")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
     }
 
-    private func openXboxSearch() {
-        guard let encoded = searchText.addingPercentEncoding(
-            withAllowedCharacters: .urlQueryAllowed
-        ) else { return }
-
-        guard let url = URL(
-            string: "https://www.xbox.com/en-IN/play#search?query=\(encoded)"
-        ) else { return }
+    private func performSearch() {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return }
 
         searchFocused = false
-
-        NotificationCenter.default.post(
-            name: .openXboxSearch,
-            object: url
-        )
+        session.openSearch(query: query)
     }
 }
 
@@ -142,11 +138,11 @@ struct SearchView: View {
 struct SettingsView: View {
     @EnvironmentObject var session: SessionStore
 
-    @AppStorage("streamQuality")
-    private var streamQuality = "Auto"
+    @AppStorage("streamQuality") private var streamQuality = "Auto"
+    @AppStorage("serverRegion") private var serverRegion = "Auto"
 
-    @AppStorage("serverRegion")
-    private var serverRegion = "Auto"
+    private let qualityOptions = ["Auto", "1080p", "720p", "Performance"]
+    private let regionOptions = ["Auto", "North America", "Europe", "Asia", "Australia"]
 
     var body: some View {
         ZStack {
@@ -154,25 +150,63 @@ struct SettingsView: View {
                 .ignoresSafeArea()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 18) {
                     Text("Settings")
                         .font(.system(size: 34, weight: .bold, design: .rounded))
-                        .padding(.top, 12)
+                        .padding(.top, 8)
 
-                    GlassRow(
-                        title: "Account",
-                        value: session.accountLabel ?? "Not signed in"
-                    )
+                    // Account
+                    GlassRow(title: "Account", value: session.accountLabel ?? "Not signed in")
 
-                    GlassRow(
-                        title: "Stream quality",
-                        value: streamQuality
-                    )
+                    // Stream Quality
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Stream quality")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 4)
 
-                    GlassRow(
-                        title: "Server region",
-                        value: serverRegion
-                    )
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(qualityOptions, id: \.self) { option in
+                                    Button {
+                                        streamQuality = option
+                                    } label: {
+                                        Text(option)
+                                            .font(.subheadline.weight(.medium))
+                                            .padding(.horizontal, 14)
+                                            .padding(.vertical, 10)
+                                    }
+                                    .buttonStyle(.glass)
+                                    .opacity(streamQuality == option ? 1.0 : 0.55)
+                                }
+                            }
+                        }
+                    }
+
+                    // Server Region
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Server region")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 4)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(regionOptions, id: \.self) { option in
+                                    Button {
+                                        serverRegion = option
+                                    } label: {
+                                        Text(option)
+                                            .font(.subheadline.weight(.medium))
+                                            .padding(.horizontal, 14)
+                                            .padding(.vertical, 10)
+                                    }
+                                    .buttonStyle(.glass)
+                                    .opacity(serverRegion == option ? 1.0 : 0.55)
+                                }
+                            }
+                        }
+                    }
 
                     if session.isSignedIn {
                         Button {
@@ -198,7 +232,7 @@ struct SettingsView: View {
     }
 }
 
-// MARK: - GlassRow (native)
+// MARK: - GlassRow
 
 struct GlassRow: View {
     let title: String
@@ -216,10 +250,6 @@ struct GlassRow: View {
                 .foregroundStyle(.secondary)
         }
         .padding(16)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
-}
-
-extension Notification.Name {
-    static let openXboxSearch = Notification.Name("openXboxSearch")
 }

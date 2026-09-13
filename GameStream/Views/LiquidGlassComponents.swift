@@ -4,9 +4,9 @@ import SwiftUI
 
 struct GlassCard<Content: View>: View {
     let content: Content
-    var cornerRadius: CGFloat = 22
+    var cornerRadius: CGFloat = 20
 
-    init(cornerRadius: CGFloat = 22, @ViewBuilder content: () -> Content) {
+    init(cornerRadius: CGFloat = 20, @ViewBuilder content: () -> Content) {
         self.cornerRadius = cornerRadius
         self.content = content()
     }
@@ -59,8 +59,8 @@ struct GlassIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 18, weight: .semibold))
-                .frame(width: 44, height: 44)
+                .font(.system(size: 17, weight: .semibold))
+                .frame(width: 42, height: 42)
         }
         .buttonStyle(.glass)
     }
@@ -80,7 +80,6 @@ struct GlassSection<Content: View>: View {
             if let title {
                 Text(title)
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(.primary)
                     .padding(.horizontal, 4)
             }
             content
@@ -88,43 +87,14 @@ struct GlassSection<Content: View>: View {
     }
 }
 
-struct GlassNavigationItem: View {
-    let title: String
-    let systemImage: String
-    let isSelected: Bool
-    let namespace: Namespace.ID
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 20, weight: .semibold))
-                Text(title)
-                    .font(.caption2.weight(.medium))
-            }
-            .foregroundStyle(isSelected ? .primary : .secondary)
-            .frame(maxWidth: .infinity)
-            .frame(minHeight: 48)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .glassEffect(
-            isSelected ? .regular.interactive() : .clear,
-            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-        )
-        .glassEffectID(title, in: namespace)
-    }
-}
-
 // MARK: - Convenience helpers
 
 extension View {
-    func glassCard(cornerRadius: CGFloat = 22) -> some View {
+    func glassCard(cornerRadius: CGFloat = 20) -> some View {
         self.glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 
-    func interactiveGlass(in shape: some Shape = RoundedRectangle(cornerRadius: 20, style: .continuous)) -> some View {
+    func interactiveGlass(in shape: some Shape = RoundedRectangle(cornerRadius: 18, style: .continuous)) -> some View {
         self.glassEffect(.regular.interactive(), in: shape)
     }
 }

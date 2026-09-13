@@ -21,7 +21,6 @@ struct RootView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Content
             Group {
                 switch selectedTab {
                 case .library:
@@ -35,36 +34,61 @@ struct RootView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(AnimatedBackground())
 
-            // Floating Liquid Glass navigation
             glassNavigation
-                .padding(.horizontal, 20)
-                .padding(.bottom, 12)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 10)
                 .zIndex(10)
+        }
+        .onChange(of: session.requestedTab) { _, newValue in
+            if let tab = newValue {
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                    selectedTab = tab
+                }
+                session.requestedTab = nil
+            }
         }
     }
 
     private var glassNavigation: some View {
-        GlassEffectContainer(spacing: 8) {
-            HStack(spacing: 6) {
+        GlassEffectContainer(spacing: 4) {
+            HStack(spacing: 0) {
                 ForEach(Tab.allCases, id: \.self) { tab in
-                    GlassNavigationItem(
-                        title: tab.rawValue,
-                        systemImage: tab.icon,
-                        isSelected: selectedTab == tab,
-                        namespace: navNamespace
-                    ) {
-                        let generator = UIImpactFeedbackGenerator(style: .light)
-                        generator.impactOccurred()
-                        SoundManager.playTap()
-
-                        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                            selectedTab = tab
-                        }
-                    }
+                    navItem(tab)
                 }
             }
-            .padding(6)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .padding(5)
+            .glassEffect(.regular, in: Capsule())
+        }
+    }
+
+    private func navItem(_ tab: Tab) -> some View {
+        Button {
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.impactOccurred()
+            SoundManager.playTap()
+
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                selectedTab = tab
+            }
+        } label: {
+            VStack(spacing: 3) {
+                Image(systemName: tab.icon)
+                    .font(.system(size: 18, weight: .semibold))
+                Text(tab.rawValue)
+                    .font(.system(size: 10, weight: .medium))
+            }
+            .foregroundStyle(selectedTab == tab ? .primary : .secondary)
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background {
+            if selectedTab == tab {
+                Capsule()
+                    .glassEffect(.regular.interactive())
+                    .matchedGeometryEffect(id: "selectedTab", in: navNamespace)
+            }
         }
     }
 }
