@@ -56,9 +56,9 @@ struct WelcomeView: View {
                     .padding(.top, 22)
                     .frame(maxWidth: min(520, geo.size.width - 24))
                     .accessibilityLabel("Sign in with Microsoft")
-                    .accessibilityHint("Opens Microsoft\u2019s real sign-in page")
+                    .accessibilityHint("Opens Microsoft's real sign-in page")
 
-                    Text("Uses Microsoft\u2019s real sign-in page. GameStream never stores your password.")
+                    Text("Uses Microsoft's real sign-in page. GameStream never stores your password.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
