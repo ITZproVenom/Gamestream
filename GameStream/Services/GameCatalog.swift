@@ -17,6 +17,8 @@ struct CatalogGame: Identifiable, Hashable {
 }
 
 enum GameCatalog {
+    static let genreNames = ["Racing", "Shooter", "Action", "Adventure", "Sandbox", "RPG", "Survival", "Platformer"]
+
     static let games: [CatalogGame] = [
         CatalogGame(id: "9PNJ1RJL8SL9", slug: "forza-horizon-5", title: "Forza Horizon 5",
                     tagline: "Open-world racing across Mexico", genre: "Racing", provider: "Xbox Cloud", featured: true, accent: 0xE85D04),
@@ -87,7 +89,6 @@ enum GameCatalog {
     }
 
     static func shelves(favorites: [TrackedGame], recents: [TrackedGame]) -> [(String, [CatalogGame])] {
-        let genres = ["Racing", "Shooter", "Action", "Adventure", "Sandbox", "RPG", "Survival", "Platformer"]
         var rows: [(String, [CatalogGame])] = []
         if !recents.isEmpty {
             rows.append(("Continue playing", recents.map { catalog(from: $0) }))
@@ -96,7 +97,7 @@ enum GameCatalog {
             rows.append(("Favorites", favorites.map { catalog(from: $0) }))
         }
         rows.append(("Popular on Cloud", Array(games.prefix(8))))
-        for genre in genres {
+        for genre in genreNames {
             let items = games.filter { $0.genre == genre }
             if items.count >= 2 {
                 rows.append((genre, items))
