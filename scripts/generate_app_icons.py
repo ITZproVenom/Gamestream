@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Generate GameStream app icons into GameStream/Assets.xcassets/AppIcon.appiconset/"""
+"""Generate GameStream app icon into GameStream/Assets.xcassets/AppIcon.appiconset/"""
 
 from PIL import Image, ImageDraw, ImageFilter
 import os
+import json
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "GameStream", "Assets.xcassets", "AppIcon.appiconset")
@@ -28,7 +29,9 @@ def make_icon(size: int) -> Image.Image:
         return layer
 
     img = Image.alpha_composite(img, radial(size // 2, size // 2, int(size * 0.45), (120, 80, 255, 40)))
-    img = Image.alpha_composite(img, radial(int(size * 0.55), int(size * 0.62), int(size * 0.35), (40, 180, 255, 28), 1.8))
+    img = Image.alpha_composite(
+        img, radial(int(size * 0.55), int(size * 0.62), int(size * 0.35), (40, 180, 255, 28), 1.8)
+    )
 
     s = size
     body_w, body_h = int(s * 0.62), int(s * 0.38)
@@ -39,8 +42,19 @@ def make_icon(size: int) -> Image.Image:
     cd = ImageDraw.Draw(controller)
     cd.rounded_rectangle([bx, by, bx + body_w, by + body_h], radius=radius, fill=(245, 247, 255, 235))
     grip_r = int(s * 0.14)
-    cd.ellipse([bx - int(s * 0.02), by + int(body_h * 0.25), bx + grip_r * 2, by + body_h + int(s * 0.06)], fill=(245, 247, 255, 235))
-    cd.ellipse([bx + body_w - grip_r * 2 + int(s * 0.02), by + int(body_h * 0.25), bx + body_w + int(s * 0.02), by + body_h + int(s * 0.06)], fill=(245, 247, 255, 235))
+    cd.ellipse(
+        [bx - int(s * 0.02), by + int(body_h * 0.25), bx + grip_r * 2, by + body_h + int(s * 0.06)],
+        fill=(245, 247, 255, 235),
+    )
+    cd.ellipse(
+        [
+            bx + body_w - grip_r * 2 + int(s * 0.02),
+            by + int(body_h * 0.25),
+            bx + body_w + int(s * 0.02),
+            by + body_h + int(s * 0.06),
+        ],
+        fill=(245, 247, 255, 235),
+    )
 
     dx, dy = bx + int(body_w * 0.22), by + int(body_h * 0.48)
     arm, thick = int(s * 0.035), int(s * 0.028)
@@ -48,7 +62,7 @@ def make_icon(size: int) -> Image.Image:
     cd.rectangle([dx - thick // 2, dy - arm, dx + thick // 2, dy + arm], fill=(40, 30, 70, 220))
 
     rx, ry = bx + int(body_w * 0.78), by + int(body_h * 0.48)
-    br = int(s * 0.028)
+    br = max(1, int(s * 0.028))
     for ox, oy, col in [
         (0, -br * 2.2, (90, 200, 120, 230)),
         (0, br * 2.2, (80, 140, 255, 230)),
@@ -74,39 +88,42 @@ def make_icon(size: int) -> Image.Image:
     arc_cx, arc_cy = s // 2, int(s * 0.22)
     for i, rad in enumerate([int(s * 0.06), int(s * 0.10), int(s * 0.14)]):
         alpha = 180 - i * 40
-        draw.arc([arc_cx - rad, arc_cy - rad // 2, arc_cx + rad, arc_cy + rad], start=200, end=340, fill=(160, 140, 255, alpha), width=max(2, s // 80))
+        draw.arc(
+            [arc_cx - rad, arc_cy - rad // 2, arc_cx + rad, arc_cy + rad],
+            start=200,
+            end=340,
+            fill=(160, 140, 255, alpha),
+            width=max(2, s // 80),
+        )
 
     return img
 
 
-SIZES = {
-    "fiona.g@example.net": 40,
-    "sarah.b@example.net": 60,
-    "beth.t@example.com": 58,
-    "karen.d@example.net": 87,
-    "xavier.y@example.org": 80,
-    "julia.r@example.org": 120,
-    "carol.a@example.org": 120,
-    "frank.g@example.org": 180,
-    "AppIcon-1024.png": 1024,
-    "Icon-76.png": 76,
-    "Icon-152.png": 152,
-    "Icon-167.png": 167,
-}
-
-
 def main():
     os.makedirs(OUT, exist_ok=True)
-    for name, size in SIZES.items():
-        icon = make_icon(size)
-        path = os.path.join(OUT, name)
-        if size == 1024:
-            bg = Image.new("RGB", (1024, 1024), (12, 10, 28))
-            bg.paste(icon, mask=icon.split()[-1])
-            bg.save(path, "PNG")
-        else:
-            icon.save(path, "PNG")
-        print("wrote", path)
+
+    # 1024 marketing / single-size icon (Xcode expands for device sizes)
+    icon = make_icon(1024)
+    path = os.path.join(OUT, "icon-1024.png")
+    bg = Image.new("RGB", (1024, 1024), (12, 10, 28))
+    bg.paste(icon, mask=icon.split()[-1])
+    bg.save(path, "PNG")
+    print("wrote", path)
+
+    contents = {
+        "images": [
+            {
+                "filename": "icon-1024.png",
+                "idiom": "universal",
+                "platform": "ios",
+                "size": "1024x1024",
+            }
+        ],
+        "info": {"author": "xcode", "version": 1},
+    }
+    with open(os.path.join(OUT, "Contents.json"), "w") as f:
+        json.dump(contents, f, indent=2)
+    print("wrote Contents.json")
 
 
 if __name__ == "__main__":
