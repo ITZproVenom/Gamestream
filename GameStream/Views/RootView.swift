@@ -11,9 +11,12 @@ struct RootView: View {
 
         var icon: String {
             switch self {
-            case .library: return "square.grid.2x2.fill"
-            case .search: return "magnifyingglass"
-            case .settings: return "gearshape.fill"
+            case .library:
+                return "square.grid.2x2.fill"
+            case .search:
+                return "magnifyingglass"
+            case .settings:
+                return "gearshape.fill"
             }
         }
     }
@@ -23,9 +26,12 @@ struct RootView: View {
             NavigationStack {
                 Group {
                     switch selectedTab {
-                    case .library: LibraryView()
-                    case .search: SearchView()
-                    case .settings: SettingsView()
+                    case .library:
+                        LibraryView()
+                    case .search:
+                        SearchView()
+                    case .settings:
+                        SettingsView()
                     }
                 }
             }
@@ -33,6 +39,7 @@ struct RootView: View {
             .background(AnimatedBackground())
 
             glassTabBar
+                .zIndex(10)
         }
     }
 
@@ -42,7 +49,9 @@ struct RootView: View {
                 Button {
                     let generator = UIImpactFeedbackGenerator(style: .light)
                     generator.impactOccurred()
+
                     SoundManager.playTap()
+
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                         selectedTab = tab
                     }
@@ -50,22 +59,46 @@ struct RootView: View {
                     VStack(spacing: 4) {
                         Image(systemName: tab.icon)
                             .font(.system(size: 20, weight: .semibold))
+
                         Text(tab.rawValue)
                             .font(.caption2)
                     }
-                    .foregroundStyle(selectedTab == tab ? .white : .white.opacity(0.5))
+                    .foregroundStyle(
+                        selectedTab == tab
+                            ? .white
+                            : .white.opacity(0.5)
+                    )
                     .frame(maxWidth: .infinity)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
         }
         .padding(.vertical, 10)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .background(
+            .ultraThinMaterial,
+            in: RoundedRectangle(
+                cornerRadius: 28,
+                style: .continuous
+            )
+        )
         .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .strokeBorder(.white.opacity(0.15), lineWidth: 1)
+            RoundedRectangle(
+                cornerRadius: 28,
+                style: .continuous
+            )
+            .strokeBorder(
+                .white.opacity(0.15),
+                lineWidth: 1
+            )
         )
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
-        .shadow(color: .black.opacity(0.3), radius: 20, y: 8)
+        .shadow(
+            color: .black.opacity(0.3),
+            radius: 20,
+            y: 8
+        )
     }
 }
