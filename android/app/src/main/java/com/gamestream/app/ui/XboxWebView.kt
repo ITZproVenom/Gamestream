@@ -7,7 +7,6 @@ import android.os.Looper
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -56,18 +55,6 @@ fun XboxWebView(
 
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(
-                    view: WebView?,
-                    request: WebResourceRequest?
-                ): Boolean {
-                    val next = request?.url?.toString() ?: return false
-                    if (next.startsWith("http://") || next.startsWith("https://")) {
-                        view?.loadUrl(next)
-                        return true
-                    }
-                    return false
-                }
-
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                     url?.let { session.updateStreamingFromUrl(it) }
                     inject(view)
@@ -126,20 +113,17 @@ fun XboxWebView(
 }
 
 private fun inject(view: WebView?) {
-    val boot = BetterXCloudInjector.bootstrapAndModernCss()
-    view?.evaluateJavascript(boot, null)
-    BetterXCloudInjector.currentScript(view?.context ?: return)?.let { script ->
-        view.evaluateJavascript(
-            """
-            (function(){
-              if (window.__gsBxScript) return;
-              window.__gsBxScript = true;
-              $script
-            })();
-            """.trimIndent(),
-            null
-        )
-    }
+    if (view == null) return
+    view.evaluateJavascript(BetterXCloudInjector.bootstrapAndModernCss(), null)
+    val script = BetterXCloudInjector.currentScript(view.context) ?: return
+    view.evaluateJavascript(
+        "(function(){ if (window.__gsBxScript) return true; window.__gsBxScript = true; return false; })();",
+        { already ->
+            if (already != "true") {
+                view.evaluateJavascript(script, null)
+            }
+        }
+    )
 }
 
 private fun urlsEquivalent(a: String, b: String): Boolean {
