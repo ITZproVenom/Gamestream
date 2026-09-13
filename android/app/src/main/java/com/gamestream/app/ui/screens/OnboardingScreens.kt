@@ -7,6 +7,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -15,21 +16,21 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.SportsEsports
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -43,11 +44,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -55,38 +55,80 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import coil.compose.AsyncImage
+import com.gamestream.app.GameCatalog
 import com.gamestream.app.OnboardingPrefs
 import com.gamestream.app.SessionStore
 
 @Composable
 fun IntroScreen(onFinished: () -> Unit) {
     val context = LocalContext.current
-    val pulse = rememberInfiniteTransition(label = "intro")
-    val glow by pulse.animateFloat(
-        initialValue = 0.86f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1800), RepeatMode.Reverse),
-        label = "glow"
+    val motion = rememberInfiniteTransition(label = "intro")
+    val shift by motion.animateFloat(
+        initialValue = -18f,
+        targetValue = 18f,
+        animationSpec = infiniteRepeatable(tween(18000, easing = LinearEasing), RepeatMode.Reverse),
+        label = "shift"
     )
+    val scale by motion.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(tween(20000), RepeatMode.Reverse),
+        label = "scale"
+    )
+    val posters = remember { GameCatalog.games.mapNotNull { it.posterUrl }.take(12) }
 
     fun finish() {
         OnboardingPrefs.markIntroDone(context)
         onFinished()
     }
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFF12081F), Color(0xFF0A0A12), Color(0xFF050508))
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
+        val columns = if (maxWidth > 700.dp) 5 else 3
+        Column(
+            Modifier
+                .fillMaxSize()
+                .scale(scale)
+                .offset(x = shift.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            repeat(4) { row ->
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    repeat(columns) { col ->
+                        val index = (row * columns + col) % maxOf(posters.size, 1)
+                        val url = posters.getOrNull(index)
+                        AsyncImage(
+                            model = url,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(210.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF1A1228))
+                        )
+                    }
+                }
+            }
+        }
+
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0x33000000), Color(0x99000000), Color(0xF2000000))
+                    )
                 )
-            )
-    ) {
+        )
+
         TextButton(
             onClick = { finish() },
             modifier = Modifier
-                .align(Alignment.TopEnd)
+                .align(Alignment.TopStart)
                 .padding(12.dp)
         ) {
             Text("Skip", color = Color.White, maxLines = 1)
@@ -94,28 +136,11 @@ fun IntroScreen(onFinished: () -> Unit) {
 
         Column(
             Modifier
-                .fillMaxSize()
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
                 .padding(horizontal = 24.dp, vertical = 28.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(36.dp))
-
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                PosterChip(Icons.Default.Star, "Instant play", -8f)
-                PosterChip(Icons.Default.Cloud, "Xbox Cloud", 7f)
-            }
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                PosterChip(Icons.Default.GridView, "GameHub", 5f)
-                PosterChip(Icons.Default.SportsEsports, "Better xCloud", -6f)
-            }
-
             Column(
                 Modifier
                     .widthIn(max = 520.dp)
@@ -128,7 +153,7 @@ fun IntroScreen(onFinished: () -> Unit) {
                     Icons.Default.SportsEsports,
                     contentDescription = null,
                     tint = Color(0xFFB9A8FF),
-                    modifier = Modifier.size(48.dp).scale(glow)
+                    modifier = Modifier.size(44.dp)
                 )
                 Spacer(Modifier.height(12.dp))
                 Text(
@@ -141,13 +166,13 @@ fun IntroScreen(onFinished: () -> Unit) {
                 )
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "Xbox Cloud Gaming, Better xCloud, and GameHub \u2014 one cinematic place to play.",
+                    "Xbox Cloud Gaming with Better xCloud and a native GameHub — play instantly.",
                     color = Color(0xFFD0D0D8),
                     textAlign = TextAlign.Center,
                     fontSize = 15.sp
                 )
             }
-
+            Spacer(Modifier.height(20.dp))
             Button(
                 onClick = { finish() },
                 modifier = Modifier
@@ -159,23 +184,6 @@ fun IntroScreen(onFinished: () -> Unit) {
                 Text("Get Started", maxLines = 1)
             }
         }
-    }
-}
-
-@Composable
-private fun PosterChip(icon: ImageVector, title: String, rot: Float) {
-    Column(
-        Modifier
-            .rotate(rot)
-            .clip(RoundedCornerShape(18.dp))
-            .background(Color(0xAA1C1C28))
-            .padding(horizontal = 14.dp, vertical = 18.dp)
-            .widthIn(min = 110.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
-        Spacer(Modifier.height(8.dp))
-        Text(title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 
@@ -216,10 +224,13 @@ fun WelcomeScreen(session: SessionStore) {
             Spacer(Modifier.height(28.dp))
             Button(
                 onClick = { showLogin = true },
-                modifier = Modifier.fillMaxWidth().height(54.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 520.dp)
+                    .height(54.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6C5CE7))
             ) {
-                Text("Sign in with Microsoft", maxLines = 1)
+                Text("Sign in with Microsoft", maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Spacer(Modifier.height(10.dp))
             Text(
@@ -253,7 +264,7 @@ fun MicrosoftSignInWeb(session: SessionStore, onClose: () -> Unit) {
                 textAlign = TextAlign.Center,
                 maxLines = 1
             )
-            Spacer(Modifier.size(64.dp))
+            Spacer(Modifier.width(64.dp))
         }
         AndroidView(
             factory = {
