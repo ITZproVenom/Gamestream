@@ -20,11 +20,13 @@ struct RootView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Group {
-                switch selectedTab {
-                case .library: LibraryView()
-                case .search: SearchView()
-                case .settings: SettingsView()
+            NavigationStack {
+                Group {
+                    switch selectedTab {
+                    case .library: LibraryView()
+                    case .search: SearchView()
+                    case .settings: SettingsView()
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
