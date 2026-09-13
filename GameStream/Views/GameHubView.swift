@@ -163,7 +163,7 @@ struct GameHubView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
         }
-        .buttonStyle(filter == item ? .glassProminent : .glass)
+        .modifier(HubChipStyle(selected: filter == item))
         .accessibilityLabel(item.title)
         .accessibilityAddTraits(filter == item ? .isSelected : [])
     }
@@ -394,6 +394,7 @@ struct GameHubView: View {
                             onOpen: { detailGame = game },
                             onFavorite: { session.toggleFavorite(game.tracked) }
                         )
+                        .frame(width: 132)
                         .contextMenu {
                             if allowsRemoveRecent {
                                 Button(role: .destructive) {
@@ -525,5 +526,16 @@ private extension Color {
         let g = Double((hex >> 8) & 0xFF) / 255
         let b = Double(hex & 0xFF) / 255
         self.init(red: r, green: g, blue: b)
+    }
+}
+
+private struct HubChipStyle: ViewModifier {
+    let selected: Bool
+    func body(content: Content) -> some View {
+        if selected {
+            content.buttonStyle(.glassProminent)
+        } else {
+            content.buttonStyle(.glass)
+        }
     }
 }
