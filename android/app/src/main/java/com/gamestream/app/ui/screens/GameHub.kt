@@ -21,10 +21,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,6 +50,9 @@ import com.gamestream.app.SessionStore
 @Composable
 fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
     var query by remember { mutableStateOf("") }
+    var detail by remember { mutableStateOf<CatalogGame?>(null) }
+    val filtering = query.isNotBlank()
+    val matches = remember(query) { GameCatalog.matches(query) }
     val shelves = remember(session.favoriteIds, session.recentIds) {
         buildList {
             val recents = session.recentGames()
@@ -72,40 +77,82 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
         Text("Xbox Cloud Gaming", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFB0B0B8))
         Spacer(Modifier.height(14.dp))
         OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Search games") }, singleLine = true)
-        if (query.isNotBlank()) {
+        if (filtering) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                if (matches.isEmpty()) "No catalog matches" else "Matching games",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = Color.White
+            )
+            Spacer(Modifier.height(8.dp))
+            if (matches.isEmpty()) {
+                Text("No local catalog titles match this search.", color = Color(0xFFB0B0B8))
+            } else {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    matches.forEach { game ->
+                        PosterCard(game, session.isFavorite(game.id), onOpen = { detail = game }, onPlay = { session.playGame(game) }, onFav = { session.toggleFavorite(game) })
+                    }
+                }
+            }
             TextButton(onClick = { session.openSearch(query) }) {
                 Text("Search Xbox Cloud for \"${query.trim()}\"")
             }
-        }
-        Spacer(Modifier.height(16.dp))
-        Text("Featured", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            GameCatalog.featured.forEach { game ->
-                FeaturedCard(game, session.isFavorite(game.id), onPlay = { session.playGame(game) }, onFav = { session.toggleFavorite(game) })
-            }
-        }
-        shelves.forEach { (title, games) ->
-            Spacer(Modifier.height(18.dp))
-            Text(title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
+        } else {
+            Spacer(Modifier.height(16.dp))
+            Text("Featured", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
             Spacer(Modifier.height(8.dp))
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                games.forEach { game ->
-                    PosterCard(game, session.isFavorite(game.id), onOpen = { session.openGame(game) }, onPlay = { session.playGame(game) }, onFav = { session.toggleFavorite(game) })
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                GameCatalog.featured.forEach { game ->
+                    FeaturedCard(game, session.isFavorite(game.id), onPlay = { session.playGame(game) }, onFav = { session.toggleFavorite(game) }, onOpen = { detail = game })
                 }
             }
-        }
-        Spacer(Modifier.height(20.dp))
-        Button(onClick = { session.openXboxCloud() }, modifier = Modifier.fillMaxWidth()) {
-            Text("Full Xbox Cloud library")
+            shelves.forEach { (title, games) ->
+                Spacer(Modifier.height(18.dp))
+                Text(title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    games.forEach { game ->
+                        PosterCard(game, session.isFavorite(game.id), onOpen = { detail = game }, onPlay = { session.playGame(game) }, onFav = { session.toggleFavorite(game) })
+                    }
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+            Button(onClick = { session.openXboxCloud() }, modifier = Modifier.fillMaxWidth()) {
+                Text("Full Xbox Cloud library")
+            }
         }
         Spacer(Modifier.height(80.dp))
+    }
+
+    detail?.let { game ->
+        AlertDialog(
+            onDismissRequest = { detail = null },
+            title = { Text(game.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+            text = {
+                Column {
+                    Text(game.tagline)
+                    Spacer(Modifier.height(8.dp))
+                    Text("${game.genre} · ${game.provider}", color = Color(0xFF808088))
+                }
+            },
+            confirmButton = {
+                Button(onClick = { session.playGame(game); detail = null }) { Text("Play now") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { session.toggleFavorite(game) }) {
+                        Text(if (session.isFavorite(game.id)) "Unfavorite" else "Favorite")
+                    }
+                    OutlinedButton(onClick = { session.openGame(game); detail = null }) { Text("Open") }
+                }
+            }
+        )
     }
 }
 
 @Composable
-private fun FeaturedCard(game: CatalogGame, favorite: Boolean, onPlay: () -> Unit, onFav: () -> Unit) {
-    Box(Modifier.width(280.dp).height(168.dp).clip(RoundedCornerShape(20.dp)).background(Color(game.accent))) {
+private fun FeaturedCard(game: CatalogGame, favorite: Boolean, onPlay: () -> Unit, onFav: () -> Unit, onOpen: () -> Unit) {
+    Box(Modifier.width(280.dp).height(168.dp).clip(RoundedCornerShape(20.dp)).background(Color(game.accent)).clickable(onClick = onOpen)) {
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)))))
         Column(Modifier.align(Alignment.BottomStart).padding(14.dp)) {
             Text(game.provider, color = Color.White.copy(alpha = 0.85f), style = MaterialTheme.typography.labelSmall, maxLines = 1)
