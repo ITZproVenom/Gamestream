@@ -6,6 +6,7 @@ struct ListsBrowserView: View {
     @ObservedObject private var artwork = ArtworkStore.shared
     @State private var newName = ""
     var onPlay: (CatalogGame) -> Void
+    var onOpen: (CatalogGame) -> Void = { _ in }
 
     var body: some View {
         NavigationStack {
@@ -19,6 +20,7 @@ struct ListsBrowserView: View {
                         Button("Add") { create() }
                             .buttonStyle(.glassProminent)
                             .disabled(newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .lineLimit(1)
                     }
                     .padding(12)
                     .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -41,6 +43,7 @@ struct ListsBrowserView: View {
                                 Text("\(list.gameIDs.count)")
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(.secondary)
+                                    .lineLimit(1)
                                 Button(role: .destructive) {
                                     lists.delete(list.id)
                                 } label: {
@@ -64,10 +67,20 @@ struct ListsBrowserView: View {
                                                 artworkURL: artwork.url(for: game.id),
                                                 isFavorite: session.isFavorite(game.id),
                                                 onPlay: { onPlay(game) },
-                                                onOpen: { onPlay(game) },
+                                                onOpen: { onOpen(game) },
                                                 onFavorite: { session.toggleFavorite(game.tracked) }
                                             )
                                             .frame(width: 132)
+                                            .contextMenu {
+                                                Button { onPlay(game) } label: {
+                                                    Label("Play now", systemImage: "play.fill")
+                                                }
+                                                Button {
+                                                    lists.toggle(game: game.tracked, inCollection: list.id)
+                                                } label: {
+                                                    Label("Remove from list", systemImage: "minus.circle")
+                                                }
+                                            }
                                         }
                                     }
                                 }
