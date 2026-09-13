@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate GameStream app icon into GameStream/Assets.xcassets/AppIcon.appiconset/"""
+"""Generate GameStream App Icon into GameStream/Assets.xcassets/AppIcon.appiconset/"""
 
 from PIL import Image, ImageDraw, ImageFilter
 import os
@@ -102,7 +102,6 @@ def make_icon(size: int) -> Image.Image:
 def main():
     os.makedirs(OUT, exist_ok=True)
 
-    # 1024 marketing / single-size icon (Xcode expands for device sizes)
     icon = make_icon(1024)
     path = os.path.join(OUT, "icon-1024.png")
     bg = Image.new("RGB", (1024, 1024), (12, 10, 28))
@@ -124,6 +123,7 @@ def main():
     with open(os.path.join(OUT, "Contents.json"), "w") as f:
         json.dump(contents, f, indent=2)
     print("wrote Contents.json")
+    print("Done. Rebuild the app to see the GameStream icon.")
 
 
 if __name__ == "__main__":

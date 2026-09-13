@@ -109,7 +109,6 @@ struct XboxCloudWebView: UIViewRepresentable {
             uiView.load(URLRequest(url: url))
         }
 
-        // Run any pending JS from Settings (pref apply / reload / etc.)
         if let js = session.pendingJavaScript, !js.isEmpty {
             context.coordinator.runPendingJS(js, in: uiView)
             DispatchQueue.main.async {
@@ -119,7 +118,6 @@ struct XboxCloudWebView: UIViewRepresentable {
             }
         }
 
-        // Script refresh requested
         if context.coordinator.lastRefreshToken != session.betterXCloudRefreshToken {
             context.coordinator.lastRefreshToken = session.betterXCloudRefreshToken
             BetterXCloudInjector.shared.invalidateCache()
@@ -178,7 +176,6 @@ struct XboxCloudWebView: UIViewRepresentable {
                 }
             }
 
-            // Flush pending JS after load as well
             if let js = session?.pendingJavaScript, !js.isEmpty {
                 webView.evaluateJavaScript(js, completionHandler: nil)
                 Task { @MainActor in
@@ -199,7 +196,7 @@ struct XboxCloudWebView: UIViewRepresentable {
     }
 }
 
-// MARK: - Better xCloud Injector
+// MARK: - Better xCloud Injector + modern glass UI
 
 final class BetterXCloudInjector {
     static let shared = BetterXCloudInjector()
@@ -219,71 +216,189 @@ final class BetterXCloudInjector {
     })();
     """
 
+    /// Aggressive modern glass theme for Better xCloud UI (re-applied on every load).
     static let modernUIOverridesJS = """
     (function() {
-        if (window.__bxModernUI) return;
-        window.__bxModernUI = true;
+        const CSS_ID = 'gamestream-bx-modern-v3';
         const css = `
-        [class*="bx-"], [id*="bx-"], .bx-settings, .bx-dialog, .bx-menu, .bx-stats-bar, .bx-toast {
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif !important;
+        /* ===== GameStream modern Better xCloud theme ===== */
+        html {
+            --bx-bg: rgba(16, 16, 18, 0.92);
+            --bx-bg-soft: rgba(28, 28, 32, 0.88);
+            --bx-border: rgba(255,255,255,0.10);
+            --bx-text: #f5f5f7;
+            --bx-muted: rgba(255,255,255,0.55);
+            --bx-accent: #8b7cff;
+            --bx-radius: 18px;
+        }
+
+        [class*="bx-"], [id*="bx-"],
+        .bx-settings, .bx-dialog, .bx-menu, .bx-stats-bar, .bx-toast,
+        [class*="BxSettings"], [class*="BxDialog"], [class*="BxMenu"] {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif !important;
             -webkit-font-smoothing: antialiased !important;
+            color: var(--bx-text) !important;
         }
-        .bx-settings, .bx-dialog, [class*="bx-modal"], [class*="bx-panel"] {
-            background: rgba(18, 18, 20, 0.88) !important;
-            backdrop-filter: blur(32px) saturate(170%) !important;
-            -webkit-backdrop-filter: blur(32px) saturate(170%) !important;
-            border: 1px solid rgba(255,255,255,0.10) !important;
-            border-radius: 20px !important;
-            box-shadow: 0 16px 48px rgba(0,0,0,0.5) !important;
-            color: #f5f5f7 !important;
+
+        /* Main panels / settings / dialogs */
+        .bx-settings,
+        .bx-dialog,
+        [class*="bx-modal"],
+        [class*="bx-panel"],
+        [class*="bx-settings"],
+        [class*="BxSettings"],
+        [class*="bx-overlay"] > div,
+        div[class*="bx-"][class*="dialog"],
+        div[class*="bx-"][class*="settings"] {
+            background: var(--bx-bg) !important;
+            backdrop-filter: blur(40px) saturate(180%) !important;
+            -webkit-backdrop-filter: blur(40px) saturate(180%) !important;
+            border: 1px solid var(--bx-border) !important;
+            border-radius: var(--bx-radius) !important;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06) !important;
+            color: var(--bx-text) !important;
+            padding: 16px !important;
         }
-        .bx-settings button, .bx-dialog button, [class*="bx-"] button {
+
+        /* Setting rows */
+        [class*="bx-"] label,
+        [class*="bx-setting"],
+        [class*="bx-row"],
+        .bx-settings > div,
+        .bx-dialog > div {
+            border-color: rgba(255,255,255,0.06) !important;
+        }
+
+        /* Buttons */
+        [class*="bx-"] button,
+        .bx-settings button,
+        .bx-dialog button {
             border-radius: 12px !important;
             font-weight: 600 !important;
-        }
-        .bx-stats-bar, [class*="bx-stats"], [class*="BxStats"], [id*="bx-stats"] {
-            background: rgba(12, 12, 14, 0.72) !important;
-            backdrop-filter: blur(24px) saturate(180%) !important;
-            -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
-            border: 1px solid rgba(255,255,255,0.09) !important;
-            border-radius: 16px !important;
+            letter-spacing: -0.01em !important;
+            border: 1px solid rgba(255,255,255,0.08) !important;
+            background: rgba(255,255,255,0.08) !important;
+            color: var(--bx-text) !important;
+            transition: transform 0.12s ease, background 0.12s ease !important;
             padding: 8px 14px !important;
+        }
+        [class*="bx-"] button:active,
+        .bx-settings button:active {
+            transform: scale(0.97) !important;
+            background: rgba(255,255,255,0.14) !important;
+        }
+        [class*="bx-"] button[class*="primary"],
+        [class*="bx-"] button.primary {
+            background: linear-gradient(180deg, #9b8cff, #6d5efc) !important;
+            border-color: transparent !important;
+        }
+
+        /* Inputs / selects */
+        [class*="bx-"] input,
+        [class*="bx-"] select,
+        [class*="bx-"] textarea {
+            background: rgba(255,255,255,0.06) !important;
+            border: 1px solid rgba(255,255,255,0.10) !important;
+            border-radius: 12px !important;
+            color: var(--bx-text) !important;
+            padding: 8px 12px !important;
+        }
+
+        /* Tabs / section headers */
+        [class*="bx-"] [class*="tab"],
+        [class*="bx-"] [class*="Tab"] {
+            border-radius: 10px !important;
+            font-weight: 600 !important;
+        }
+
+        /* Stream stats HUD */
+        .bx-stats-bar,
+        [class*="bx-stats"],
+        [class*="BxStats"],
+        [id*="bx-stats"] {
+            background: rgba(10, 10, 12, 0.78) !important;
+            backdrop-filter: blur(28px) saturate(180%) !important;
+            -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+            border: 1px solid rgba(255,255,255,0.10) !important;
+            border-radius: 16px !important;
+            padding: 8px 12px !important;
             font-size: 11px !important;
             font-weight: 600 !important;
             font-variant-numeric: tabular-nums !important;
             letter-spacing: 0.03em !important;
             color: rgba(255,255,255,0.92) !important;
-            box-shadow: 0 8px 28px rgba(0,0,0,0.4) !important;
+            box-shadow: 0 10px 32px rgba(0,0,0,0.45) !important;
+            display: flex !important;
+            flex-wrap: wrap !important;
+            gap: 6px !important;
+            align-items: center !important;
         }
-        .bx-stats-bar > *, [class*="bx-stats"] > * {
-            background: rgba(255,255,255,0.06) !important;
+        .bx-stats-bar > *,
+        [class*="bx-stats"] > * {
+            background: rgba(255,255,255,0.07) !important;
             border-radius: 8px !important;
             padding: 3px 8px !important;
             border: 1px solid rgba(255,255,255,0.05) !important;
         }
-        [class*="bx-server"], [class*="bx-region"] {
-            border-radius: 12px !important;
-            background: rgba(255,255,255,0.08) !important;
-            border: 1px solid rgba(255,255,255,0.10) !important;
-        }
-        .bx-toast, [class*="bx-toast"] {
-            background: rgba(22, 22, 24, 0.92) !important;
-            backdrop-filter: blur(28px) !important;
-            -webkit-backdrop-filter: blur(28px) !important;
+
+        /* Server / region button near profile */
+        [class*="bx-server"],
+        [class*="bx-region"],
+        button[class*="bx-"][class*="server"],
+        a[class*="bx-"][class*="server"] {
             border-radius: 14px !important;
-            border: 1px solid rgba(255,255,255,0.08) !important;
+            background: rgba(255,255,255,0.10) !important;
+            border: 1px solid rgba(255,255,255,0.12) !important;
+            backdrop-filter: blur(16px) !important;
+            -webkit-backdrop-filter: blur(16px) !important;
+            font-weight: 600 !important;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.25) !important;
+        }
+
+        /* Toasts */
+        .bx-toast,
+        [class*="bx-toast"] {
+            background: rgba(20, 20, 22, 0.94) !important;
+            backdrop-filter: blur(32px) !important;
+            -webkit-backdrop-filter: blur(32px) !important;
+            border-radius: 16px !important;
+            border: 1px solid rgba(255,255,255,0.10) !important;
+            box-shadow: 0 12px 36px rgba(0,0,0,0.5) !important;
+            color: var(--bx-text) !important;
+        }
+
+        /* Scrollbars */
+        [class*="bx-"]::-webkit-scrollbar { width: 6px !important; height: 6px !important; }
+        [class*="bx-"]::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.18) !important;
+            border-radius: 10px !important;
+        }
+
+        /* Secondary text */
+        [class*="bx-"] small,
+        [class*="bx-"] .note,
+        [class*="bx-"] [class*="note"],
+        [class*="bx-"] [class*="desc"] {
+            color: var(--bx-muted) !important;
         }
         `;
-        const style = document.createElement('style');
-        style.id = 'gamestream-bx-modern';
-        style.textContent = css;
-        (document.head || document.documentElement).appendChild(style);
-        const observer = new MutationObserver(() => {
-            if (!document.getElementById('gamestream-bx-modern')) {
+
+        function apply() {
+            let style = document.getElementById(CSS_ID);
+            if (!style) {
+                style = document.createElement('style');
+                style.id = CSS_ID;
                 (document.head || document.documentElement).appendChild(style);
             }
-        });
-        observer.observe(document.documentElement, { childList: true, subtree: true });
+            if (style.textContent !== css) style.textContent = css;
+        }
+
+        apply();
+
+        // Keep re-applying as BX recreates DOM
+        const obs = new MutationObserver(function() { apply(); });
+        obs.observe(document.documentElement, { childList: true, subtree: true });
+        setInterval(apply, 2000);
     })();
     """
 

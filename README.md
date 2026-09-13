@@ -14,109 +14,44 @@
 
 ---
 
+## Quick start
+
+```bash
+# 1. App icon (required for a proper home-screen icon)
+pip3 install pillow
+python3 scripts/generate_app_icons.py
+
+# 2. Xcode project
+xcodegen generate
+open GameStream.xcodeproj
+```
+
+Then run on a device or simulator. Sign in with your Xbox account in **Library**.
+
 ## Overview
 
 **GameStream** is a native iOS app for [Xbox Cloud Gaming](https://www.xbox.com/play).  
-It wraps the official web experience in a modern **Liquid Glass** interface and automatically injects **[Better xCloud](https://github.com/redphx/better-xcloud)** so you get higher quality streams, touch controls, stats, and more — without a separate browser extension.
+It wraps the official web experience in **Liquid Glass** UI and injects **[Better xCloud](https://github.com/redphx/better-xcloud)** on every load.
 
 ## Features
 
-### Native experience
-- **iOS 26 Liquid Glass** UI (real `.glassEffect`, `GlassEffectContainer`)
-- Floating glass navigation that **auto-hides while you play**
-- Persistent sign-in (cookies + local session)
-- Search that opens Xbox Cloud results in-app
-- Polished Settings (quality chips, region, account)
-- Branded **GameStream** app name + App Icon asset catalog
+- iOS 26 Liquid Glass navigation (auto-hides while streaming)
+- Persistent sign-in
+- Working Settings (resolution / region applied to Better xCloud)
+- Better xCloud always on + modern glass UI overrides
+- Stream performance tweaks (shared process pool, persistent cookies)
 
-### Better xCloud (always on)
-- 1080p / high-quality streaming options
-- Modern glass stream stats HUD
-- Touch controller layouts
-- Remote Play support
-- Server / region selection
-- Visual clarity filters, volume boost, screenshots, and more
+## App icon
 
-### Streaming
-- Optimised `WKWebView` (persistent data store, shared process pool)
-- Inline media + Picture in Picture ready
-- Clean error / loading states
-
-## Requirements
-
-| Requirement | Version |
-|-------------|---------|
-| iOS | 26.0+ |
-| Xcode | 26+ |
-| XcodeGen | Latest |
-| Apple Silicon / arm64 | Required |
-
-An **Xbox account** with Cloud Gaming access is required to play.
-
-## Build
+The repo ships an empty App Icon slot. Generate the branded icon before building:
 
 ```bash
-# 1. Install the branded App Icon (optional but recommended)
-pip3 install pillow   # only needed for generate_app_icons.py
+pip3 install pillow
 python3 scripts/generate_app_icons.py
-
-# 2. Generate the Xcode project
-xcodegen generate
-
-# 3. Open in Xcode
-open GameStream.xcodeproj
-
-# 4. Select your team / signing (or keep unsigned for the IPA workflow)
-# 5. Run on device or simulator
 ```
 
-### App name & icon
-
-- **Display name:** GameStream  
-- **Bundle ID:** `com.gamestream.app`  
-- **App Icon:** `GameStream/Assets.xcassets/AppIcon.appiconset`  
-  Generate PNGs with `scripts/generate_app_icons.py` (Pillow), then rebuild.
-
-### Unsigned IPA (CI)
-
-This repo includes `.github/workflows/build-ipa.yml` for building an unsigned IPA.
-
-## Project structure
-
-```
-Gamestream/
-├── GameStream/
-│   ├── GameStreamApp.swift
-│   ├── Info.plist
-│   ├── Assets.xcassets/          # App Icon
-│   ├── Services/
-│   │   ├── SessionStore.swift
-│   │   └── SoundManager.swift
-│   └── Views/
-│       ├── RootView.swift
-│       ├── LibraryView.swift
-│       ├── SearchView.swift
-│       ├── StreamPlayerView.swift
-│       ├── AnimatedBackground.swift
-│       ├── LiquidGlassComponents.swift
-│       └── SignInWebView.swift
-├── scripts/
-│   └── generate_app_icons.py
-├── project.yml
-├── LICENSE
-└── README.md
-```
-
-## Better xCloud
-
-The official Better xCloud userscript is downloaded from  
-[redphx/better-xcloud](https://github.com/redphx/better-xcloud) releases, cached on device, and injected into every Xbox Cloud page load.
-
-- Always enabled  
-- Modern glass overrides for panels & performance HUD  
-- Open **Library → Better xCloud** badge for tips  
-
-Better xCloud is © its authors. This project is not affiliated with Microsoft or Xbox.
+This writes `GameStream/Assets.xcassets/AppIcon.appiconset/icon-1024.png`.  
+Xcode expands it for all device sizes.
 
 ## License
 
@@ -124,5 +59,4 @@ MIT — see [LICENSE](LICENSE).
 
 ## Disclaimer
 
-GameStream is an unofficial client. Xbox, xCloud, and related trademarks belong to Microsoft.  
-Use at your own risk and comply with Microsoft’s terms of service.
+Unofficial client. Xbox / xCloud trademarks belong to Microsoft.
