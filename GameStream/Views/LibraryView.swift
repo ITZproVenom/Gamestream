@@ -88,13 +88,13 @@ struct LibraryView: View {
     // MARK: - Floating chrome
 
     private var libraryChrome: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Button {
                 session.goBack()
             } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 40, height: 40)
+                    .frame(width: 38, height: 38)
             }
             .buttonStyle(.glass)
             .accessibilityLabel("Back")
@@ -104,48 +104,58 @@ struct LibraryView: View {
             } label: {
                 Image(systemName: "house.fill")
                     .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 40, height: 40)
+                    .frame(width: 38, height: 38)
             }
             .buttonStyle(.glass)
             .accessibilityLabel("Library home")
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 4)
 
             Button {
                 showBetterXCloudInfo = true
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     Image(systemName: "sparkles")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                     Text("Better xCloud")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.caption.weight(.semibold))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                        .minimumScaleFactor(0.75)
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 10)
                 .padding(.vertical, 9)
             }
             .buttonStyle(.glass)
             .fixedSize(horizontal: true, vertical: false)
 
-            Spacer(minLength: 8)
+            if session.currentGame != nil {
+                Button {
+                    session.toggleFavoriteCurrent()
+                } label: {
+                    Image(systemName: session.currentGame?.isFavorite == true ? "star.fill" : "star")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: 38, height: 38)
+                }
+                .buttonStyle(.glass)
+                .accessibilityLabel(session.currentGame?.isFavorite == true ? "Remove favorite" : "Add favorite")
+            }
 
             Button {
                 session.reloadCurrent()
             } label: {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 40, height: 40)
+                    .frame(width: 38, height: 38)
             }
             .buttonStyle(.glass)
             .accessibilityLabel("Reload")
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 12)
     }
 
     /// Tiny edge control so a stream can be left without fighting Xbox page chrome.
     private var streamExitChrome: some View {
-        HStack {
+        HStack(spacing: 8) {
             if showStreamExit {
                 Button {
                     session.openHome()
@@ -163,6 +173,18 @@ struct LibraryView: View {
                 }
                 .buttonStyle(.glass)
                 .accessibilityLabel("Exit stream")
+
+                if session.currentGame != nil {
+                    Button {
+                        session.toggleFavoriteCurrent()
+                    } label: {
+                        Image(systemName: session.currentGame?.isFavorite == true ? "star.fill" : "star")
+                            .font(.system(size: 12, weight: .bold))
+                            .frame(width: 32, height: 28)
+                    }
+                    .buttonStyle(.glass)
+                    .accessibilityLabel(session.currentGame?.isFavorite == true ? "Remove favorite" : "Add favorite")
+                }
             } else {
                 Button {
                     revealStreamExit()
