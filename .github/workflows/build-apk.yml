@@ -37,15 +37,15 @@ jobs:
         run: |
           chmod +x gradlew 2>/dev/null || true
           if [ ! -f gradlew ]; then
-            gradle wrapper --gradle-version 8.9
+            (command -v gradle >/dev/null && gradle wrapper --gradle-version 8.9) || \
+              (curl -sL https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/gradle.zip && \
+               unzip -q /tmp/gradle.zip -d /tmp && /tmp/gradle-8.9/bin/gradle wrapper --gradle-version 8.9)
           fi
           ./gradlew :app:assembleDebug --no-daemon
 
       - name: Locate APK
-        id: apk
         run: |
           APK=$(find app/build/outputs/apk -name "*.apk" | head -1)
-          echo "path=$APK" >> "$GITHUB_OUTPUT"
           ls -lh "$APK"
           cp "$APK" "$GITHUB_WORKSPACE/GameStream-debug.apk"
 
@@ -56,15 +56,25 @@ jobs:
           path: GameStream-debug.apk
           if-no-files-found: error
 
-      - name: Build changelog
+      - name: Build changelog + release identity
+        id: meta
         working-directory: .
         run: |
           SHORT_SHA="$(echo '${{ github.sha }}' | cut -c1-7)"
           DATE_UTC="$(date -u +'%Y-%m-%d %H:%M UTC')"
+          STAMP="$(date -u +'%Y%m%d-%H%M')"
+          RUN="${{ github.run_number }}"
+
+          TAG="android-build-${STAMP}-${SHORT_SHA}"
+          NAME="Android build #${RUN} (${SHORT_SHA})"
+
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
+
           {
-            echo "## Android APK"
+            echo "## Changelog"
             echo ""
-            echo "**Build:** \`${SHORT_SHA}\` · **${DATE_UTC}**"
+            echo "**Platform:** Android · **Build:** \`${SHORT_SHA}\` · **${DATE_UTC}**"
             echo ""
             echo "### What's changed"
             echo ""
@@ -73,15 +83,16 @@ jobs:
             echo ""
             echo "---"
             echo ""
-            echo "Install the **GameStream-debug.apk** (allow unknown sources)."
+            echo "### Install"
+            echo "Download **GameStream-debug.apk** and install (allow unknown sources)."
           } > android_release_notes.md
 
-      - name: Publish to latest release (Android asset)
+      - name: Publish new Android build release
         if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
-          name: Latest unsigned build
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.name }}
           prerelease: true
           body_path: android_release_notes.md
           files: GameStream-debug.apk
@@ -89,7 +100,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish tagged release APK
+      - name: Publish versioned release APK
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:

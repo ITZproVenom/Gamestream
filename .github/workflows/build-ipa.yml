@@ -48,15 +48,23 @@ jobs:
           zip -r GameStream-unsigned.ipa Payload
           ls -lh GameStream-unsigned.ipa
 
-      - name: Build changelog
-        id: changelog
+      - name: Build changelog + release identity
+        id: meta
         run: |
           set -euo pipefail
 
           SHORT_SHA="$(echo '${{ github.sha }}' | cut -c1-7)"
           DATE_UTC="$(date -u +'%Y-%m-%d %H:%M UTC')"
+          STAMP="$(date -u +'%Y%m%d-%H%M')"
+          RUN="${{ github.run_number }}"
 
-          # Commits since previous v* tag, otherwise last 15
+          # Unique tag per workflow run (never overwrite)
+          TAG="ios-build-${STAMP}-${SHORT_SHA}"
+          NAME="iOS build #${RUN} (${SHORT_SHA})"
+
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
+
           if git describe --tags --abbrev=0 --match 'v*' HEAD^ >/tmp/prev_tag 2>/dev/null; then
             PREV_TAG="$(cat /tmp/prev_tag)"
             RANGE="${PREV_TAG}..HEAD"
@@ -69,7 +77,7 @@ jobs:
           {
             echo "## Changelog"
             echo ""
-            echo "**Build:** \`${SHORT_SHA}\` · **${DATE_UTC}** · ${RANGE_LABEL}"
+            echo "**Platform:** iOS · **Build:** \`${SHORT_SHA}\` · **${DATE_UTC}** · ${RANGE_LABEL}"
             echo ""
             echo "### What's changed"
             echo ""
@@ -88,7 +96,6 @@ jobs:
             echo "_Unsigned build — not signed for App Store / TestFlight._"
           } > release_notes.md
 
-          echo "----- release notes -----"
           cat release_notes.md
 
       - name: Upload IPA artifact
@@ -98,7 +105,8 @@ jobs:
           path: build/GameStream-unsigned.ipa
           if-no-files-found: error
 
-      - name: Publish tagged release
+      # Versioned release for git tags like v1.0.0
+      - name: Publish versioned release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
@@ -109,12 +117,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish latest prerelease
+      # New prerelease every main / manual run (unique tag)
+      - name: Publish new iOS build release
         if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
-          name: Latest unsigned build
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.name }}
           prerelease: true
           body_path: release_notes.md
           files: build/GameStream-unsigned.ipa
