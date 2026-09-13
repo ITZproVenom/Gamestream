@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct RootView: View {
     @EnvironmentObject var session: SessionStore
@@ -55,8 +56,12 @@ struct RootView: View {
                 session.requestedTab = nil
             }
         }
+        .onChange(of: session.isStreaming) { _, streaming in
+            UIApplication.shared.isIdleTimerDisabled = streaming
+        }
         .onAppear {
             BetterXCloudInjector.shared.preload()
+            UIApplication.shared.isIdleTimerDisabled = session.isStreaming
         }
     }
 

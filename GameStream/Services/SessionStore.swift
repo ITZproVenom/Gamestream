@@ -116,8 +116,8 @@ final class SessionStore: ObservableObject {
     }
 
     func reloadCurrent() {
+        // Single path: XboxCloudWebView reloads when reloadNonce changes.
         reloadNonce += 1
-        pendingJavaScript = "try { location.reload(); } catch (e) {}"
     }
 
     /// Called from the webview bridge. Updates streaming state only — never webURL.
@@ -211,7 +211,7 @@ final class SessionStore: ObservableObject {
             Task { @MainActor in
                 self?.webURL = URL(string: "https://www.xbox.com/play")!
                 self?.isStreaming = false
-                self?.pendingJavaScript = "try { location.reload(); } catch (e) {}"
+                self?.reloadNonce += 1
                 self?.requestedTab = .library
             }
         }

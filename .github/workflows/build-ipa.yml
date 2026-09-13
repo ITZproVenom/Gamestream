@@ -41,14 +41,8 @@ jobs:
             echo "xcodegen already available"
           fi
 
-      # Icon gen is optional; skip network-heavy pillow install when icons already exist
-      - name: App icon (optional)
-        run: |
-          if [ ! -f GameStream/Assets.xcassets/AppIcon.appiconset/icon-1024.png ]; then
-            pip3 install --quiet pillow && python3 scripts/generate_app_icons.py || true
-          else
-            echo "App icon already present — skip generate"
-          fi
+      - name: App icon
+        run: python3 scripts/install_icons.py
 
       - name: Generate Xcode project
         run: xcodegen generate
