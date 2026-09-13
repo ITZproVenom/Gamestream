@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import WebKit
 
 @MainActor
 final class SessionStore: ObservableObject {
@@ -41,11 +42,12 @@ final class SessionStore: ObservableObject {
         isStreaming = false
         webURL = URL(string: "https://www.xbox.com/play")!
 
-        // Clear web cookies so Xbox session is also ended
+        // Clear Xbox / Microsoft website data so the web session is also ended
         let store = WKWebsiteDataStore.default()
         store.fetchDataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes()) { records in
             let xboxRecords = records.filter {
-                $0.displayName.contains("xbox") || $0.displayName.contains("microsoft") || $0.displayName.contains("live")
+                let name = $0.displayName.lowercased()
+                return name.contains("xbox") || name.contains("microsoft") || name.contains("live") || name.contains("bing")
             }
             store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), for: xboxRecords) {}
         }
@@ -79,5 +81,3 @@ final class SessionStore: ObservableObject {
         }
     }
 }
-
-import WebKit
