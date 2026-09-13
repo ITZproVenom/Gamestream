@@ -18,11 +18,13 @@ struct LibraryView: View {
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .webViewLoadingChanged)) { note in
                     if let loading = note.object as? Bool {
-                        withAnimation { isLoading = loading }
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            isLoading = loading
+                        }
                     }
                 }
             } else {
-                signInPrompt
+                signInSurface
             }
         }
         .sheet(isPresented: $showingSignIn) {
@@ -36,38 +38,77 @@ struct LibraryView: View {
                                 session.markSignedIn()
                                 showingSignIn = false
                             }
+                            .buttonStyle(.glassProminent)
                         }
                     }
             }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
     }
 
-    private var signInPrompt: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "gamecontroller.fill")
-                .font(.system(size: 44))
-                .foregroundStyle(.white.opacity(0.4))
-            Text("Sign in to load your library")
-                .foregroundStyle(.white.opacity(0.7))
+    // MARK: - Sign-in surface (native Liquid Glass)
+
+    private var signInSurface: some View {
+        VStack(spacing: 28) {
+            Spacer()
+
+            VStack(spacing: 18) {
+                Image(systemName: "gamecontroller.fill")
+                    .font(.system(size: 52, weight: .medium))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(.primary)
+
+                VStack(spacing: 8) {
+                    Text("Your Library")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+
+                    Text("Sign in with your Xbox account to load games from Xbox Cloud Gaming.")
+                        .font(.subheadline)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 24)
+                }
+            }
+            .padding(28)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .padding(.horizontal, 28)
+
             Button {
                 showingSignIn = true
             } label: {
                 Text("Sign In")
                     .font(.headline)
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-                    .background(.white, in: Capsule())
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
             }
+            .buttonStyle(.glassProminent)
+            .padding(.horizontal, 40)
+
+            Spacer()
+            Spacer()
         }
     }
 
+    // MARK: - Loading overlay
+
     private var loadingOverlay: some View {
         ZStack {
-            Color.black.opacity(0.6).ignoresSafeArea()
-            ProgressView("Loading library…")
-                .tint(.white)
-                .foregroundStyle(.white)
+            Color.black.opacity(0.45)
+                .ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                ProgressView()
+                    .controlSize(.large)
+                    .tint(.white)
+
+                Text("Loading library…")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white)
+            }
+            .padding(28)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
+        .transition(.opacity)
     }
 }

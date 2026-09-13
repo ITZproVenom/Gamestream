@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject var session: SessionStore
     @State private var selectedTab: Tab = .library
+    @Namespace private var navNamespace
 
     enum Tab: String, CaseIterable {
         case library = "Library"
@@ -11,94 +12,59 @@ struct RootView: View {
 
         var icon: String {
             switch self {
-            case .library:
-                return "square.grid.2x2.fill"
-            case .search:
-                return "magnifyingglass"
-            case .settings:
-                return "gearshape.fill"
+            case .library: return "square.grid.2x2.fill"
+            case .search: return "magnifyingglass"
+            case .settings: return "gearshape.fill"
             }
         }
     }
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            NavigationStack {
-                Group {
-                    switch selectedTab {
-                    case .library:
-                        LibraryView()
-                    case .search:
-                        SearchView()
-                    case .settings:
-                        SettingsView()
-                    }
+            // Content
+            Group {
+                switch selectedTab {
+                case .library:
+                    LibraryView()
+                case .search:
+                    SearchView()
+                case .settings:
+                    SettingsView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(AnimatedBackground())
 
-            glassTabBar
+            // Floating Liquid Glass navigation
+            glassNavigation
+                .padding(.horizontal, 20)
+                .padding(.bottom, 12)
                 .zIndex(10)
         }
     }
 
-    private var glassTabBar: some View {
-        HStack(spacing: 0) {
-            ForEach(Tab.allCases, id: \.self) { tab in
-                Button {
-                    let generator = UIImpactFeedbackGenerator(style: .light)
-                    generator.impactOccurred()
+    private var glassNavigation: some View {
+        GlassEffectContainer(spacing: 8) {
+            HStack(spacing: 6) {
+                ForEach(Tab.allCases, id: \.self) { tab in
+                    GlassNavigationItem(
+                        title: tab.rawValue,
+                        systemImage: tab.icon,
+                        isSelected: selectedTab == tab,
+                        namespace: navNamespace
+                    ) {
+                        let generator = UIImpactFeedbackGenerator(style: .light)
+                        generator.impactOccurred()
+                        SoundManager.playTap()
 
-                    SoundManager.playTap()
-
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        selectedTab = tab
+                        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                            selectedTab = tab
+                        }
                     }
-                } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: tab.icon)
-                            .font(.system(size: 20, weight: .semibold))
-
-                        Text(tab.rawValue)
-                            .font(.caption2)
-                    }
-                    .foregroundStyle(
-                        selectedTab == tab
-                            ? .white
-                            : .white.opacity(0.5)
-                    )
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
             }
+            .padding(6)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
         }
-        .padding(.vertical, 10)
-        .background(
-            .ultraThinMaterial,
-            in: RoundedRectangle(
-                cornerRadius: 28,
-                style: .continuous
-            )
-        )
-        .overlay(
-            RoundedRectangle(
-                cornerRadius: 28,
-                style: .continuous
-            )
-            .strokeBorder(
-                .white.opacity(0.15),
-                lineWidth: 1
-            )
-        )
-        .padding(.horizontal, 16)
-        .padding(.bottom, 8)
-        .shadow(
-            color: .black.opacity(0.3),
-            radius: 20,
-            y: 8
-        )
     }
 }
