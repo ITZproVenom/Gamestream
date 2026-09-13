@@ -138,7 +138,7 @@ private fun urlsEquivalent(a: String, b: String): Boolean {
     return norm(a) == norm(b)
 }
 
-private const val SPA_BRIDGE = """
+private val SPA_BRIDGE = """
 (function(){
   if (window.__gsSpaBridge) return;
   window.__gsSpaBridge = true;
