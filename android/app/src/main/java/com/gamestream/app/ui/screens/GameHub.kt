@@ -56,8 +56,10 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
     var detail by remember { mutableStateOf<CatalogGame?>(null) }
     val filtering = query.isNotBlank()
     val matches = remember(query) { GameCatalog.matches(query) }
-    val shelves = remember(session.favoriteIds, session.recentIds) {
+    val shelves = remember(session.favoriteIds, session.recentIds, session.queueIds) {
         buildList {
+            val queued = session.queuedGames()
+            if (queued.isNotEmpty()) add("Up Next" to queued)
             val recents = session.recentGames()
             if (recents.isNotEmpty()) add("Continue playing" to recents)
             val favs = session.favoriteGames()
@@ -101,6 +103,12 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
                 Text("Search Xbox Cloud for \"${query.trim()}\"")
             }
         } else {
+            if (session.queuedGames().isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = { session.playNextQueued() }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Play next in queue")
+                }
+            }
             Spacer(Modifier.height(16.dp))
             Text("Featured", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
             Spacer(Modifier.height(8.dp))
@@ -145,6 +153,9 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
                 Row {
                     TextButton(onClick = { session.toggleFavorite(game) }) {
                         Text(if (session.isFavorite(game.id)) "Unfavorite" else "Favorite")
+                    }
+                    TextButton(onClick = { session.toggleQueue(game) }) {
+                        Text(if (session.isQueued(game.id)) "Queued" else "Up Next")
                     }
                     OutlinedButton(onClick = { session.openGame(game); detail = null }) { Text("Open") }
                 }
