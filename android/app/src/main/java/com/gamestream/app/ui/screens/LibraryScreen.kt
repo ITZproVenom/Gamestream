@@ -12,13 +12,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.gamestream.app.SessionStore
 import com.gamestream.app.ui.XboxWebView
@@ -46,7 +50,28 @@ fun LibraryScreen(session: SessionStore) {
                 }
                 GameHub(session = session, modifier = Modifier.fillMaxSize())
             }
-        } else if (!session.isStreaming) {
+        } else if (session.isStreaming) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp)
+                    .align(Alignment.TopStart),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(onClick = { session.exitStreamToHub() }) {
+                    Text("Exit", maxLines = 1)
+                }
+                if (session.queuedGames().isNotEmpty()) {
+                    Button(onClick = { session.playNextFromStream() }) {
+                        Text("Play next", maxLines = 1)
+                    }
+                }
+                OutlinedButton(onClick = { session.returnToHub() }) {
+                    Text("Hub", maxLines = 1)
+                }
+            }
+        } else {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
