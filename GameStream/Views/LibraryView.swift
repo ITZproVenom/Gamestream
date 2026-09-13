@@ -2,72 +2,72 @@ import SwiftUI
 
 struct LibraryView: View {
     @EnvironmentObject var session: SessionStore
-    private let columns = [GridItem(.adaptive(minimum: 150), spacing: 16)]
+    @State private var isLoading = true
+    @State private var showingSignIn = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                header
+        ZStack {
+            if session.isSignedIn {
+                ZStack {
+                    XboxCloudWebView()
+                        .ignoresSafeArea()
 
-                if session.library.isEmpty {
-                    emptyState
-                } else {
-                    LazyVGrid(columns: columns, spacing: 16) {
-                        ForEach(session.library) { game in
-                            NavigationLink {
-                                StreamPlayerView(game: game)
-                            } label: {
-                                GlassGameCard(game: game)
+                    if isLoading {
+                        loadingOverlay
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .webViewLoadingChanged)) { note in
+                    if let loading = note.object as? Bool {
+                        withAnimation { isLoading = loading }
+                    }
+                }
+            } else {
+                signInPrompt
+            }
+        }
+        .sheet(isPresented: $showingSignIn) {
+            NavigationStack {
+                SignInWebView()
+                    .navigationTitle("Sign in")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") {
+                                session.markSignedIn()
+                                showingSignIn = false
                             }
                         }
                     }
-                    .padding(.horizontal, 16)
-                }
             }
-            .padding(.top, 60)
-            .padding(.bottom, 120)
         }
     }
 
-    private var header: some View {
-        Text("Library")
-            .font(.largeTitle.bold())
-            .foregroundStyle(.white)
-            .padding(.horizontal, 20)
-    }
-
-    private var emptyState: some View {
-        VStack(spacing: 12) {
+    private var signInPrompt: some View {
+        VStack(spacing: 16) {
             Image(systemName: "gamecontroller.fill")
-                .font(.system(size: 40))
+                .font(.system(size: 44))
                 .foregroundStyle(.white.opacity(0.4))
-            Text(session.isSignedIn ? "No games found yet." : "Sign in to load your library.")
-                .foregroundStyle(.white.opacity(0.6))
+            Text("Sign in to load your library")
+                .foregroundStyle(.white.opacity(0.7))
+            Button {
+                showingSignIn = true
+            } label: {
+                Text("Sign In")
+                    .font(.headline)
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(.white, in: Capsule())
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 80)
     }
-}
 
-struct GlassGameCard: View {
-    let game: GameEntry
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.white.opacity(0.08))
-                .aspectRatio(3/4, contentMode: .fit)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(.white.opacity(0.12), lineWidth: 1)
-                )
-
-            Text(game.title)
-                .font(.subheadline.weight(.medium))
+    private var loadingOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.6).ignoresSafeArea()
+            ProgressView("Loading library…")
+                .tint(.white)
                 .foregroundStyle(.white)
-                .lineLimit(1)
         }
-        .padding(10)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
