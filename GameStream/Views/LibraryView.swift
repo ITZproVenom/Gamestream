@@ -6,6 +6,7 @@ struct LibraryView: View {
     @State private var showingSignIn = false
     @State private var errorMessage: String?
     @State private var showChrome = true
+    @State private var showBetterXCloudInfo = false
 
     var body: some View {
         ZStack {
@@ -22,7 +23,6 @@ struct LibraryView: View {
                         errorOverlay(errorMessage)
                     }
 
-                    // Floating glass chrome
                     if showChrome && !isLoading {
                         libraryChrome
                             .padding(.top, 8)
@@ -67,9 +67,12 @@ struct LibraryView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showBetterXCloudInfo) {
+            betterXCloudSheet
+        }
     }
 
-    // MARK: - Floating chrome
+    // MARK: - Floating chrome (native integration)
 
     private var libraryChrome: some View {
         HStack(spacing: 10) {
@@ -77,18 +80,27 @@ struct LibraryView: View {
                 session.openHome()
             } label: {
                 Image(systemName: "house.fill")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .frame(width: 40, height: 40)
             }
             .buttonStyle(.glass)
 
             Spacer()
 
-            Text("Xbox Cloud")
-                .font(.subheadline.weight(.semibold))
+            // Better xCloud badge / entry point
+            Button {
+                showBetterXCloudInfo = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("Better xCloud")
+                        .font(.subheadline.weight(.semibold))
+                }
                 .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .glassEffect(.regular, in: Capsule())
+                .padding(.vertical, 9)
+            }
+            .buttonStyle(.glass)
 
             Spacer()
 
@@ -96,12 +108,113 @@ struct LibraryView: View {
                 session.reloadCurrent()
             } label: {
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .frame(width: 40, height: 40)
             }
             .buttonStyle(.glass)
         }
         .padding(.horizontal, 16)
+    }
+
+    // MARK: - Better xCloud native sheet
+
+    private var betterXCloudSheet: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Status
+                    HStack(spacing: 12) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.title2)
+                            .foregroundStyle(.green)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Better xCloud is active")
+                                .font(.headline)
+                            Text("All features are running inside the stream")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                    // How to use
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("How to use")
+                            .font(.title3.weight(.semibold))
+
+                        tipRow(icon: "server.rack", title: "Server & settings",
+                               text: "Look for the server/region button near your profile picture on the Xbox page. Tap it to open Better xCloud settings.")
+
+                        tipRow(icon: "chart.bar.fill", title: "Stream stats",
+                               text: "While playing, open the system menu (…) and enable Stream Stats for live ping, FPS, bitrate and more.")
+
+                        tipRow(icon: "hand.tap.fill", title: "Touch controls",
+                               text: "Better xCloud can show touch controls for games that don’t have them by default.")
+
+                        tipRow(icon: "tv.fill", title: "Remote Play",
+                               text: "Remote Play support is enabled. You can stream from your console when available.")
+                    }
+
+                    // Feature list
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Included features")
+                            .font(.title3.weight(.semibold))
+
+                        featureChip("1080p / High quality stream")
+                        featureChip("Clarity & visual filters")
+                        featureChip("Stream stats overlay")
+                        featureChip("Touch controller layouts")
+                        featureChip("Remote Play")
+                        featureChip("Server / region selection")
+                        featureChip("Screenshot capture")
+                        featureChip("Volume boost & more")
+                    }
+                }
+                .padding(20)
+            }
+            .navigationTitle("Better xCloud")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { showBetterXCloudInfo = false }
+                        .buttonStyle(.glassProminent)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func tipRow(icon: String, title: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.body.weight(.semibold))
+                .frame(width: 28)
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                Text(text)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func featureChip(_ title: String) -> some View {
+        HStack {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+            Text(title)
+                .font(.subheadline)
+            Spacer()
+        }
+        .padding(.vertical, 4)
     }
 
     // MARK: - Sign-in surface

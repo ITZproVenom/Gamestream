@@ -13,7 +13,6 @@ struct SearchView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
 
-                    // Header
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Search")
                             .font(.system(size: 34, weight: .bold, design: .rounded))
@@ -24,7 +23,6 @@ struct SearchView: View {
                     }
                     .padding(.top, 8)
 
-                    // Search field
                     HStack(spacing: 12) {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 17, weight: .semibold))
@@ -36,14 +34,10 @@ struct SearchView: View {
                             .autocorrectionDisabled()
                             .font(.system(size: 17, weight: .medium))
                             .submitLabel(.search)
-                            .onSubmit {
-                                performSearch()
-                            }
+                            .onSubmit { performSearch() }
 
                         if !searchText.isEmpty {
-                            Button {
-                                searchText = ""
-                            } label: {
+                            Button { searchText = "" } label: {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundStyle(.secondary)
                             }
@@ -57,7 +51,6 @@ struct SearchView: View {
                         in: RoundedRectangle(cornerRadius: 16, style: .continuous)
                     )
 
-                    // Content
                     if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         emptyState
                     } else {
@@ -94,9 +87,7 @@ struct SearchView: View {
 
     private var resultsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Button {
-                performSearch()
-            } label: {
+            Button { performSearch() } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "magnifyingglass")
                     Text("Search Xbox Cloud Gaming")
@@ -123,7 +114,6 @@ struct SearchView: View {
     private func performSearch() {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return }
-
         searchFocused = false
         session.openSearch(query: query)
     }
@@ -151,28 +141,35 @@ struct SettingsView: View {
                         .font(.system(size: 34, weight: .bold, design: .rounded))
                         .padding(.top, 8)
 
-                    // Better xCloud status
-                    HStack(spacing: 12) {
-                        Image(systemName: "sparkles")
-                            .foregroundStyle(.yellow)
-                        VStack(alignment: .leading, spacing: 2) {
+                    // Better xCloud card
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "sparkles")
+                                .foregroundStyle(.yellow)
                             Text("Better xCloud")
-                                .font(.body.weight(.medium))
-                            Text("Always active — all features enabled")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(.headline)
+                            Spacer()
+                            Text("Active")
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(.green.opacity(0.2), in: Capsule())
+                                .foregroundStyle(.green)
                         }
-                        Spacer()
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
+
+                        Text("Modern UI overrides + full feature set are running inside every Xbox Cloud session.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        Text("Open Library → tap the Better xCloud badge for tips and feature list.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                     .padding(16)
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
 
-                    // Account
                     GlassRow(title: "Account", value: session.accountLabel ?? "Not signed in")
 
-                    // Stream Quality
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Stream quality")
                             .font(.subheadline.weight(.medium))
@@ -182,9 +179,7 @@ struct SettingsView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
                                 ForEach(qualityOptions, id: \.self) { option in
-                                    Button {
-                                        streamQuality = option
-                                    } label: {
+                                    Button { streamQuality = option } label: {
                                         Text(option)
                                             .font(.subheadline.weight(.medium))
                                             .padding(.horizontal, 14)
@@ -197,7 +192,6 @@ struct SettingsView: View {
                         }
                     }
 
-                    // Server Region
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Server region")
                             .font(.subheadline.weight(.medium))
@@ -207,9 +201,7 @@ struct SettingsView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
                                 ForEach(regionOptions, id: \.self) { option in
-                                    Button {
-                                        serverRegion = option
-                                    } label: {
+                                    Button { serverRegion = option } label: {
                                         Text(option)
                                             .font(.subheadline.weight(.medium))
                                             .padding(.horizontal, 14)
@@ -223,9 +215,7 @@ struct SettingsView: View {
                     }
 
                     if session.isSignedIn {
-                        Button {
-                            session.signOut()
-                        } label: {
+                        Button { session.signOut() } label: {
                             HStack {
                                 Image(systemName: "rectangle.portrait.and.arrow.right")
                                 Text("Sign Out")
@@ -246,8 +236,6 @@ struct SettingsView: View {
     }
 }
 
-// MARK: - GlassRow
-
 struct GlassRow: View {
     let title: String
     let value: String
@@ -256,9 +244,7 @@ struct GlassRow: View {
         HStack(spacing: 12) {
             Text(title)
                 .font(.body.weight(.medium))
-
             Spacer()
-
             Text(value)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
