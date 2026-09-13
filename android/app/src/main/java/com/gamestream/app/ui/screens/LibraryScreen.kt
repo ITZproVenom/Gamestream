@@ -10,13 +10,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import com.gamestream.app.SessionStore
 import com.gamestream.app.ui.XboxWebView
 
@@ -45,7 +46,7 @@ fun LibraryScreen(session: SessionStore) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(12.dpSafe())
+                    .padding(12.dp)
                     .align(Alignment.TopCenter),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -53,7 +54,7 @@ fun LibraryScreen(session: SessionStore) {
                 IconButton(
                     onClick = { session.openHome() },
                     modifier = Modifier
-                        .clip(RoundedCornerShape(12))
+                        .clip(RoundedCornerShape(12.dp))
                         .background(Color(0xCC1C1C24))
                 ) {
                     Icon(Icons.Default.Home, contentDescription = "Home", tint = Color.White)
@@ -61,7 +62,7 @@ fun LibraryScreen(session: SessionStore) {
                 IconButton(
                     onClick = { session.reloadCurrent() },
                     modifier = Modifier
-                        .clip(RoundedCornerShape(12))
+                        .clip(RoundedCornerShape(12.dp))
                         .background(Color(0xCC1C1C24))
                 ) {
                     Icon(Icons.Default.Refresh, contentDescription = "Reload", tint = Color.White)
@@ -76,7 +77,7 @@ private fun SignInPrompt(onSignIn: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(28.dpSafe()),
+            .padding(28.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -84,26 +85,26 @@ private fun SignInPrompt(onSignIn: () -> Unit) {
             Icons.Default.SportsEsports,
             contentDescription = null,
             tint = Color(0xFF8B7CFF),
-            modifier = Modifier.height(56.dpSafe())
+            modifier = Modifier.size(56.dp)
         )
-        Spacer(Modifier.height(16.dpSafe()))
+        Spacer(Modifier.height(16.dp))
         Text(
             "Your Library",
             style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
             color = Color.White
         )
-        Spacer(Modifier.height(8.dpSafe()))
+        Spacer(Modifier.height(8.dp))
         Text(
             "Sign in with your Xbox account to load games from Xbox Cloud Gaming.",
             style = MaterialTheme.typography.bodyMedium,
             color = Color(0xFFB0B0B8),
             textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(24.dpSafe()))
+        Spacer(Modifier.height(24.dp))
         Button(onClick = onSignIn) {
             Text("Continue to Xbox Cloud")
         }
-        Spacer(Modifier.height(8.dpSafe()))
+        Spacer(Modifier.height(8.dp))
         Text(
             "You'll sign in inside the web session. Cookies stay on this device.",
             style = MaterialTheme.typography.labelSmall,
@@ -112,7 +113,3 @@ private fun SignInPrompt(onSignIn: () -> Unit) {
         )
     }
 }
-
-/** Avoid needing foundation.dp import everywhere in tiny helpers */
-@Composable
-private fun Int.dpSafe() = androidx.compose.ui.unit.Dp(this.toFloat())

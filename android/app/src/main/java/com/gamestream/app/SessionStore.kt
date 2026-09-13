@@ -39,6 +39,10 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
     var serverRegion by mutableStateOf(prefs.getString(KEY_REGION, "Auto") ?: "Auto")
         private set
 
+    fun clearPendingJs() {
+        pendingJs = null
+    }
+
     fun markSignedIn(label: String = "Xbox Account") {
         accountLabel = label
         isSignedIn = true
@@ -57,7 +61,6 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
             .putBoolean(KEY_SIGNED_IN, false)
             .remove(KEY_ACCOUNT)
             .apply()
-        // Cookie wipe is handled by WebView layer when pending flag is set
         pendingJs = "try { localStorage.clear(); sessionStorage.clear(); location.href='$HOME_URL'; } catch(e){}"
         reloadNonce++
     }

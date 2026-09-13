@@ -1,0 +1,100 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - "android/**"
+      - ".github/workflows/build-apk.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        run: |
+          chmod +x gradlew 2>/dev/null || true
+          if [ ! -f gradlew ]; then
+            gradle wrapper --gradle-version 8.9
+          fi
+          ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Locate APK
+        id: apk
+        run: |
+          APK=$(find app/build/outputs/apk -name "*.apk" | head -1)
+          echo "path=$APK" >> "$GITHUB_OUTPUT"
+          ls -lh "$APK"
+          cp "$APK" "$GITHUB_WORKSPACE/GameStream-debug.apk"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GameStream-debug-apk
+          path: GameStream-debug.apk
+          if-no-files-found: error
+
+      - name: Build changelog
+        working-directory: .
+        run: |
+          SHORT_SHA="$(echo '${{ github.sha }}' | cut -c1-7)"
+          DATE_UTC="$(date -u +'%Y-%m-%d %H:%M UTC')"
+          {
+            echo "## Android APK"
+            echo ""
+            echo "**Build:** \`${SHORT_SHA}\` · **${DATE_UTC}**"
+            echo ""
+            echo "### What's changed"
+            echo ""
+            git log --max-count=15 --pretty=format:'- %s (%h)' --no-merges -- android/ || true
+            echo ""
+            echo ""
+            echo "---"
+            echo ""
+            echo "Install the **GameStream-debug.apk** (allow unknown sources)."
+          } > android_release_notes.md
+
+      - name: Publish to latest release (Android asset)
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest unsigned build
+          prerelease: true
+          body_path: android_release_notes.md
+          files: GameStream-debug.apk
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish tagged release APK
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: GameStream-debug.apk
+          body_path: android_release_notes.md
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

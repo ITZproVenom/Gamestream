@@ -37,7 +37,6 @@ fun XboxWebView(
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-            settings.userAgentString = settings.userAgentString // keep default Chrome UA
             settings.cacheMode = WebSettings.LOAD_DEFAULT
             CookieManager.getInstance().setAcceptCookie(true)
             CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
@@ -59,7 +58,6 @@ fun XboxWebView(
                     BetterXCloudInjector.currentScript(context)?.let {
                         view?.evaluateJavascript(it, null)
                     }
-                    // Streaming bridge poll
                     view?.evaluateJavascript(
                         """
                         (function(){
@@ -85,7 +83,6 @@ fun XboxWebView(
         }
     }
 
-    // App-driven navigation
     LaunchedEffect(session.webUrl) {
         if (webView.url != session.webUrl) {
             webView.loadUrl(session.webUrl)
@@ -99,7 +96,7 @@ fun XboxWebView(
     LaunchedEffect(session.pendingJs) {
         val js = session.pendingJs ?: return@LaunchedEffect
         webView.evaluateJavascript(js, null)
-        session.pendingJs = null
+        session.clearPendingJs()
     }
 
     LaunchedEffect(session.bxRefreshToken) {

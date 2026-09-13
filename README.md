@@ -1,57 +1,68 @@
 <h1 align="center">GameStream</h1>
 
 <p align="center">
-  <strong>Native iOS 26 Xbox Cloud Gaming client</strong><br>
-  Liquid Glass UI · Better xCloud · Built for performance
+  <strong>Xbox Cloud Gaming client for iOS &amp; Android</strong><br>
+  Better xCloud · Native shells · Sideload builds
 </p>
 
 <p align="center">
   <img alt="iOS" src="https://img.shields.io/badge/iOS-26%2B-black?style=flat-square" />
-  <img alt="Swift" src="https://img.shields.io/badge/Swift-5-orange?style=flat-square" />
-  <img alt="License" src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" />
+  <img alt="Android" src="https://img.shields.io/badge/Android-8%2B-green?style=flat-square" />
   <img alt="Better xCloud" src="https://img.shields.io/badge/Better%20xCloud-Integrated-purple?style=flat-square" />
+  <img alt="License" src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" />
 </p>
 
 ---
 
-## Quick start
+## Platforms
+
+| Platform | Stack | Folder |
+|----------|--------|--------|
+| **iOS** | SwiftUI · Liquid Glass · WKWebView | repo root (`GameStream/`) |
+| **Android** | Kotlin · Jetpack Compose · WebView | [`android/`](android/) |
+
+Both inject **[Better xCloud](https://github.com/redphx/better-xcloud)** into [xbox.com/play](https://www.xbox.com/play).
+
+---
+
+## iOS quick start
 
 ```bash
-# 1. App icon (required for a proper home-screen icon)
-pip3 install pillow
-python3 scripts/generate_app_icons.py
-
-# 2. Xcode project
+pip3 install pillow && python3 scripts/generate_app_icons.py
 xcodegen generate
 open GameStream.xcodeproj
 ```
 
-Then run on a device or simulator. Sign in with your Xbox account in **Library**.
+CI builds an **unsigned IPA** (`.github/workflows/build-ipa.yml`) and publishes it to [Releases](../../releases) with a changelog.
 
-## Overview
+---
 
-**GameStream** is a native iOS app for [Xbox Cloud Gaming](https://www.xbox.com/play).  
-It wraps the official web experience in **Liquid Glass** UI and injects **[Better xCloud](https://github.com/redphx/better-xcloud)** on every load.
-
-## Features
-
-- iOS 26 Liquid Glass navigation (auto-hides while streaming)
-- Persistent sign-in
-- Working Settings (resolution / region applied to Better xCloud)
-- Better xCloud always on + modern glass UI overrides
-- Stream performance tweaks (shared process pool, persistent cookies)
-
-## App icon
-
-The repo ships an empty App Icon slot. Generate the branded icon before building:
+## Android quick start
 
 ```bash
-pip3 install pillow
-python3 scripts/generate_app_icons.py
+cd android
+gradle wrapper --gradle-version 8.9   # if needed
+./gradlew :app:assembleDebug
 ```
 
-This writes `GameStream/Assets.xcassets/AppIcon.appiconset/icon-1024.png`.  
-Xcode expands it for all device sizes.
+APK: `android/app/build/outputs/apk/debug/app-debug.apk`
+
+Or open `android/` in Android Studio.  
+CI: `.github/workflows/build-apk.yml` → APK on Releases.
+
+See [android/README.md](android/README.md).
+
+---
+
+## Features (both)
+
+- Library / Search / Settings
+- Better xCloud always on + modern UI overrides
+- Stream resolution & region → BX prefs
+- Chrome hides while streaming
+- Persistent session cookies
+
+---
 
 ## License
 
