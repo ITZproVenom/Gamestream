@@ -57,8 +57,10 @@ jobs:
       - name: App icon
         run: |
           set -euo pipefail
-          python3 -m pip install --user 'pillow>=10'
-          python3 scripts/install_icons.py
+          python3 -m venv .icon-venv
+          .icon-venv/bin/pip install --upgrade pip
+          .icon-venv/bin/pip install 'pillow>=10'
+          .icon-venv/bin/python scripts/install_icons.py
           ICON="GameStream/Assets.xcassets/AppIcon.appiconset/icon-1024.png"
           test -f "$ICON"
           python3 - <<'PY'
@@ -122,10 +124,9 @@ jobs:
             exit 1
           fi
           python3 - <<'PY'
-          import os, zipfile, struct, sys
+          import zipfile, sys
           z = zipfile.ZipFile("GameStream-unsigned.ipa")
-          names = z.namelist()
-          cars = [n for n in names if n.endswith("Assets.car")]
+          cars = [n for n in z.namelist() if n.endswith("Assets.car")]
           print("Assets.car entries:", cars)
           if not cars:
               sys.exit("IPA missing Assets.car — icon catalog not packaged")
