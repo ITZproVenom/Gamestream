@@ -39,6 +39,7 @@ struct GameStreamApp: App {
                 }
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+                .interactiveDismissDisabled(false)
                 .environmentObject(session)
             }
             .onChange(of: session.isSignedIn) { _, signedIn in
