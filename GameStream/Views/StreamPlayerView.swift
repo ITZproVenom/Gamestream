@@ -19,17 +19,11 @@ struct XboxCloudWebView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
-
-        // --- Stream performance ---
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
         config.allowsPictureInPictureMediaPlayback = true
         config.preferences.javaScriptCanOpenWindowsAutomatically = false
-
-        // Persist cookies / login across app launches
         config.websiteDataStore = .default()
-
-        // Shared process pool for better resource reuse
         config.processPool = Self.sharedProcessPool
 
         let prefs = WKWebpagePreferences()
@@ -38,7 +32,6 @@ struct XboxCloudWebView: UIViewRepresentable {
 
         let contentController = config.userContentController
 
-        // Early bootstrap + modern HUD / UI
         contentController.addUserScript(WKUserScript(
             source: BetterXCloudInjector.bootstrapJS + "\n" + BetterXCloudInjector.modernUIOverridesJS,
             injectionTime: .atDocumentStart,
@@ -99,8 +92,6 @@ struct XboxCloudWebView: UIViewRepresentable {
         webView.isOpaque = false
         webView.backgroundColor = .black
         webView.scrollView.backgroundColor = .black
-
-        // Prefer smoother scrolling / less rubber-banding during stream
         webView.scrollView.bounces = false
 
         context.coordinator.webView = webView
@@ -117,18 +108,39 @@ struct XboxCloudWebView: UIViewRepresentable {
             context.coordinator.lastLoadedURL = url
             uiView.load(URLRequest(url: url))
         }
+
+        // Run any pending JS from Settings (pref apply / reload / etc.)
+        if let js = session.pendingJavaScript, !js.isEmpty {
+            context.coordinator.runPendingJS(js, in: uiView)
+            DispatchQueue.main.async {
+                if session.pendingJavaScript == js {
+                    session.pendingJavaScript = nil
+                }
+            }
+        }
+
+        // Script refresh requested
+        if context.coordinator.lastRefreshToken != session.betterXCloudRefreshToken {
+            context.coordinator.lastRefreshToken = session.betterXCloudRefreshToken
+            BetterXCloudInjector.shared.invalidateCache()
+            BetterXCloudInjector.shared.ensureInjected(into: uiView)
+        }
     }
 
-    // Shared across all webviews for better process reuse
     private static let sharedProcessPool = WKProcessPool()
 
     class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var lastLoadedURL: URL?
+        var lastRefreshToken: Int = 0
         weak var webView: WKWebView?
         private weak var session: SessionStore?
 
         init(session: SessionStore) {
             self.session = session
+        }
+
+        func runPendingJS(_ js: String, in webView: WKWebView) {
+            webView.evaluateJavaScript(js, completionHandler: nil)
         }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -165,6 +177,14 @@ struct XboxCloudWebView: UIViewRepresentable {
                     session?.updateFromWebURL(url)
                 }
             }
+
+            // Flush pending JS after load as well
+            if let js = session?.pendingJavaScript, !js.isEmpty {
+                webView.evaluateJavaScript(js, completionHandler: nil)
+                Task { @MainActor in
+                    session?.pendingJavaScript = nil
+                }
+            }
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -179,7 +199,7 @@ struct XboxCloudWebView: UIViewRepresentable {
     }
 }
 
-// MARK: - Better xCloud Injector + modern performance HUD
+// MARK: - Better xCloud Injector
 
 final class BetterXCloudInjector {
     static let shared = BetterXCloudInjector()
@@ -199,20 +219,15 @@ final class BetterXCloudInjector {
     })();
     """
 
-    /// Modern glass UI + redesigned performance HUD
     static let modernUIOverridesJS = """
     (function() {
         if (window.__bxModernUI) return;
         window.__bxModernUI = true;
-
         const css = `
-        /* Base */
         [class*="bx-"], [id*="bx-"], .bx-settings, .bx-dialog, .bx-menu, .bx-stats-bar, .bx-toast {
             font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif !important;
             -webkit-font-smoothing: antialiased !important;
         }
-
-        /* Panels */
         .bx-settings, .bx-dialog, [class*="bx-modal"], [class*="bx-panel"] {
             background: rgba(18, 18, 20, 0.88) !important;
             backdrop-filter: blur(32px) saturate(170%) !important;
@@ -222,17 +237,11 @@ final class BetterXCloudInjector {
             box-shadow: 0 16px 48px rgba(0,0,0,0.5) !important;
             color: #f5f5f7 !important;
         }
-
         .bx-settings button, .bx-dialog button, [class*="bx-"] button {
             border-radius: 12px !important;
             font-weight: 600 !important;
         }
-
-        /* ===== Performance HUD (stream stats) ===== */
-        .bx-stats-bar,
-        [class*="bx-stats"],
-        [class*="BxStats"],
-        [id*="bx-stats"] {
+        .bx-stats-bar, [class*="bx-stats"], [class*="BxStats"], [id*="bx-stats"] {
             background: rgba(12, 12, 14, 0.72) !important;
             backdrop-filter: blur(24px) saturate(180%) !important;
             -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
@@ -245,52 +254,30 @@ final class BetterXCloudInjector {
             letter-spacing: 0.03em !important;
             color: rgba(255,255,255,0.92) !important;
             box-shadow: 0 8px 28px rgba(0,0,0,0.4) !important;
-            gap: 10px !important;
-            display: flex !important;
-            align-items: center !important;
-            flex-wrap: wrap !important;
         }
-
-        /* Individual stat pills inside the HUD */
-        .bx-stats-bar > *,
-        [class*="bx-stats"] > * {
+        .bx-stats-bar > *, [class*="bx-stats"] > * {
             background: rgba(255,255,255,0.06) !important;
             border-radius: 8px !important;
             padding: 3px 8px !important;
             border: 1px solid rgba(255,255,255,0.05) !important;
         }
-
-        /* Colour coding remains visible; boost contrast */
-        .bx-stats-bar [style*="color"],
-        [class*="bx-stats"] [style*="color"] {
-            font-weight: 700 !important;
-        }
-
-        /* Server / region button */
         [class*="bx-server"], [class*="bx-region"] {
             border-radius: 12px !important;
             background: rgba(255,255,255,0.08) !important;
             border: 1px solid rgba(255,255,255,0.10) !important;
-            backdrop-filter: blur(12px) !important;
-            -webkit-backdrop-filter: blur(12px) !important;
         }
-
-        /* Toasts */
         .bx-toast, [class*="bx-toast"] {
             background: rgba(22, 22, 24, 0.92) !important;
             backdrop-filter: blur(28px) !important;
             -webkit-backdrop-filter: blur(28px) !important;
             border-radius: 14px !important;
             border: 1px solid rgba(255,255,255,0.08) !important;
-            box-shadow: 0 10px 32px rgba(0,0,0,0.45) !important;
         }
         `;
-
         const style = document.createElement('style');
         style.id = 'gamestream-bx-modern';
         style.textContent = css;
         (document.head || document.documentElement).appendChild(style);
-
         const observer = new MutationObserver(() => {
             if (!document.getElementById('gamestream-bx-modern')) {
                 (document.head || document.documentElement).appendChild(style);
@@ -314,8 +301,14 @@ final class BetterXCloudInjector {
         }
     }
 
-    func currentScriptSource() -> String? {
-        cachedScript
+    func currentScriptSource() -> String? { cachedScript }
+
+    func invalidateCache() {
+        lock.lock()
+        cachedScript = nil
+        lock.unlock()
+        UserDefaults.standard.removeObject(forKey: cacheKey)
+        UserDefaults.standard.removeObject(forKey: cacheDateKey)
     }
 
     func ensureInjected(into webView: WKWebView) {
@@ -335,10 +328,8 @@ final class BetterXCloudInjector {
     }
 
     private static func stripUserScriptHeader(_ source: String) -> String {
-        if let start = source.range(of: "// ==UserScript=="),
-           let end = source.range(of: "// ==/UserScript==") {
-            let after = source[end.upperBound...]
-            return String(after).trimmingCharacters(in: .whitespacesAndNewlines)
+        if let end = source.range(of: "// ==/UserScript==") {
+            return String(source[end.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return source
     }
@@ -386,9 +377,7 @@ final class BetterXCloudInjector {
             UserDefaults.standard.set(source, forKey: self.cacheKey)
             UserDefaults.standard.set(Date(), forKey: self.cacheDateKey)
 
-            DispatchQueue.main.async {
-                completion(source)
-            }
+            DispatchQueue.main.async { completion(source) }
         }.resume()
     }
 }

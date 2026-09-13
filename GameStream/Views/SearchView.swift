@@ -119,15 +119,17 @@ struct SearchView: View {
     }
 }
 
-// MARK: - Settings
+// MARK: - Settings (actually useful)
 
 struct SettingsView: View {
     @EnvironmentObject var session: SessionStore
 
-    @AppStorage("streamQuality") private var streamQuality = "Auto"
-    @AppStorage("serverRegion") private var serverRegion = "Auto"
+    @State private var streamResolution = SessionStore.storedResolution
+    @State private var serverRegion = SessionStore.storedRegion
+    @State private var showClearConfirm = false
+    @State private var statusMessage: String?
 
-    private let qualityOptions = ["Auto", "1080p", "720p", "Performance"]
+    private let resolutionOptions = ["Auto", "720p", "1080p", "1080p HQ"]
     private let regionOptions = ["Auto", "North America", "Europe", "Asia", "Australia"]
 
     var body: some View {
@@ -136,102 +138,172 @@ struct SettingsView: View {
                 .ignoresSafeArea()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 20) {
                     Text("Settings")
                         .font(.system(size: 34, weight: .bold, design: .rounded))
                         .padding(.top, 8)
 
-                    // Better xCloud card
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "sparkles")
-                                .foregroundStyle(.yellow)
-                            Text("Better xCloud")
+                    if let statusMessage {
+                        Text(statusMessage)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.green)
+                            .padding(.horizontal, 4)
+                            .transition(.opacity)
+                    }
+
+                    // Account
+                    sectionHeader("Account")
+                    GlassRow(title: "Signed in as", value: session.accountLabel ?? "Not signed in")
+
+                    // Stream — writes into Better xCloud localStorage
+                    sectionHeader("Stream")
+                    Text("These apply to Better xCloud and take effect after the page reloads.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+
+                    chipSection(
+                        title: "Target resolution",
+                        options: resolutionOptions,
+                        selection: $streamResolution
+                    ) { option in
+                        session.applyStreamResolution(option)
+                        flash("Resolution set to \(option). Reloading…")
+                    }
+
+                    chipSection(
+                        title: "Server region",
+                        options: regionOptions,
+                        selection: $serverRegion
+                    ) { option in
+                        session.applyServerRegion(option)
+                        flash("Region set to \(option). Reloading…")
+                    }
+
+                    // Actions
+                    sectionHeader("Actions")
+
+                    actionButton(icon: "house.fill", title: "Open Library", tint: .primary) {
+                        session.openHome()
+                    }
+
+                    actionButton(icon: "arrow.triangle.2.circlepath", title: "Refresh Better xCloud script", tint: .primary) {
+                        session.refreshBetterXCloudScript()
+                        flash("Script cache cleared. Reloading…")
+                    }
+
+                    actionButton(icon: "trash", title: "Clear web data", tint: .orange) {
+                        showClearConfirm = true
+                    }
+
+                    if session.isSignedIn {
+                        actionButton(icon: "rectangle.portrait.and.arrow.right", title: "Sign Out", tint: .red) {
+                            session.signOut()
+                            flash("Signed out.")
+                        }
+                    }
+
+                    // About
+                    sectionHeader("About")
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("GameStream")
                                 .font(.headline)
                             Spacer()
-                            Text("Active")
-                                .font(.caption.weight(.semibold))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(.green.opacity(0.2), in: Capsule())
-                                .foregroundStyle(.green)
+                            Text("1.0.0")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                         }
-
-                        Text("Modern UI overrides + full feature set are running inside every Xbox Cloud session.")
-                            .font(.subheadline)
+                        Text("Native iOS 26 client for Xbox Cloud Gaming with Better xCloud built in.")
+                            .font(.caption)
                             .foregroundStyle(.secondary)
 
-                        Text("Open Library → tap the Better xCloud badge for tips and feature list.")
+                        Text("Full stream options (stats, touch controls, clarity, Remote Play) live in the Better xCloud menu on the Xbox page — look near your profile for the server button.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     .padding(16)
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-
-                    GlassRow(title: "Account", value: session.accountLabel ?? "Not signed in")
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Stream quality")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 4)
-
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(qualityOptions, id: \.self) { option in
-                                    Button { streamQuality = option } label: {
-                                        Text(option)
-                                            .font(.subheadline.weight(.medium))
-                                            .padding(.horizontal, 14)
-                                            .padding(.vertical, 10)
-                                    }
-                                    .buttonStyle(.glass)
-                                    .opacity(streamQuality == option ? 1.0 : 0.55)
-                                }
-                            }
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Server region")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 4)
-
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(regionOptions, id: \.self) { option in
-                                    Button { serverRegion = option } label: {
-                                        Text(option)
-                                            .font(.subheadline.weight(.medium))
-                                            .padding(.horizontal, 14)
-                                            .padding(.vertical, 10)
-                                    }
-                                    .buttonStyle(.glass)
-                                    .opacity(serverRegion == option ? 1.0 : 0.55)
-                                }
-                            }
-                        }
-                    }
-
-                    if session.isSignedIn {
-                        Button { session.signOut() } label: {
-                            HStack {
-                                Image(systemName: "rectangle.portrait.and.arrow.right")
-                                Text("Sign Out")
-                                Spacer()
-                            }
-                            .foregroundStyle(.red)
-                            .padding(16)
-                        }
-                        .buttonStyle(.glass)
-                        .padding(.top, 8)
-                    }
+                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 130)
             }
             .scrollIndicators(.hidden)
+        }
+        .confirmationDialog(
+            "Clear all Xbox website data and cookies? You will need to sign in again.",
+            isPresented: $showClearConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Clear web data", role: .destructive) {
+                session.clearWebData()
+                flash("Web data cleared.")
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    // MARK: - Building blocks
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.title3.weight(.semibold))
+            .padding(.top, 4)
+    }
+
+    private func chipSection(
+        title: String,
+        options: [String],
+        selection: Binding<String>,
+        onSelect: @escaping (String) -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(options, id: \.self) { option in
+                        Button {
+                            selection.wrappedValue = option
+                            onSelect(option)
+                        } label: {
+                            Text(option)
+                                .font(.subheadline.weight(.medium))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.glass)
+                        .opacity(selection.wrappedValue == option ? 1.0 : 0.5)
+                    }
+                }
+            }
+        }
+    }
+
+    private func actionButton(icon: String, title: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                Text(title)
+                    .font(.body.weight(.medium))
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .foregroundStyle(tint)
+            .padding(16)
+        }
+        .buttonStyle(.glass)
+    }
+
+    private func flash(_ message: String) {
+        withAnimation { statusMessage = message }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            withAnimation { statusMessage = nil }
         }
     }
 }
