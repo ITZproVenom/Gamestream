@@ -54,13 +54,9 @@ struct XboxCloudWebView: UIViewRepresentable {
             function notify() {
                 try {
                     const href = location.href || '';
-                    const path = location.pathname || '';
                     const streaming =
-                        path.includes('/launch') ||
-                        path.includes('/play/game') ||
-                        path.includes('/play/launch') ||
-                        href.includes('/launch/') ||
-                        href.includes('/stream');
+                        /\\/play\\/launch|\\/launch\\/|\\/launch\\?|\\/stream\\/|\\/streaming/i.test(href) &&
+                        href.toLowerCase().indexOf('/play/games') === -1;
                     window.webkit.messageHandlers.gamestreamBridge.postMessage({
                         type: 'url',
                         href: href,

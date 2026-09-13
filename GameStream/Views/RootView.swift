@@ -21,18 +21,19 @@ struct RootView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Group {
-                switch selectedTab {
-                case .library:
-                    LibraryView()
-                case .search:
-                    SearchView()
-                case .settings:
-                    SettingsView()
-                }
+            // Keep Library (and its WKWebView) mounted so streams and cookies survive tab switches.
+            LibraryView()
+                .opacity(selectedTab == .library ? 1 : 0)
+                .allowsHitTesting(selectedTab == .library)
+                .zIndex(selectedTab == .library ? 1 : 0)
+
+            if selectedTab == .search {
+                SearchView()
+                    .zIndex(2)
+            } else if selectedTab == .settings {
+                SettingsView()
+                    .zIndex(2)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(AnimatedBackground())
 
             // Hide Liquid Glass tab bar while a game is streaming
             if !session.isStreaming {
@@ -43,6 +44,8 @@ struct RootView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AnimatedBackground())
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: session.isStreaming)
         .onChange(of: session.requestedTab) { _, newValue in
             if let tab = newValue {
@@ -53,7 +56,6 @@ struct RootView: View {
             }
         }
         .onAppear {
-            // Preload Better xCloud as early as possible
             BetterXCloudInjector.shared.preload()
         }
     }

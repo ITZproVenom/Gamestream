@@ -62,10 +62,50 @@ final class SessionStore: ObservableObject {
     }
 
     func openSearch(query: String) {
-        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://www.xbox.com/play/search?q=\(encoded)") else { return }
-        webURL = url
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let escaped = trimmed
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "'", with: "\\'")
+            .replacingOccurrences(of: "\n", with: " ")
+
+        // Stay on /play so we do not bounce through a non-existent /play/search route.
+        webURL = URL(string: "https://www.xbox.com/play")!
         isStreaming = false
+        pendingJavaScript = """
+        (function() {
+            var q = '\(escaped)';
+            function findInput() {
+                return document.querySelector('input[type="search"], input[placeholder*="Search" i], input[aria-label*="Search" i], input[name="q"]');
+            }
+            var input = findInput();
+            if (!input) {
+                var btn = document.querySelector('button[aria-label*="Search" i], [role="search"] button, a[href*="search"]');
+                if (btn) { try { btn.click(); } catch (e) {} }
+            }
+            setTimeout(function() {
+                input = findInput();
+                if (input) {
+                    input.focus();
+                    try {
+                        var proto = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+                        if (proto && proto.set) proto.set.call(input, q); else input.value = q;
+                    } catch (e) { input.value = q; }
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    var form = input.closest('form');
+                    if (form) {
+                        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                    } else {
+                        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+                    }
+                } else {
+                    location.href = 'https://www.xbox.com/play?search=' + encodeURIComponent(q);
+                }
+            }, 280);
+        })();
+        """
         requestedTab = .library
     }
 
@@ -82,19 +122,21 @@ final class SessionStore: ObservableObject {
 
     /// Called from the webview bridge. Updates streaming state only — never webURL.
     func updateFromWebURL(_ url: URL) {
-        let path = url.path.lowercased()
-        let full = url.absoluteString.lowercased()
-        let streaming =
-            path.contains("/launch") ||
-            path.contains("/play/game") ||
-            path.contains("/play/launch") ||
-            full.contains("/launch/") ||
-            full.contains("streaming") ||
-            full.contains("/stream")
-
+        let streaming = Self.isStreamingURL(url.absoluteString)
         if isStreaming != streaming {
             isStreaming = streaming
         }
+    }
+
+    /// Catalog pages like /play/games/... are not an active stream.
+    static func isStreamingURL(_ raw: String) -> Bool {
+        let full = raw.lowercased()
+        if full.contains("/play/games") { return false }
+        return full.contains("/play/launch") ||
+            full.contains("/launch/") ||
+            full.contains("/launch?") ||
+            full.contains("/stream/") ||
+            full.contains("/streaming")
     }
 
     // MARK: - Better xCloud preference bridging

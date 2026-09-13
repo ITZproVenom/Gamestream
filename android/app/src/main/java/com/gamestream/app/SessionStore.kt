@@ -72,9 +72,41 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
     }
 
     fun openSearch(query: String) {
-        val encoded = java.net.URLEncoder.encode(query.trim(), "UTF-8")
-        webUrl = "https://www.xbox.com/play/search?q=$encoded"
+        val q = query.trim()
+        if (q.isEmpty()) return
+        val escaped = q.replace("\\", "\\\\").replace("'", "\\'").replace("\n", " ")
+        webUrl = HOME_URL
         isStreaming = false
+        pendingJs = """
+            (function(){
+              var q='$escaped';
+              function findInput(){
+                return document.querySelector('input[type="search"], input[placeholder*="Search" i], input[aria-label*="Search" i], input[name="q"]');
+              }
+              var input=findInput();
+              if(!input){
+                var btn=document.querySelector('button[aria-label*="Search" i], [role="search"] button, a[href*="search"]');
+                if(btn){ try{ btn.click(); }catch(e){} }
+              }
+              setTimeout(function(){
+                input=findInput();
+                if(input){
+                  input.focus();
+                  try{
+                    var proto=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value');
+                    if(proto&&proto.set) proto.set.call(input,q); else input.value=q;
+                  }catch(e){ input.value=q; }
+                  input.dispatchEvent(new Event('input',{bubbles:true}));
+                  input.dispatchEvent(new Event('change',{bubbles:true}));
+                  var form=input.closest('form');
+                  if(form) form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
+                  else input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',keyCode:13,which:13,bubbles:true}));
+                } else {
+                  location.href='https://www.xbox.com/play?search='+encodeURIComponent(q);
+                }
+              },280);
+            })();
+        """.trimIndent()
         requestedTab = "library"
     }
 
@@ -84,11 +116,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
     }
 
     fun updateStreamingFromUrl(url: String) {
-        val lower = url.lowercase()
-        val streaming = lower.contains("/launch") ||
-            lower.contains("/play/game") ||
-            lower.contains("/play/launch") ||
-            lower.contains("/stream")
+        val streaming = isStreamingUrl(url)
         if (isStreaming != streaming) isStreaming = streaming
     }
 
@@ -150,5 +178,15 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         private const val KEY_ACCOUNT = "account"
         private const val KEY_RES = "resolution"
         private const val KEY_REGION = "region"
+
+        fun isStreamingUrl(url: String): Boolean {
+            val lower = url.lowercase()
+            if (lower.contains("/play/games")) return false
+            return lower.contains("/play/launch") ||
+                lower.contains("/launch/") ||
+                lower.contains("/launch?") ||
+                lower.contains("/stream/") ||
+                lower.contains("/streaming")
+        }
     }
 }
