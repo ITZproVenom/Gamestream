@@ -55,7 +55,22 @@ jobs:
           xcodegen --version
 
       - name: App icon
-        run: python3 scripts/install_icons.py
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user 'pillow>=10'
+          python3 scripts/install_icons.py
+          ICON="GameStream/Assets.xcassets/AppIcon.appiconset/icon-1024.png"
+          test -f "$ICON"
+          python3 - <<'PY'
+          import struct, sys
+          p = "GameStream/Assets.xcassets/AppIcon.appiconset/icon-1024.png"
+          data = open(p, "rb").read()
+          assert data[:8] == b"\x89PNG\r\n\x1a\n", "not a PNG"
+          w, h = struct.unpack(">II", data[16:24])
+          print(f"icon {p}: {w}x{h}, {len(data)} bytes")
+          if (w, h) != (1024, 1024) or len(data) < 20000:
+              sys.exit("invalid App Icon — refusing to continue")
+          PY
 
       - name: Generate Xcode project
         run: xcodegen generate
@@ -102,12 +117,23 @@ jobs:
           echo "App payload:"
           unzip -l GameStream-unsigned.ipa
           IPA_SIZE=$(stat -f%z GameStream-unsigned.ipa)
-          # Pure SwiftUI WebView client (no WebRTC) is ~130KB. Fail only if
-          # the zip is empty/truncated, not because it is no longer ~20MB.
           if [ "$IPA_SIZE" -lt 80000 ]; then
             echo "IPA is only ${IPA_SIZE} bytes — packaging regression" >&2
             exit 1
           fi
+          python3 - <<'PY'
+          import os, zipfile, struct, sys
+          z = zipfile.ZipFile("GameStream-unsigned.ipa")
+          names = z.namelist()
+          cars = [n for n in names if n.endswith("Assets.car")]
+          print("Assets.car entries:", cars)
+          if not cars:
+              sys.exit("IPA missing Assets.car — icon catalog not packaged")
+          car = z.read(cars[0])
+          print(f"Assets.car size={len(car)}")
+          if len(car) < 10000:
+              sys.exit("Assets.car too small — likely missing app icon")
+          PY
 
       - name: Build changelog + release identity
         id: meta
