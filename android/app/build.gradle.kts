@@ -12,8 +12,8 @@ android {
         applicationId = "com.gamestream.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.1.2"
+        versionCode = 6
+        versionName = "1.1.3"
     }
 
     buildTypes {
@@ -58,6 +58,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.navigation:navigation-compose:2.8.3")
     implementation("androidx.webkit:webkit:1.12.1")
+    implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("com.google.android.material:material:1.12.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
