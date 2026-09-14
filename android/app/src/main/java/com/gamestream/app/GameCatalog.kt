@@ -52,6 +52,7 @@ object GameCatalog {
     )
 
     val featured: List<CatalogGame> get() = games.filter { it.featured }
+    val genreNames: List<String> get() = games.map { it.genre }.distinct()
 
     fun matches(query: String): List<CatalogGame> {
         val q = query.trim()
