@@ -48,7 +48,7 @@ struct RootView: View {
             }
 
             if selectedTab == .search {
-                SearchView()
+                SearchHubView()
                     .safeAreaInset(edge: .top, spacing: 0) {
                         if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                            let game = session.continueGame {
