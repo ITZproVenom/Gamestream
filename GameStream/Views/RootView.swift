@@ -75,7 +75,7 @@ struct RootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AnimatedBackground())
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: hideTabBar)
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showingHub)
+        .animation(.spring(response: 0.35, dampingFraction: 0.86), value: showingHub)
         .onChange(of: selectedTab) { _, newValue in
             UserDefaults.standard.set(newValue.rawValue, forKey: Self.tabStorageKey)
         }
@@ -104,6 +104,7 @@ struct RootView: View {
         .onAppear {
             BetterXCloudInjector.shared.preload()
             syncIdleTimer()
+            session.consumeLaunchResumeIfNeeded()
         }
     }
 
