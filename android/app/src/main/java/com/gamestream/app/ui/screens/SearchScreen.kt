@@ -46,25 +46,16 @@ import com.gamestream.app.SessionStore
 
 @Composable
 fun SearchScreen(session: SessionStore) {
-    val prefs = remember { SearchPrefs(LocalContext.current) }
+    val context = LocalContext.current
+    val prefs = remember(context) { SearchPrefs(context) }
     var query by remember { mutableStateOf("") }
     var recent by remember { mutableStateOf(prefs.recent()) }
     var pinned by remember { mutableStateOf(prefs.pinned()) }
     val catalogHits = remember(query) { GameCatalog.matches(query).take(8) }
-    val popular = listOf("Fortnite", "Minecraft", "Call of Duty", "Forza Horizon", "Roblox", "Sea of Thieves")
-
-    fun refresh() {
-        recent = prefs.recent()
-        pinned = prefs.pinned()
+    val popular = remember {
+        listOf("Fortnite", "Minecraft", "Call of Duty", "Forza Horizon", "Roblox", "Sea of Thieves")
     }
-
-    fun go() {
-        val q = query.trim()
-        if (q.isNotEmpty()) {
-            recent = prefs.remember(q)
-            session.openSearch(q)
-        }
-    }
+    val queryPinned = remember(query, pinned) { prefs.isPinned(query) }
 
     Column(
         modifier = Modifier
@@ -83,16 +74,32 @@ fun SearchScreen(session: SessionStore) {
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { go() })
+            keyboardActions = KeyboardActions(onSearch = {
+                val q = query.trim()
+                if (q.isNotEmpty()) {
+                    recent = prefs.remember(q)
+                    session.openSearch(q)
+                }
+            })
         )
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Button(onClick = { go() }, enabled = query.isNotBlank(), modifier = Modifier.weight(1f)) {
+            Button(
+                onClick = {
+                    val q = query.trim()
+                    if (q.isNotEmpty()) {
+                        recent = prefs.remember(q)
+                        session.openSearch(q)
+                    }
+                },
+                enabled = query.isNotBlank(),
+                modifier = Modifier.weight(1f)
+            ) {
                 Text("Search Xbox Cloud Gaming", maxLines = 1)
             }
             if (query.isNotBlank()) {
                 FilledTonalButton(onClick = { pinned = prefs.togglePin(query) }) {
-                    Text(if (prefs.isPinned(query)) "Unpin" else "Pin", maxLines = 1)
+                    Text(if (queryPinned) "Unpin" else "Pin", maxLines = 1)
                 }
             }
         }
@@ -101,15 +108,33 @@ fun SearchScreen(session: SessionStore) {
             Text("Pinned searches", style = MaterialTheme.typography.titleMedium, color = Color.White)
             pinned.forEach { item ->
                 Row(
-                    modifier = Modifier.fillMaxWidth().clickable { query = item; prefs.remember(item); session.openSearch(item) }.padding(vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        query = item
+                        prefs.remember(item)
+                        session.openSearch(item)
+                    }.padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(item, color = Color.White, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    TextButton(onClick = { pinned = prefs.togglePin(item); refresh() }) { Text("Unpin") }
+                    TextButton(onClick = { pinned = prefs.togglePin(item); recent = prefs.recent() }) { Text("Unpin") }
                 }
             }
         }
         if (query.isBlank()) {
+            session.recentGames().firstOrNull()?.let { last ->
+                Spacer(Modifier.height(20.dp))
+                Text("Jump back in", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(last.title, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("Resume on Xbox Cloud", color = Color(0xFFB0B0B8), style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                    }
+                    Button(onClick = { session.resumeLastStream() }) { Text("Resume", maxLines = 1) }
+                }
+            }
             Spacer(Modifier.height(16.dp))
             Text("Browse genres", style = MaterialTheme.typography.titleMedium, color = Color.White)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -132,7 +157,11 @@ fun SearchScreen(session: SessionStore) {
                 }
                 recent.forEach { item ->
                     Row(
-                        modifier = Modifier.fillMaxWidth().clickable { query = item; prefs.remember(item); session.openSearch(item) }.padding(vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth().clickable {
+                            query = item
+                            prefs.remember(item)
+                            session.openSearch(item)
+                        }.padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(item, color = Color.White, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
