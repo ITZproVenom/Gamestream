@@ -11,20 +11,22 @@ struct GameStreamApp: App {
         )
     }
 
-    // SessionStore is owned by the scene. AppearanceStore is observed below on a View —
-    // never wrap singletons in @StateObject, and never put @ObservedObject on App.
+    // SessionStore is owned by the scene. AppearanceStore is a @MainActor singleton —
+    // resolve it from App.body (main actor) and pass it in. Never wrap singletons in
+    // @StateObject, never put @ObservedObject on App, and never default-init
+    // @ObservedObject with AppearanceStore.shared (that init is not MainActor-isolated).
     @StateObject private var session = SessionStore()
 
     var body: some Scene {
         WindowGroup {
-            GameStreamRootView(session: session)
+            GameStreamRootView(session: session, appearance: AppearanceStore.shared)
         }
     }
 }
 
 private struct GameStreamRootView: View {
     @ObservedObject var session: SessionStore
-    @ObservedObject private var appearance = AppearanceStore.shared
+    @ObservedObject var appearance: AppearanceStore
     @State private var showIntro = !OnboardingStore.hasCompletedIntro
     @State private var showingMicrosoftLogin = false
     @State private var didBootstrap = false
@@ -84,9 +86,9 @@ private struct GameStreamRootView: View {
         if session.isStreaming {
             session.exitStreamToHub()
         }
-        session.revalidatePersistedLogin()
-        // Defer network/catalog so the first frame never races secondary services.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+        // WebKit cookie store must not initialize during the first SwiftUI frame.
+        DispatchQueue.main.async {
+            session.revalidatePersistedLogin()
             CloudCatalogService.refreshIfNeeded()
         }
     }
