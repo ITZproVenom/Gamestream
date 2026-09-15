@@ -210,7 +210,7 @@ final class SessionStore: ObservableObject {
         return (try? JSONDecoder().decode([TrackedGame].self, from: data)) ?? []
     }
     private static func saveGames(_ games: [TrackedGame], key: String) {
-        if let data = try? JSONEncoder().encode(games) { UserDefaults.standard.set(data, forKey: keys: Keys.favorites) }
+        if let data = try? JSONEncoder().encode(games) { UserDefaults.standard.set(data, forKey: key) }
     }
 
     static func isStreamingURL(_ raw: String) -> Bool {
