@@ -56,23 +56,36 @@ jobs:
               sys.exit("invalid source icon")
           PY
 
-      - name: Build debug APK
+      - name: Decode release keystore
+        working-directory: .
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64
+          src = Path("android/keystore/gamestream-release.jks.b64")
+          dest = Path("android/keystore/gamestream-release.jks")
+          dest.write_bytes(base64.b64decode(src.read_text()))
+          print(f"wrote {dest} ({dest.stat().st_size} bytes)")
+          PY
+
+      - name: Build release APK
         run: |
           set -euo pipefail
           if [ -x ./gradlew ]; then
-            ./gradlew :app:assembleDebug --no-daemon --build-cache --parallel
+            ./gradlew :app:assembleRelease --no-daemon --build-cache --parallel
           else
-            gradle :app:assembleDebug --no-daemon --build-cache --parallel
+            gradle :app:assembleRelease --no-daemon --build-cache --parallel
           fi
 
       - name: Locate APK
         run: |
           set -euo pipefail
-          APK=$(find app/build/outputs/apk -name "*.apk" | head -1)
+          APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
           test -n "$APK"
           ls -lh "$APK"
-          cp "$APK" "$GITHUB_WORKSPACE/GameStream-debug.apk"
-          python3 - "$GITHUB_WORKSPACE/GameStream-debug.apk" <<'PY'
+          cp "$APK" "$GITHUB_WORKSPACE/GameStream-release.apk"
+          python3 - "$GITHUB_WORKSPACE/GameStream-release.apk" <<'PY'
           import sys, zipfile
           path = sys.argv[1]
           z = zipfile.ZipFile(path)
@@ -88,8 +101,8 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GameStream-debug-apk
-          path: GameStream-debug.apk
+          name: GameStream-release-apk
+          path: GameStream-release.apk
           if-no-files-found: error
 
       - name: Build changelog + release identity
@@ -115,7 +128,8 @@ jobs:
             echo "---"
             echo ""
             echo "### Install"
-            echo "Download **GameStream-debug.apk** (allow unknown sources)."
+            echo "Download **GameStream-release.apk** (allow unknown sources)."
+            echo "Signed with the persistent GameStream release keystore. Updates install over previous official APKs without uninstalling."
           } > android_release_notes.md
 
       - name: Publish new Android build release
@@ -126,7 +140,7 @@ jobs:
           name: ${{ steps.meta.outputs.name }}
           prerelease: true
           body_path: android_release_notes.md
-          files: GameStream-debug.apk
+          files: GameStream-release.apk
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -135,7 +149,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: GameStream-debug.apk
+          files: GameStream-release.apk
           body_path: android_release_notes.md
           fail_on_unmatched_files: false
         env:
