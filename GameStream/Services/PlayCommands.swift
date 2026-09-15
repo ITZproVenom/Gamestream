@@ -8,7 +8,13 @@ extension SessionStore {
         HubState.shared.showNativeHub = false
         offerPlayNext = false
         requestedTab = .library
-        noteTrackedGame(game, markRecent: true)
+        currentGame = TrackedGame(
+            id: game.id,
+            slug: game.slug,
+            title: game.title,
+            lastSeen: Date(),
+            isFavorite: isFavorite(game.id)
+        )
         guard let url = game.launchURL else { return }
         if webURL != url {
             webURL = url
