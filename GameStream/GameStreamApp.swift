@@ -1,16 +1,8 @@
 import SwiftUI
 
 @main
+@MainActor
 struct GameStreamApp: App {
-    init() {
-        // Bounded HTTP cache — posters + catalog without unbounded growth
-        URLCache.shared = URLCache(
-            memoryCapacity: 24 * 1024 * 1024,
-            diskCapacity: 96 * 1024 * 1024,
-            diskPath: "gamestream-url-cache"
-        )
-    }
-
     // SessionStore is owned by the scene. AppearanceStore is a @MainActor singleton —
     // resolve it from App.body (main actor) and pass it in. Never wrap singletons in
     // @StateObject, never put @ObservedObject on App, and never default-init
@@ -87,7 +79,16 @@ private struct GameStreamRootView: View {
             session.exitStreamToHub()
         }
         // WebKit cookie store must not initialize during the first SwiftUI frame.
-        DispatchQueue.main.async {
+        Task { @MainActor in
+            // URLCache is useful for posters and catalog data, but it is not
+            // launch-critical. Configure it after the first frame instead of
+            // mutating the process-global cache from App.init().
+            await Task.yield()
+            URLCache.shared = URLCache(
+                memoryCapacity: 24 * 1024 * 1024,
+                diskCapacity: 96 * 1024 * 1024,
+                diskPath: "gamestream-url-cache"
+            )
             session.revalidatePersistedLogin()
             CloudCatalogService.refreshIfNeeded()
         }
