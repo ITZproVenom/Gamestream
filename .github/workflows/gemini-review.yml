@@ -17,7 +17,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Gemini Code Review
-        uses: dazbo/gemini-code-review-action@v1
+        uses: derailed-dash/gemini-review-action@v1
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
