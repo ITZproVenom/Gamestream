@@ -18,13 +18,18 @@ targets:
     resources:
       - path: GameStream/Assets.xcassets
       - path: GameStream/Resources
+        includes:
+          - "**/*"
+        excludes:
+          - "**/.gitkeep"
+          - "**/*.md"
     info:
       path: GameStream/Info.plist
       properties:
         CFBundleDisplayName: GameStream
         CFBundleName: GameStream
-        CFBundleShortVersionString: "1.5.0"
-        CFBundleVersion: "38"
+        CFBundleShortVersionString: "1.5.1"
+        CFBundleVersion: "39"
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
