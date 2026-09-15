@@ -37,7 +37,7 @@ struct WelcomeView: View {
                     }
                     .padding(26)
                     .frame(maxWidth: min(520, geo.size.width - 32))
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    .gsGlass(in: RoundedRectangle(cornerRadius: 28, style: .continuous))
                     .padding(.horizontal, 24)
 
                     Button(action: onSignIn) {
@@ -51,7 +51,7 @@ struct WelcomeView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                     }
-                    .buttonStyle(.glassProminent)
+                    .gsGlassButton(prominent: true)
                     .padding(.horizontal, 28)
                     .padding(.top, 22)
                     .frame(maxWidth: min(520, geo.size.width - 24))

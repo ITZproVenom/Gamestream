@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Shared Liquid Glass Primitives (iOS 26 native)
+// MARK: - Shared glass primitives (safe fallbacks via GlassCompat)
 
 struct GlassCard<Content: View>: View {
     let content: Content
@@ -14,7 +14,7 @@ struct GlassCard<Content: View>: View {
     var body: some View {
         content
             .padding(16)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .gsGlass(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }
 
@@ -48,7 +48,7 @@ struct GlassActionButton: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
         }
-        .buttonStyle(.glassProminent)
+        .gsGlassButton(prominent: true)
     }
 }
 
@@ -62,7 +62,7 @@ struct GlassIconButton: View {
                 .font(.system(size: 17, weight: .semibold))
                 .frame(width: 42, height: 42)
         }
-        .buttonStyle(.glass)
+        .gsGlassButton()
     }
 }
 
@@ -87,14 +87,12 @@ struct GlassSection<Content: View>: View {
     }
 }
 
-// MARK: - Convenience helpers
-
 extension View {
     func glassCard(cornerRadius: CGFloat = 20) -> some View {
-        self.glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        self.gsGlass(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 
     func interactiveGlass(in shape: some Shape = RoundedRectangle(cornerRadius: 18, style: .continuous)) -> some View {
-        self.glassEffect(.regular.interactive(), in: shape)
+        self.gsGlassInteractive(in: shape)
     }
 }
