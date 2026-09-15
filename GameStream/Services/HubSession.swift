@@ -8,9 +8,13 @@ final class HubState: ObservableObject {
 }
 
 extension SessionStore {
+    static let idleWebURL = URL(string: "about:blank")!
+    static let xboxHomeURL = URL(string: "https://www.xbox.com/play")!
+
     func openXboxCloud() {
         PlayActivityStore.shared.end()
-        webURL = URL(string: "https://www.xbox.com/play")!
+        pendingJavaScript = nil
+        webURL = Self.xboxHomeURL
         isStreaming = false
         offerPlayNext = false
         HubState.shared.showNativeHub = false
@@ -24,22 +28,26 @@ extension SessionStore {
     }
 
     func playCatalogGame(_ game: CatalogGame) {
-        HubState.shared.showNativeHub = false
-        offerPlayNext = false
         playGame(game.tracked)
     }
 
     func returnToHub() {
         PlayActivityStore.shared.end()
+        pendingJavaScript = nil
         isStreaming = false
+        // Unload the Xbox site while GameHub is the UI so the website is not the app.
+        if webURL.host?.contains("xbox.com") == true {
+            webURL = Self.idleWebURL
+        }
         HubState.shared.showNativeHub = true
         requestedTab = .library
     }
 
     func exitStreamToHub() {
         PlayActivityStore.shared.end()
+        pendingJavaScript = nil
         let hasNext = nextQueuedGame != nil
-        webURL = URL(string: "https://www.xbox.com/play")!
+        webURL = Self.idleWebURL
         isStreaming = false
         offerPlayNext = hasNext
         HubState.shared.showNativeHub = true
