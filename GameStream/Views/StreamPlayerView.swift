@@ -39,6 +39,13 @@ struct XboxCloudWebView: UIViewRepresentable {
             forMainFrameOnly: true
         ))
 
+        let prefsJS = SessionStore.betterXCloudPrefsJS(SessionStore.storedBetterXCloudPrefs(), reloadIfXbox: false)
+        contentController.addUserScript(WKUserScript(
+            source: prefsJS,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        ))
+
         if let scriptSource = BetterXCloudInjector.shared.currentScriptSource() {
             contentController.addUserScript(WKUserScript(
                 source: scriptSource,
