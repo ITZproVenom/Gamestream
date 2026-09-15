@@ -15,7 +15,7 @@ struct HubPage<Content: View>: View {
                 }
                 .padding(.horizontal, horizontalPadding)
                 .padding(.top, 8)
-                .padding(.bottom, 36)
+                .padding(.bottom, 28)
                 .frame(width: width, alignment: .leading)
                 .clipped()
             }
