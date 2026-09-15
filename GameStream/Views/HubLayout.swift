@@ -15,14 +15,17 @@ struct HubPage<Content: View>: View {
                 }
                 .padding(.horizontal, horizontalPadding)
                 .padding(.top, 8)
-                .padding(.bottom, 28)
+                .padding(.bottom, 36)
                 .frame(width: width, alignment: .leading)
+                .clipped()
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .frame(width: width, height: geo.size.height, alignment: .top)
+            .clipped()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
     }
 }
 
@@ -38,6 +41,7 @@ struct HubCarousel<Content: View>: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
         .clipped()
     }
 }

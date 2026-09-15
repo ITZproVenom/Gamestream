@@ -42,10 +42,10 @@ CI builds an **unsigned IPA** (`.github/workflows/build-ipa.yml`) and publishes 
 ```bash
 cd android
 gradle wrapper --gradle-version 8.9   # if needed
-./gradlew :app:assembleDebug
+./gradlew :app:assembleRelease
 ```
 
-APK: `android/app/build/outputs/apk/debug/app-debug.apk`
+APK: `android/app/build/outputs/apk/release/app-release.apk`
 
 Or open `android/` in Android Studio.  
 CI: `.github/workflows/build-apk.yml` → APK on Releases.
