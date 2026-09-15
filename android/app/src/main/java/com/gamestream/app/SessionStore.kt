@@ -11,6 +11,7 @@ import androidx.lifecycle.AndroidViewModel
 class SessionStore(app: Application) : AndroidViewModel(app) {
     private val prefs = app.getSharedPreferences("gamestream", Context.MODE_PRIVATE)
     private val playActivity = PlayActivity.get(app)
+    private var didConsumeLaunchResume = false
 
     var isSignedIn by mutableStateOf(false)
         private set
@@ -28,6 +29,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         private set
     var showNativeHub by mutableStateOf(true)
     var offerPlayNext by mutableStateOf(false)
+    var resumeLastOnOpen by mutableStateOf(prefs.getBoolean(KEY_RESUME, false))
     var favoriteIds by mutableStateOf(prefs.getStringSet(KEY_FAVS, emptySet())?.toSet() ?: emptySet())
         private set
     var recentIds by mutableStateOf(prefs.getString("recent_ids", "")?.split(",")?.filter { it.isNotBlank() } ?: emptyList())
@@ -53,6 +55,10 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
 
     fun activity(): PlayActivity = playActivity
     fun clearPendingJs() { pendingJs = null }
+    fun setResumeLastOnOpen(enabled: Boolean) {
+        resumeLastOnOpen = enabled
+        prefs.edit().putBoolean(KEY_RESUME, enabled).apply()
+    }
 
     fun markSignedInAfterMicrosoftAuth(label: String = "Xbox Account") {
         accountLabel = label
@@ -77,6 +83,17 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
     fun openXboxCloud() { playActivity.end(); webUrl = HOME_URL; isStreaming = false; offerPlayNext = false; showNativeHub = false; requestedTab = "library" }
     fun openGame(game: CatalogGame) { webUrl = game.catalogUrl; isStreaming = false; offerPlayNext = false; showNativeHub = false; requestedTab = "library"; rememberRecent(game.id) }
     fun playGame(game: CatalogGame) { webUrl = game.launchUrl; isStreaming = false; offerPlayNext = false; showNativeHub = false; requestedTab = "library"; rememberRecent(game.id) }
+    fun resumeLastStream(): Boolean {
+        val game = recentGames().firstOrNull() ?: return false
+        playGame(game)
+        return true
+    }
+    fun consumeLaunchResumeIfNeeded() {
+        if (didConsumeLaunchResume) return
+        didConsumeLaunchResume = true
+        if (!resumeLastOnOpen || !isSignedIn || isStreaming) return
+        resumeLastStream()
+    }
     fun returnToHub() { playActivity.end(); isStreaming = false; showNativeHub = true; requestedTab = "library" }
     fun exitStreamToHub() {
         playActivity.end()
@@ -218,6 +235,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         private const val KEY_RES = "resolution"
         private const val KEY_REGION = "region"
         private const val KEY_FAVS = "favorite_ids"
+        private const val KEY_RESUME = "resume_last_on_open"
         fun isStreamingUrl(url: String): Boolean {
             val lower = url.lowercase()
             if (lower.contains("/play/games")) return false
