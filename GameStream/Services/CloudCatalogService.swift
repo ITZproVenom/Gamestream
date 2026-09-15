@@ -8,15 +8,19 @@ enum CloudCatalogService {
     static func refreshIfNeeded() {
         guard !started else { return }
         started = true
-        if let cached = loadCache(), cached.count >= 20 {
-            GameCatalog.installLiveCatalog(cached)
+        Task { @MainActor in
+            if let cached = loadCache(), cached.count >= 20 {
+                GameCatalog.installLiveCatalog(cached)
+            }
         }
         Task.detached(priority: .utility) {
             do {
                 let remote = try await fetchRemote()
                 if remote.count >= 20 {
                     saveCache(remote)
-                    GameCatalog.installLiveCatalog(remote)
+                    await MainActor.run {
+                        GameCatalog.installLiveCatalog(remote)
+                    }
                 }
             } catch {
             }
