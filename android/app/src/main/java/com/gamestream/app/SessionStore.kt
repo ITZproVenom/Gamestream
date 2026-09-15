@@ -17,7 +17,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         private set
     var accountLabel by mutableStateOf(prefs.getString(KEY_ACCOUNT, null))
         private set
-    var webUrl by mutableStateOf(HOME_URL)
+    var webUrl by mutableStateOf(IDLE_URL)
         private set
     var isStreaming by mutableStateOf(false)
         private set
@@ -74,13 +74,13 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         isStreaming = false
         offerPlayNext = false
         showNativeHub = true
-        webUrl = HOME_URL
+        webUrl = IDLE_URL
         prefs.edit().putBoolean(KEY_SIGNED_IN, false).remove(KEY_ACCOUNT).remove(KEY_AUTH_PROOF).apply()
         pendingJs = "try { localStorage.clear(); sessionStorage.clear(); location.href='$HOME_URL'; } catch(e){}"
         reloadNonce++
     }
 
-    fun openHome() { playActivity.end(); webUrl = HOME_URL; isStreaming = false; offerPlayNext = queuedGames().isNotEmpty(); showNativeHub = true; requestedTab = "library" }
+    fun openHome() { playActivity.end(); webUrl = IDLE_URL; isStreaming = false; offerPlayNext = queuedGames().isNotEmpty(); showNativeHub = true; requestedTab = "library" }
     fun openXboxCloud() { playActivity.end(); webUrl = HOME_URL; isStreaming = false; offerPlayNext = false; showNativeHub = false; requestedTab = "library" }
     fun openGame(game: CatalogGame) { webUrl = game.catalogUrl; isStreaming = false; offerPlayNext = false; showNativeHub = false; requestedTab = "library"; rememberRecent(game.id) }
     fun playGame(game: CatalogGame) { webUrl = game.launchUrl; isStreaming = false; offerPlayNext = false; showNativeHub = false; requestedTab = "library"; rememberRecent(game.id) }
@@ -95,11 +95,17 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         if (!resumeLastOnOpen || !isSignedIn || isStreaming) return
         resumeLastStream()
     }
-    fun returnToHub() { playActivity.end(); isStreaming = false; showNativeHub = true; requestedTab = "library" }
+    fun returnToHub() {
+        playActivity.end()
+        isStreaming = false
+        if (webUrl.contains("xbox.com", ignoreCase = true)) webUrl = IDLE_URL
+        showNativeHub = true
+        requestedTab = "library"
+    }
     fun exitStreamToHub() {
         playActivity.end()
         offerPlayNext = queuedGames().isNotEmpty()
-        webUrl = HOME_URL
+        webUrl = IDLE_URL
         isStreaming = false
         showNativeHub = true
         requestedTab = "library"
@@ -229,6 +235,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
     }
     companion object {
         const val HOME_URL = "https://www.xbox.com/play"
+        const val IDLE_URL = "about:blank"
         private const val KEY_SIGNED_IN = "signed_in"
         private const val KEY_ACCOUNT = "account"
         private const val KEY_AUTH_PROOF = "microsoft_auth_proof_v2"

@@ -207,13 +207,13 @@ fun SettingsScreen(session: SessionStore) {
         Spacer(modifier = Modifier.height(24.dp))
         Text("About", style = MaterialTheme.typography.titleMedium, color = Color.White)
         Text(
-            "GameStream Android 1.3.7 — native WebView client for Xbox Cloud Gaming with Better xCloud.",
+            "GameStream Android 1.3.9 — native GameHub for Xbox Cloud Gaming with Better xCloud.",
             style = MaterialTheme.typography.bodySmall,
             color = Color(0xFF808088)
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "Made with ❤️ by Bestin",
+            "Made with 🤍 by Bestin",
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
             color = Color.White
         )
