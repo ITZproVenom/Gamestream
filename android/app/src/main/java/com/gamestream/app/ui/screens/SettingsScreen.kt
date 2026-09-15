@@ -207,7 +207,7 @@ fun SettingsScreen(session: SessionStore) {
         Spacer(modifier = Modifier.height(24.dp))
         Text("About", style = MaterialTheme.typography.titleMedium, color = Color.White)
         Text(
-            "GameStream Android 1.3.3 — native WebView client for Xbox Cloud Gaming with Better xCloud.",
+            "GameStream Android 1.3.7 — native WebView client for Xbox Cloud Gaming with Better xCloud.",
             style = MaterialTheme.typography.bodySmall,
             color = Color(0xFF808088)
         )
