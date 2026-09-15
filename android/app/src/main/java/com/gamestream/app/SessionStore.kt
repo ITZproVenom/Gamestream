@@ -41,6 +41,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         private set
     var serverRegion by mutableStateOf(prefs.getString(KEY_REGION, "Auto") ?: "Auto")
         private set
+    var searchQuery by mutableStateOf("")
 
     init {
         val proof = prefs.getInt(KEY_AUTH_PROOF, 0)
@@ -76,14 +77,28 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         showNativeHub = true
         webUrl = IDLE_URL
         prefs.edit().putBoolean(KEY_SIGNED_IN, false).remove(KEY_ACCOUNT).remove(KEY_AUTH_PROOF).apply()
-        pendingJs = "try { localStorage.clear(); sessionStorage.clear(); location.href='$HOME_URL'; } catch(e){}"
-        reloadNonce++
+        pendingJs = null
     }
 
-    fun openHome() { playActivity.end(); webUrl = IDLE_URL; isStreaming = false; offerPlayNext = queuedGames().isNotEmpty(); showNativeHub = true; requestedTab = "library" }
-    fun openXboxCloud() { playActivity.end(); webUrl = HOME_URL; isStreaming = false; offerPlayNext = false; showNativeHub = false; requestedTab = "library" }
-    fun openGame(game: CatalogGame) { webUrl = game.catalogUrl; isStreaming = false; offerPlayNext = false; showNativeHub = false; requestedTab = "library"; rememberRecent(game.id) }
-    fun playGame(game: CatalogGame) { pendingJs = null; webUrl = game.launchUrl; isStreaming = true; offerPlayNext = false; showNativeHub = false; requestedTab = "library"; rememberRecent(game.id) }
+    fun openHome() { returnToHub() }
+    fun openXboxCloud() { returnToHub() }
+    fun openGame(game: CatalogGame) {
+        webUrl = IDLE_URL
+        isStreaming = false
+        offerPlayNext = false
+        showNativeHub = true
+        requestedTab = "library"
+        rememberRecent(game.id)
+    }
+    fun playGame(game: CatalogGame) {
+        pendingJs = null
+        webUrl = game.launchUrl
+        isStreaming = true
+        offerPlayNext = false
+        showNativeHub = false
+        requestedTab = "library"
+        rememberRecent(game.id)
+    }
     fun resumeLastStream(): Boolean {
         val game = recentGames().firstOrNull() ?: return false
         playGame(game)
@@ -98,7 +113,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
     fun returnToHub() {
         playActivity.end()
         isStreaming = false
-        if (webUrl.contains("xbox.com", ignoreCase = true)) webUrl = IDLE_URL
+        webUrl = IDLE_URL
         showNativeHub = true
         requestedTab = "library"
     }
@@ -146,42 +161,11 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
     fun openSearch(query: String) {
         val q = query.trim()
         if (q.isEmpty()) return
-        val escaped = q.replace("\\", "\\\\").replace("'", "\\'").replace("\n", " ")
-        webUrl = HOME_URL
+        searchQuery = q
         isStreaming = false
         offerPlayNext = false
-        showNativeHub = false
-        pendingJs = """
-            (function(){
-              var q='$escaped';
-              function findInput(){
-                return document.querySelector('input[type=\"search\"], input[placeholder*=\"Search\" i], input[aria-label*=\"Search\" i], input[name=\"q\"]');
-              }
-              var input=findInput();
-              if(!input){
-                var btn=document.querySelector('button[aria-label*=\"Search\" i], [role=\"search\"] button, a[href*=\"search\"]');
-                if(btn){ try{ btn.click(); }catch(e){} }
-              }
-              setTimeout(function(){
-                input=findInput();
-                if(input){
-                  input.focus();
-                  try{
-                    var proto=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value');
-                    if(proto&&proto.set) proto.set.call(input,q); else input.value=q;
-                  }catch(e){ input.value=q; }
-                  input.dispatchEvent(new Event('input',{bubbles:true}));
-                  input.dispatchEvent(new Event('change',{bubbles:true}));
-                  var form=input.closest('form');
-                  if(form) form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
-                  else input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',keyCode:13,which:13,bubbles:true}));
-                } else {
-                  location.href='https://www.xbox.com/play?search='+encodeURIComponent(q);
-                }
-              },280);
-            })();
-        """.trimIndent()
-        requestedTab = "library"
+        showNativeHub = true
+        requestedTab = "search"
     }
     fun reloadCurrent() { reloadNonce++; pendingJs = "try { location.reload(); } catch(e){}" }
     fun updateStreamingFromUrl(url: String) {
