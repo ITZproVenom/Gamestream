@@ -50,7 +50,6 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
         CloudCatalogService.refreshIfNeeded(context.applicationContext)
         withContext(Dispatchers.IO) {
             BetterXCloudInjector.ensureFetched(context.applicationContext)
-            CloudCatalogService.fetchAndInstall(context.applicationContext)
         }
     }
 
