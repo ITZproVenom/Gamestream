@@ -67,11 +67,56 @@ jobs:
           import struct, sys
           p = "GameStream/Assets.xcassets/AppIcon.appiconset/icon-1024.png"
           data = open(p, "rb").read()
-          assert data[:8] == b"\x89PNG\r\n\x1a\n", "not a PNG"
+          assert data[:8] == b"\\x89PNG\\r\\n\\x1a\\n", "not a PNG"
           w, h = struct.unpack(">II", data[16:24])
           print(f"icon {p}: {w}x{h}, {len(data)} bytes")
           if (w, h) != (1024, 1024) or len(data) < 20000:
               sys.exit("invalid App Icon — refusing to continue")
+          PY
+
+      - name: Bundle Better xCloud + sound pack
+        run: |
+          set -euo pipefail
+          mkdir -p GameStream/Resources/Sounds
+          curl -fsSL -o GameStream/Resources/better-xcloud.user.js \
+            "https://github.com/redphx/better-xcloud/releases/latest/download/better-xcloud.user.js"
+          test -s GameStream/Resources/better-xcloud.user.js
+          BYTES=$(wc -c < GameStream/Resources/better-xcloud.user.js | tr -d ' ')
+          echo "Bundled BX script: ${BYTES} bytes"
+          if [ "$BYTES" -lt 50000 ]; then
+            echo "Better xCloud script too small" >&2
+            exit 1
+          fi
+          python3 - <<'PY'
+          import base64, json, math, struct, wave
+          from pathlib import Path
+          out = Path("GameStream/Resources/Sounds")
+          out.mkdir(parents=True, exist_ok=True)
+
+          def tone(name, freqs, dur, vol=0.3, sr=22050):
+              n = int(sr * dur)
+              frames = []
+              for i in range(n):
+                  t = i / sr
+                  env = min(1.0, i / 200) * min(1.0, (n - i) / 400)
+                  s = sum(math.sin(2 * math.pi * f * t) for f in freqs) / len(freqs) * vol * env
+                  frames.append(struct.pack("<h", int(max(-1, min(1, s)) * 32767)))
+              path = out / f"{name}.wav"
+              with wave.open(str(path), "w") as w:
+                  w.setnchannels(1)
+                  w.setsampwidth(2)
+                  w.setframerate(sr)
+                  w.writeframes(b"".join(frames))
+              return base64.b64encode(path.read_bytes()).decode("ascii")
+
+          pack = {
+              "tap": tone("tap", [800], 0.05, 0.2),
+              "launch": tone("launch", [440, 660], 0.18, 0.3),
+              "ready": tone("ready", [520, 780, 1040], 0.22, 0.28),
+              "error": tone("error", [220, 180], 0.25, 0.32),
+          }
+          (out / "embedded.json").write_text(json.dumps(pack))
+          print("sound pack", {k: len(v) for k, v in pack.items()})
           PY
 
       - name: Generate Xcode project
@@ -153,7 +198,7 @@ jobs:
 
           short, date = sys.argv[1], sys.argv[2]
           raw = subprocess.check_output(
-              ["git", "log", "--max-count=50", "--name-only", "--pretty=format:COMMIT\t%h\t%s", "--no-merges"],
+              ["git", "log", "--max-count=50", "--name-only", "--pretty=format:COMMIT\\t%h\\t%s", "--no-merges"],
               text=True,
           )
 
@@ -179,10 +224,10 @@ jobs:
           sha = subject = None
           files = []
           for line in raw.splitlines():
-              if line.startswith("COMMIT\t"):
+              if line.startswith("COMMIT\\t"):
                   if sha is not None and include(files):
                       items.append(f"- {subject} ({sha})")
-                  _, sha, subject = line.split("\t", 2)
+                  _, sha, subject = line.split("\\t", 2)
                   files = []
               elif line.strip():
                   files.append(line.strip())
@@ -193,7 +238,7 @@ jobs:
           if not items:
               items = ["- No iOS-relevant commits in recent history."]
 
-          body = "\n".join([
+          body = "\\n".join([
               "## Changelog",
               "",
               f"**Platform:** iOS · **Build:** `{short}` · **{date}**",
