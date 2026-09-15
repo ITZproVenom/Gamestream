@@ -55,8 +55,11 @@ struct GameStreamApp: App {
                 .environmentObject(session)
             }
             .onAppear {
+                // Never crash on launch from secondary services
                 session.revalidatePersistedLogin()
-                CloudCatalogService.refreshIfNeeded()
+                DispatchQueue.main.async {
+                    CloudCatalogService.refreshIfNeeded()
+                }
             }
             .onChange(of: session.isSignedIn) { _, signedIn in
                 if signedIn { showingMicrosoftLogin = false }

@@ -6,12 +6,14 @@ enum SoundManager {
     private static var players: [String: AVAudioPlayer] = [:]
     private static var decoded: [String: Data] = [:]
 
-    private static let sessionConfigured: Bool = {
+    private static var sessionConfigured = false
+    private static func ensureSession() {
+        guard !sessionConfigured else { return }
+        sessionConfigured = true
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
         try? session.setActive(true, options: [])
-        return true
-    }()
+    }
 
     private static var soundsEnabled: Bool {
         if UserDefaults.standard.object(forKey: "GameStream.uiSoundsEnabled") == nil {
@@ -38,7 +40,7 @@ enum SoundManager {
 
     private static func playBundled(_ name: String, systemFallback: SystemSoundID) {
         guard soundsEnabled, !isMuted else { return }
-        _ = sessionConfigured
+        ensureSession()
         if let player = cachedPlayer(name) {
             player.currentTime = 0
             player.play()
