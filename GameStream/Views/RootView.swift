@@ -27,8 +27,9 @@ struct RootView: View {
         session.isStreaming && selectedTab == .library
     }
 
+    /// Native GameHub is the Library tab. WebView exists only while streaming.
     private var showingHub: Bool {
-        selectedTab == .library && hub.showNativeHub && !session.isStreaming
+        selectedTab == .library && !session.isStreaming
     }
 
     var body: some View {
@@ -37,10 +38,10 @@ struct RootView: View {
 
     private var signedInRoot: some View {
         ZStack(alignment: .bottom) {
-            LibraryView()
-                .opacity(selectedTab == .library && !showingHub ? 1 : 0)
-                .allowsHitTesting(selectedTab == .library && !showingHub)
-                .zIndex(selectedTab == .library && !showingHub ? 1 : 0)
+            if session.isStreaming && selectedTab == .library {
+                LibraryView()
+                    .zIndex(1)
+            }
 
             if showingHub {
                 GameHubView()
@@ -98,6 +99,8 @@ struct RootView: View {
                         selectedTab = .library
                     }
                 }
+            } else {
+                hub.showNativeHub = true
             }
         }
         .onChange(of: session.keepScreenAwake) { _, _ in
