@@ -11,33 +11,30 @@ struct SearchHubView: View {
     private let popularTitles = ["Fortnite", "Minecraft", "Call of Duty", "Forza Horizon", "Roblox", "Sea of Thieves"]
 
     var body: some View {
-        ZStack {
-            AnimatedBackground().ignoresSafeArea()
-            HubPage {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Search")
-                        .font(.system(size: 34, weight: .bold, design: .rounded))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                    Text("Find your next game")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
+        HubPage {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Search")
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text("Find your next game")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
 
-                searchField
+            searchField
 
-                if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    if !pinned.isEmpty { queryList(title: "Pinned searches", items: pinned, pinnedStyle: true) }
-                    genreChips
-                    popularSection
-                    if !recent.isEmpty { queryList(title: "Recent searches", items: recent, pinnedStyle: false) }
-                    if !session.favorites.isEmpty {
-                        libraryShelf(title: "Favorites", games: session.favorites, star: true)
-                    }
-                } else {
-                    resultsSection
+            if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if !pinned.isEmpty { queryList(title: "Pinned searches", items: pinned, pinnedStyle: true) }
+                genreChips
+                popularSection
+                if !recent.isEmpty { queryList(title: "Recent searches", items: recent, pinnedStyle: false) }
+                if !session.favorites.isEmpty {
+                    libraryShelf(title: "Favorites", games: session.favorites, star: true)
                 }
+            } else {
+                resultsSection
             }
         }
         .onAppear { reload() }
