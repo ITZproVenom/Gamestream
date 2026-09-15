@@ -9,7 +9,7 @@ struct IntroView: View {
     @State private var artShift: CGFloat = 0
 
     private var posters: [URL] {
-        Array(GameCatalog.games.compactMap(\.posterURL).prefix(12))
+        Array(GameCatalog.games.compactMap(\ .posterURL).prefix(12))
     }
 
     var body: some View {
@@ -35,7 +35,7 @@ struct IntroView: View {
                             .foregroundStyle(.white.opacity(0.92))
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
-                            .glassEffect(.regular.interactive(), in: Capsule())
+                            .gsGlassInteractive(in: Capsule())
                             .accessibilityLabel("Skip intro")
                         Spacer(minLength: 0)
                     }
@@ -71,7 +71,7 @@ struct IntroView: View {
                     .padding(.horizontal, 22)
                     .padding(.vertical, 24)
                     .frame(maxWidth: 520)
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    .gsGlass(in: RoundedRectangle(cornerRadius: 28, style: .continuous))
                     .padding(.horizontal, 24)
 
                     Button(action: finish) {
@@ -82,7 +82,7 @@ struct IntroView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                     }
-                    .buttonStyle(.glassProminent)
+                    .gsGlassButton(prominent: true)
                     .padding(.horizontal, 28)
                     .padding(.top, 20)
                     .padding(.bottom, 28)
