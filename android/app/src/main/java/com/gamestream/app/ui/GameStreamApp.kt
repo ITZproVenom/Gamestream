@@ -51,6 +51,10 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
         }
     }
 
+    LaunchedEffect(session.isSignedIn) {
+        if (session.isSignedIn) session.consumeLaunchResumeIfNeeded()
+    }
+
     LaunchedEffect(session.requestedTab) {
         when (session.requestedTab) {
             "library" -> tab = Tab.Library
