@@ -71,3 +71,5 @@ MIT — see [LICENSE](LICENSE).
 ## Disclaimer
 
 Unofficial client. Xbox / xCloud trademarks belong to Microsoft.
+
+Made with ❤️ by Bestin
