@@ -48,6 +48,53 @@ struct SettingsView: View {
                                 appearance.accent = theme
                             }
                         }
+                        Text("Background")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        chipRow(options: BackgroundStyle.allCases.map(\.title), selected: appearance.backgroundStyle.title) { title in
+                            if let style = BackgroundStyle.allCases.first(where: { $0.title == title }) {
+                                appearance.backgroundStyle = style
+                            }
+                        }
+                        Text("Game cards")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        chipRow(options: GameCardStyle.allCases.map(\.title), selected: appearance.cardStyle.title) { title in
+                            if let style = GameCardStyle.allCases.first(where: { $0.title == title }) {
+                                appearance.cardStyle = style
+                            }
+                        }
+                        Text("Library density")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        chipRow(options: LibraryDensity.allCases.map(\.title), selected: appearance.density.title) { title in
+                            if let density = LibraryDensity.allCases.first(where: { $0.title == title }) {
+                                appearance.density = density
+                            }
+                        }
+                        Text("Motion")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        chipRow(options: AnimationIntensity.allCases.map(\.title), selected: appearance.animationIntensity.title) { title in
+                            if let intensity = AnimationIntensity.allCases.first(where: { $0.title == title }) {
+                                appearance.animationIntensity = intensity
+                            }
+                        }
+                        Text("Effects")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        chipRow(options: EffectsMode.allCases.map(\.title), selected: appearance.effectsMode.title) { title in
+                            if let mode = EffectsMode.allCases.first(where: { $0.title == title }) {
+                                appearance.effectsMode = mode
+                            }
+                        }
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Glass intensity")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Slider(value: $appearance.glassIntensity, in: 0.35...1.0)
+                        }
+                        Toggle("UI sounds", isOn: $appearance.uiSoundsEnabled)
                     }
 
                     section("Jump back in") {
@@ -159,10 +206,14 @@ struct SettingsView: View {
                     }
 
                     section("About") {
-                        Text("GameStream iOS 1.2.9 — native GameHub and Xbox Cloud client with Better xCloud.")
+                        Text("GameStream iOS 1.3.2 — native GameHub and Xbox Cloud client with Better xCloud.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
+                        Text("Made with ❤️ by Bestin")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.top, 6)
+                            .accessibilityLabel("Made with love by Bestin")
                     }
                 }
                 .padding(.horizontal, 20)
