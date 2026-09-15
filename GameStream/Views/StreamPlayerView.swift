@@ -132,11 +132,15 @@ struct XboxCloudWebView: UIViewRepresentable {
                 setTimeout(notify, 50);
             };
             window.addEventListener('popstate', function() { setTimeout(notify, 50); });
-            // No setInterval — polling stole main-thread time from the stream decoder.
         })();
         """
         contentController.addUserScript(WKUserScript(
             source: bridgeJS,
+            injectionTime: .atDocumentEnd,
+            forMainFrameOnly: true
+        ))
+        contentController.addUserScript(WKUserScript(
+            source: BetterXCloudInjector.streamIsolationJS,
             injectionTime: .atDocumentEnd,
             forMainFrameOnly: true
         ))
@@ -231,6 +235,7 @@ struct XboxCloudWebView: UIViewRepresentable {
             NotificationCenter.default.post(name: .webViewLoadingChanged, object: false)
             BetterXCloudInjector.shared.ensureInjected(into: webView)
             webView.evaluateJavaScript(BetterXCloudInjector.modernUIOverridesJS, completionHandler: nil)
+            webView.evaluateJavaScript(BetterXCloudInjector.streamIsolationJS, completionHandler: nil)
 
             if let url = webView.url {
                 Task { @MainActor in
@@ -254,6 +259,59 @@ struct XboxCloudWebView: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
             NotificationCenter.default.post(name: .webViewLoadingChanged, object: false)
             NotificationCenter.default.post(name: .webViewDidFail, object: error.localizedDescription)
+        }
+
+        func webView(
+            _ webView: WKWebView,
+            decidePolicyFor navigationAction: WKNavigationAction,
+            decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+        ) {
+            guard let url = navigationAction.request.url else {
+                decisionHandler(.allow)
+                return
+            }
+            let raw = url.absoluteString.lowercased()
+            let host = (url.host ?? "").lowercased()
+
+            if raw == "about:blank"
+                || host.contains("login.live.com")
+                || host.contains("login.microsoftonline.com")
+                || host.contains("microsoft.com")
+                || host.contains("xboxlive.com")
+                || host.contains("microsoftonline.com") {
+                decisionHandler(.allow)
+                return
+            }
+
+            if session?.isStreaming == true {
+                if host.contains("xbox.com") {
+                    if raw.contains("/play/launch")
+                        || raw.contains("/launch/")
+                        || raw.contains("/launch?")
+                        || raw.contains("/stream/")
+                        || raw.contains("/streaming") {
+                        decisionHandler(.allow)
+                        return
+                    }
+                    if host.contains("xboxservices")
+                        || host.contains("gamepass")
+                        || host.contains("azure")
+                        || raw.contains("/api/")
+                        || raw.contains("xcloud") {
+                        decisionHandler(.allow)
+                        return
+                    }
+                    if raw.contains("/play/games")
+                        || raw.hasSuffix("/play")
+                        || raw.hasSuffix("/play/")
+                        || (raw.contains("xbox.com/en-") && !raw.contains("/launch")) {
+                        decisionHandler(.cancel)
+                        return
+                    }
+                }
+            }
+
+            decisionHandler(.allow)
         }
     }
 }
