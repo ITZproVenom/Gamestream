@@ -14,21 +14,20 @@ struct GameHubListShelves: View {
                 if !games.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
                         Text(list.name).font(.title3.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.85)
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                ForEach(games) { game in
-                                    GamePosterCard(
-                                        game: game,
-                                        artworkURL: artwork.url(for: game.id),
-                                        isFavorite: session.isFavorite(game.id),
-                                        onPlay: { session.playCatalogGame(game) },
-                                        onOpen: { detailGame = game },
-                                        onFavorite: { session.toggleFavorite(game.tracked) }
-                                    )
-                                    .frame(width: 132)
+                        HubCarousel(spacing: 12) {
+                            ForEach(games) { game in
+                                GamePosterCard(
+                                    game: game,
+                                    artworkURL: artwork.url(for: game.id),
+                                    isFavorite: session.isFavorite(game.id),
+                                    onPlay: { session.playCatalogGame(game) },
+                                    onOpen: { detailGame = game },
+                                    onFavorite: { session.toggleFavorite(game.tracked) }
+                                )
+                                .containerRelativeFrame(.horizontal) { width, _ in
+                                    HubMetrics.posterWidth(containerWidth: width)
                                 }
                             }
-                            .padding(.vertical, 2)
                         }
                     }
                 }
@@ -114,30 +113,30 @@ struct GameHubListsSection: View {
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         } else {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 12) {
-                                    ForEach(games) { game in
-                                        GamePosterCard(
-                                            game: game,
-                                            artworkURL: artwork.url(for: game.id),
-                                            isFavorite: session.isFavorite(game.id),
-                                            onPlay: { session.playCatalogGame(game) },
-                                            onOpen: { detailGame = game },
-                                            onFavorite: { session.toggleFavorite(game.tracked) }
-                                        )
-                                        .frame(width: 132)
-                                        .contextMenu {
-                                            Button { session.playCatalogGame(game) } label: {
-                                                Label("Play now", systemImage: "play.fill")
-                                            }
-                                            Button {
-                                                lists.toggle(game: game.tracked, inCollection: list.id)
-                                            } label: {
-                                                Label("Remove from \(list.name)", systemImage: "minus.circle")
-                                            }
-                                            Button { session.toggleQueue(game.tracked) } label: {
-                                                Label(session.isQueued(game.id) ? "Remove from Up Next" : "Add to Up Next", systemImage: "text.badge.plus")
-                                            }
+                            HubCarousel(spacing: 12) {
+                                ForEach(games) { game in
+                                    GamePosterCard(
+                                        game: game,
+                                        artworkURL: artwork.url(for: game.id),
+                                        isFavorite: session.isFavorite(game.id),
+                                        onPlay: { session.playCatalogGame(game) },
+                                        onOpen: { detailGame = game },
+                                        onFavorite: { session.toggleFavorite(game.tracked) }
+                                    )
+                                    .containerRelativeFrame(.horizontal) { width, _ in
+                                        HubMetrics.posterWidth(containerWidth: width)
+                                    }
+                                    .contextMenu {
+                                        Button { session.playCatalogGame(game) } label: {
+                                            Label("Play now", systemImage: "play.fill")
+                                        }
+                                        Button {
+                                            lists.toggle(game: game.tracked, inCollection: list.id)
+                                        } label: {
+                                            Label("Remove from \(list.name)", systemImage: "minus.circle")
+                                        }
+                                        Button { session.toggleQueue(game.tracked) } label: {
+                                            Label(session.isQueued(game.id) ? "Remove from Up Next" : "Add to Up Next", systemImage: "text.badge.plus")
                                         }
                                     }
                                 }
