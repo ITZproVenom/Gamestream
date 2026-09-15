@@ -18,11 +18,17 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.gamestream.app.AppearancePrefs
 import com.gamestream.app.SessionStore
 
 @Composable
@@ -32,6 +38,16 @@ fun SettingsScreen(session: SessionStore) {
     val activity = session.activity()
     val top = activity.rankedThisWeek().firstOrNull()
     val last = session.recentGames().firstOrNull()
+    val context = LocalContext.current
+    val appearance = remember { AppearancePrefs(context) }
+    var mode by remember { mutableStateOf(appearance.mode) }
+    var accent by remember { mutableStateOf(appearance.accent) }
+    var background by remember { mutableStateOf(appearance.background) }
+    var cardStyle by remember { mutableStateOf(appearance.cardStyle) }
+    var density by remember { mutableStateOf(appearance.density) }
+    var animation by remember { mutableStateOf(appearance.animation) }
+    var effects by remember { mutableStateOf(appearance.effects) }
+    var uiSounds by remember { mutableStateOf(appearance.uiSounds) }
 
     Column(
         modifier = Modifier
@@ -131,6 +147,44 @@ fun SettingsScreen(session: SessionStore) {
         }
 
         Spacer(modifier = Modifier.height(24.dp))
+        Text("Look", style = MaterialTheme.typography.titleMedium, color = Color.White)
+        SettingChips("Appearance", listOf("system", "light", "dark"), mode) {
+            mode = it
+            appearance.mode = it
+        }
+        SettingChips("Accent", listOf("violet", "green", "blue", "orange"), accent) {
+            accent = it
+            appearance.accent = it
+        }
+        SettingChips("Background", listOf("aurora", "solid", "dim"), background) {
+            background = it
+            appearance.background = it
+        }
+        SettingChips("Game cards", listOf("poster", "wide", "compact"), cardStyle) {
+            cardStyle = it
+            appearance.cardStyle = it
+        }
+        SettingChips("Library density", listOf("comfortable", "compact"), density) {
+            density = it
+            appearance.density = it
+        }
+        SettingChips("Motion", listOf("full", "reduced", "off"), animation) {
+            animation = it
+            appearance.animation = it
+        }
+        SettingChips("Effects", listOf("quality", "balanced", "performance"), effects) {
+            effects = it
+            appearance.effects = it
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("UI sounds", color = Color.White, modifier = Modifier.weight(1f), maxLines = 1)
+            Switch(checked = uiSounds, onCheckedChange = {
+                uiSounds = it
+                appearance.uiSounds = it
+            })
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
         Text("Actions", style = MaterialTheme.typography.titleMedium, color = Color.White)
         Spacer(modifier = Modifier.height(8.dp))
         Button(
@@ -153,7 +207,7 @@ fun SettingsScreen(session: SessionStore) {
         Spacer(modifier = Modifier.height(24.dp))
         Text("About", style = MaterialTheme.typography.titleMedium, color = Color.White)
         Text(
-            "GameStream Android 1.3.2 — native WebView client for Xbox Cloud Gaming with Better xCloud.",
+            "GameStream Android 1.3.3 — native WebView client for Xbox Cloud Gaming with Better xCloud.",
             style = MaterialTheme.typography.bodySmall,
             color = Color(0xFF808088)
         )
@@ -163,5 +217,26 @@ fun SettingsScreen(session: SessionStore) {
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
             color = Color.White
         )
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun SettingChips(label: String, options: List<String>, selected: String, onSelect: (String) -> Unit) {
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(label, style = MaterialTheme.typography.labelLarge, color = Color(0xFFB0B0B8))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        options.forEach { opt ->
+            FilterChip(
+                selected = selected == opt,
+                onClick = { onSelect(opt) },
+                label = { Text(opt.replaceFirstChar { it.uppercase() }) }
+            )
+        }
     }
 }
