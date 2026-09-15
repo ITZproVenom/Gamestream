@@ -174,6 +174,7 @@ struct SettingsView: View {
 
                     section("Actions") {
                         Button {
+                            HapticManager.tap()
                             session.returnToHub()
                         } label: {
                             Text("Open GameHub")
@@ -184,6 +185,20 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.glassProminent)
                         Button {
+                            HapticManager.tap()
+                            session.clearCache()
+                            SoundManager.playSuccess()
+                        } label: {
+                            Text("Clear cache")
+                                .font(.subheadline.weight(.medium))
+                                .lineLimit(1)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.glass)
+                        .accessibilityHint("Clears stream, catalog, and script caches without signing out")
+                        Button {
+                            HapticManager.tap()
                             session.refreshBetterXCloudScript()
                         } label: {
                             Text("Refresh Better xCloud script")
