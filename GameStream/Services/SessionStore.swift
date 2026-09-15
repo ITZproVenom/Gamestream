@@ -106,51 +106,15 @@ final class SessionStore: ObservableObject {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         updateSearchDraft(trimmed)
-        let escaped = trimmed.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'").replacingOccurrences(of: "\n", with: " ")
-        webURL = URL(string: "https://www.xbox.com/play")!
-        isStreaming = false
-        offerPlayNext = false
-        pendingJavaScript = """
-        (function() {
-            var q = '\(escaped)';
-            function findInput() {
-                return document.querySelector('input[type=\"search\"], input[placeholder*=\"Search\" i], input[aria-label*=\"Search\" i], input[name=\"q\"]');
-            }
-            var input = findInput();
-            if (!input) {
-                var btn = document.querySelector('button[aria-label*=\"Search\" i], [role=\"search\"] button, a[href*=\"search\"]');
-                if (btn) { try { btn.click(); } catch (e) {} }
-            }
-            setTimeout(function() {
-                input = findInput();
-                if (input) {
-                    input.focus();
-                    try {
-                        var proto = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-                        if (proto && proto.set) proto.set.call(input, q); else input.value = q;
-                    } catch (e) { input.value = q; }
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                    input.dispatchEvent(new Event('change', { bubbles: true }));
-                    var form = input.closest('form');
-                    if (form) {
-                        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-                    } else {
-                        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-                    }
-                } else {
-                    location.href = 'https://www.xbox.com/play?search=' + encodeURIComponent(q);
-                }
-            }, 280);
-        })();
-        """
-        requestedTab = .library
+        requestedTab = .search
     }
 
     func openHome() {
         PlayActivityStore.shared.end()
-        webURL = URL(string: "https://www.xbox.com/play")!
+        webURL = Self.idleWebURL
         isStreaming = false
         offerPlayNext = nextQueuedGame != nil
+        HubState.shared.showNativeHub = true
         requestedTab = .library
     }
 
@@ -164,16 +128,7 @@ final class SessionStore: ObservableObject {
     }
 
     func goBack() {
-        isStreaming = false
-        pendingJavaScript = """
-        (function() {
-            try {
-                if (history.length > 1) { history.back(); return; }
-            } catch (e) {}
-            location.href = 'https://www.xbox.com/play';
-        })();
-        """
-        requestedTab = .library
+        returnToHub()
     }
 
     func reloadCurrent() { reloadNonce += 1 }
@@ -255,7 +210,7 @@ final class SessionStore: ObservableObject {
         return (try? JSONDecoder().decode([TrackedGame].self, from: data)) ?? []
     }
     private static func saveGames(_ games: [TrackedGame], key: String) {
-        if let data = try? JSONEncoder().encode(games) { UserDefaults.standard.set(data, forKey: key) }
+        if let data = try? JSONEncoder().encode(games) { UserDefaults.standard.set(data, forKey: keys: Keys.favorites) }
     }
 
     static func isStreamingURL(_ raw: String) -> Bool {
@@ -275,26 +230,42 @@ final class SessionStore: ObservableObject {
     }
     static func clearRecentSearches() { UserDefaults.standard.removeObject(forKey: Keys.recentSearches) }
 
-    func applyBetterXCloudPref(_ prefKey: String, value: String) {
-        let escapedKey = prefKey.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
-        let escapedValue = value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
-        pendingJavaScript = """
+    private static let bxPrefsKey = "BetterXCloud.prefs.v1"
+
+    static func storedBetterXCloudPrefs() -> [String: String] {
+        (UserDefaults.standard.dictionary(forKey: bxPrefsKey) as? [String: String]) ?? [:]
+    }
+
+    static func betterXCloudPrefsJS(_ map: [String: String], reloadIfXbox: Bool) -> String {
+        var pairs: [String] = []
+        for (key, value) in map {
+            let ek = key.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
+            let ev = value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
+            pairs.append("data['\(ek)']='\(ev)'; try { localStorage.setItem('BetterXcloud.\(ek)', '\(ev)'); } catch (e) {}")
+        }
+        let body = pairs.joined(separator: "\n")
+        let reload = reloadIfXbox ? "if (/xbox\\.com/i.test(location.host)) { setTimeout(function(){ location.reload(); }, 80); }" : ""
+        return """
         (function() {
             try {
+                if (!location.host || location.host.indexOf('xbox.com') === -1) return;
                 var storageKey = 'BetterXcloud';
                 var data = {};
                 try { data = JSON.parse(localStorage.getItem(storageKey) || '{}') || {}; } catch (e) { data = {}; }
-                data['\(escapedKey)'] = '\(escapedValue)';
+                \(body)
                 localStorage.setItem(storageKey, JSON.stringify(data));
-                try { localStorage.setItem('BetterXcloud.\(escapedKey)', '\(escapedValue)'); } catch (e) {}
-                setTimeout(function() { location.reload(); }, 120);
+                \(reload)
             } catch (e) {}
         })();
         """
-        requestedTab = .library
-        isStreaming = false
-        if !webURL.absoluteString.contains("xbox.com/play") {
-            webURL = URL(string: "https://www.xbox.com/play")!
+    }
+
+    func applyBetterXCloudPref(_ prefKey: String, value: String) {
+        var map = Self.storedBetterXCloudPrefs()
+        map[prefKey] = value
+        UserDefaults.standard.set(map, forKey: Self.bxPrefsKey)
+        if isStreaming, webURL.host?.contains("xbox.com") == true {
+            pendingJavaScript = Self.betterXCloudPrefsJS(map, reloadIfXbox: true)
         }
     }
 
@@ -327,8 +298,9 @@ final class SessionStore: ObservableObject {
         UserDefaults.standard.removeObject(forKey: "BetterXCloud.Script.v2")
         UserDefaults.standard.removeObject(forKey: "BetterXCloud.Script.Date.v2")
         betterXCloudRefreshToken += 1
-        pendingJavaScript = "try { location.reload(); } catch (e) {}"
-        requestedTab = .library
+        if isStreaming, webURL.host?.contains("xbox.com") == true {
+            pendingJavaScript = "try { location.reload(); } catch (e) {}"
+        }
     }
 
     func clearWebData() {
@@ -337,11 +309,12 @@ final class SessionStore: ObservableObject {
         store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) { [weak self] in
             Task { @MainActor in
                 self?.clearLocalAuthFlag()
-                self?.webURL = URL(string: "https://www.xbox.com/play")!
+                self?.webURL = Self.idleWebURL
                 self?.isStreaming = false
                 self?.offerPlayNext = false
                 self?.currentGame = nil
                 self?.reloadNonce += 1
+                HubState.shared.showNativeHub = true
                 self?.requestedTab = .library
             }
         }
