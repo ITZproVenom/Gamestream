@@ -2,42 +2,26 @@ import SwiftUI
 
 // MARK: - Liquid Glass (iOS 26) — full native implementation
 //
-// Uses system Liquid Glass only: glassEffect, GlassEffectContainer,
-// .glass / .glassProminent button styles. No material fallbacks.
-
-enum LiquidGlass {
-    /// Standard floating glass for cards and panels.
-    static var regular: Glass { .regular }
-
-    /// Interactive glass that reacts to touch (tabs, chips, controls).
-    static var interactive: Glass { .regular.interactive() }
-}
+// System Liquid Glass only: glassEffect, GlassEffectContainer,
+// .glass / .glassProminent. No material fallbacks.
 
 extension View {
     /// Apply Liquid Glass in a shape (cards, docks, panels).
     func liquidGlass(
-        _ glass: Glass = .regular,
         in shape: some Shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
     ) -> some View {
-        self.glassEffect(glass, in: shape)
+        self.glassEffect(.regular, in: shape)
     }
 
-    /// Interactive Liquid Glass (buttons, selected tab pill, chips).
+    /// Interactive Liquid Glass (chips, selected tab pill).
     func liquidGlassInteractive(
         in shape: some Shape = Capsule()
     ) -> some View {
         self.glassEffect(.regular.interactive(), in: shape)
     }
-
-    /// Clear / subtle glass for overlays that should stay airy.
-    func liquidGlassClear(
-        in shape: some Shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
-    ) -> some View {
-        self.glassEffect(.clear, in: shape)
-    }
 }
 
-/// Groups morphing glass elements so the system can blend them (tab bars, toolbars).
+/// Groups morphing glass elements (tab bars, toolbars).
 struct LiquidGlassContainer<Content: View>: View {
     var spacing: CGFloat = 0
     @ViewBuilder var content: () -> Content
@@ -79,7 +63,20 @@ struct LiquidGlassActionButton: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
         }
-        .buttonStyle(prominent ? .glassProminent : .glass)
+        .modifier(LiquidGlassButtonModifier(prominent: prominent))
+    }
+}
+
+private struct LiquidGlassButtonModifier: ViewModifier {
+    let prominent: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if prominent {
+            content.buttonStyle(.glassProminent)
+        } else {
+            content.buttonStyle(.glass)
+        }
     }
 }
 

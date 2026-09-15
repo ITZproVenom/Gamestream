@@ -28,8 +28,8 @@ targets:
       properties:
         CFBundleDisplayName: GameStream
         CFBundleName: GameStream
-        CFBundleShortVersionString: "1.5.6"
-        CFBundleVersion: "44"
+        CFBundleShortVersionString: "1.5.7"
+        CFBundleVersion: "45"
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
