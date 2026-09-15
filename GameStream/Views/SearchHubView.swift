@@ -13,39 +13,32 @@ struct SearchHubView: View {
     var body: some View {
         ZStack {
             AnimatedBackground().ignoresSafeArea()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Search")
-                            .font(.system(size: 34, weight: .bold, design: .rounded))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                        Text("Find your next game")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    .padding(.top, 8)
-
-                    searchField
-
-                    if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        if !pinned.isEmpty { queryList(title: "Pinned searches", items: pinned, pinnedStyle: true) }
-                        genreChips
-                        popularSection
-                        if !recent.isEmpty { queryList(title: "Recent searches", items: recent, pinnedStyle: false) }
-                        if !session.favorites.isEmpty {
-                            libraryShelf(title: "Favorites", games: session.favorites, star: true)
-                        }
-                    } else {
-                        resultsSection
-                    }
+            HubPage {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Search")
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Text("Find your next game")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 130)
+
+                searchField
+
+                if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    if !pinned.isEmpty { queryList(title: "Pinned searches", items: pinned, pinnedStyle: true) }
+                    genreChips
+                    popularSection
+                    if !recent.isEmpty { queryList(title: "Recent searches", items: recent, pinnedStyle: false) }
+                    if !session.favorites.isEmpty {
+                        libraryShelf(title: "Favorites", games: session.favorites, star: true)
+                    }
+                } else {
+                    resultsSection
+                }
             }
-            .scrollIndicators(.hidden)
-            .scrollDismissesKeyboard(.interactively)
         }
         .onAppear { reload() }
         .sheet(item: $detailGame) { game in
@@ -85,19 +78,17 @@ struct SearchHubView: View {
     private var genreChips: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Browse genres").font(.title3.weight(.semibold)).lineLimit(1)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(GameCatalog.genreNames, id: \.self) { name in
-                        Button { session.updateSearchDraft(name) } label: {
-                            Text(name)
-                                .font(.subheadline.weight(.medium))
-                                .lineLimit(1)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 10)
-                        }
-                        .buttonStyle(.glass)
-                        .accessibilityLabel("Search \(name)")
+            HubCarousel(spacing: 8) {
+                ForEach(GameCatalog.genreNames, id: \.self) { name in
+                    Button { session.updateSearchDraft(name) } label: {
+                        Text(name)
+                            .font(.subheadline.weight(.medium))
+                            .lineLimit(1)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
                     }
+                    .buttonStyle(.glass)
+                    .accessibilityLabel("Search \(name)")
                 }
             }
         }
@@ -106,21 +97,19 @@ struct SearchHubView: View {
     private var popularSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Popular on Cloud").font(.title3.weight(.semibold)).lineLimit(1)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(popularTitles, id: \.self) { title in
-                        Button {
-                            session.updateSearchDraft(title)
-                            performSearch()
-                        } label: {
-                            Text(title)
-                                .font(.subheadline.weight(.medium))
-                                .lineLimit(1)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 10)
-                        }
-                        .buttonStyle(.glass)
+            HubCarousel(spacing: 8) {
+                ForEach(popularTitles, id: \.self) { title in
+                    Button {
+                        session.updateSearchDraft(title)
+                        performSearch()
+                    } label: {
+                        Text(title)
+                            .font(.subheadline.weight(.medium))
+                            .lineLimit(1)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
                     }
+                    .buttonStyle(.glass)
                 }
             }
         }
