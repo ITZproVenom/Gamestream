@@ -2,18 +2,43 @@ import SwiftUI
 
 struct AnimatedBackground: View {
     @ObservedObject private var appearance = AppearanceStore.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// When true, never tick TimelineView (used under streaming).
+    var forceStatic: Bool = false
+
+    private var shouldAnimate: Bool {
+        !forceStatic
+            && !reduceMotion
+            && appearance.backgroundStyle == .aurora
+            && appearance.animationIntensity == .full
+            && appearance.effectsMode != .performance
+    }
 
     var body: some View {
-        TimelineView(.animation) { timeline in
-            let animate = appearance.backgroundStyle == .aurora && appearance.animationIntensity == .full && appearance.effectsMode != .performance
-            let t = animate ? timeline.date.timeIntervalSinceReferenceDate : 0
-            let accent = appearance.accent
-            let light = appearance.mode == .light
-            let glowScale: Double = appearance.effectsMode == .performance ? 0.35 : appearance.glassIntensity
+        Group {
+            if shouldAnimate {
+                // Cap at ~20fps — full display-link redraw was starving stream decode.
+                TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: false)) { timeline in
+                    layers(t: timeline.date.timeIntervalSinceReferenceDate)
+                }
+            } else {
+                layers(t: 0)
+            }
+        }
+        .ignoresSafeArea()
+    }
 
-            ZStack {
-                (light ? Color(red: 0.93, green: 0.94, blue: 0.98) : Color.black)
+    @ViewBuilder
+    private func layers(t: TimeInterval) -> some View {
+        let accent = appearance.accent
+        let light = appearance.mode == .light
+        let glowScale: Double = appearance.effectsMode == .performance ? 0.35 : appearance.glassIntensity
+        let solidOnly = appearance.backgroundStyle == .solid
 
+        ZStack {
+            (light ? Color(red: 0.93, green: 0.94, blue: 0.98) : Color.black)
+
+            if !solidOnly {
                 RadialGradient(
                     colors: [
                         accent.primaryGlow.opacity((light ? 0.28 : 0.55) * glowScale),
@@ -42,33 +67,32 @@ struct AnimatedBackground: View {
                     endRadius: 480
                 )
 
-                RadialGradient(
-                    colors: [
-                        accent.tint.opacity(light ? 0.16 : 0.22),
-                        .clear
-                    ],
-                    center: UnitPoint(
-                        x: 0.3 + 0.2 * sin(t * 0.08),
-                        y: 0.75 + 0.15 * cos(t * 0.14)
-                    ),
-                    startRadius: 5,
-                    endRadius: 280
-                )
-
-                LinearGradient(
-                    colors: [
-                        (light ? Color.white : Color.black).opacity(light ? 0.18 : 0.35),
-                        .clear,
-                        .clear,
-                        (light ? Color.white : Color.black).opacity(light ? 0.22 : 0.45)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+                if appearance.effectsMode != .performance {
+                    RadialGradient(
+                        colors: [
+                            accent.tint.opacity(light ? 0.16 : 0.22),
+                            .clear
+                        ],
+                        center: UnitPoint(
+                            x: 0.3 + 0.2 * sin(t * 0.08),
+                            y: 0.75 + 0.15 * cos(t * 0.14)
+                        ),
+                        startRadius: 5,
+                        endRadius: 280
+                    )
+                }
             }
-            .ignoresSafeArea()
-            .animation(.easeInOut(duration: 0.35), value: appearance.accent)
-            .animation(.easeInOut(duration: 0.35), value: appearance.mode)
+
+            LinearGradient(
+                colors: [
+                    (light ? Color.white : Color.black).opacity(light ? 0.18 : 0.35),
+                    .clear,
+                    .clear,
+                    (light ? Color.white : Color.black).opacity(light ? 0.22 : 0.45)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
         }
     }
 }
