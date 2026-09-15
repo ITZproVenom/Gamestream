@@ -63,17 +63,19 @@ struct RootView: View {
                 SettingsView()
                     .zIndex(2)
             }
-
-            if !hideTabBar {
-                glassNavigation
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 10)
-                    .zIndex(10)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AnimatedBackground())
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !hideTabBar {
+                glassNavigation
+                    .padding(.horizontal, 24)
+                    .padding(.top, 6)
+                    .padding(.bottom, 8)
+                    .frame(maxWidth: .infinity)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: hideTabBar)
         .animation(.spring(response: 0.35, dampingFraction: 0.86), value: showingHub)
         .onChange(of: selectedTab) { _, newValue in
