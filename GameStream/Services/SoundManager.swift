@@ -58,13 +58,26 @@ enum SoundManager {
 
     private static func cachedPlayer(_ name: String) -> AVAudioPlayer? {
         if let existing = players[name] { return existing }
-        let url =
-            Bundle.main.url(forResource: name, withExtension: "wav", subdirectory: "Sounds")
-            ?? Bundle.main.url(forResource: name, withExtension: "wav")
-        guard let url,
+        guard let url = resolveSoundURL(name),
               let player = try? AVAudioPlayer(contentsOf: url) else { return nil }
         player.prepareToPlay()
         players[name] = player
         return player
+    }
+
+    private static func resolveSoundURL(_ name: String) -> URL? {
+        if let url = Bundle.main.url(forResource: name, withExtension: "wav", subdirectory: "Sounds")
+            ?? Bundle.main.url(forResource: name, withExtension: "wav") {
+            return url
+        }
+        guard let b64URL = Bundle.main.url(forResource: name, withExtension: "wav.b64", subdirectory: "Sounds")
+                ?? Bundle.main.url(forResource: name, withExtension: "wav.b64"),
+              let b64 = try? String(contentsOf: b64URL, encoding: .utf8),
+              let data = Data(base64Encoded: b64.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return nil
+        }
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("gs-\(name).wav")
+        try? data.write(to: tmp, options: .atomic)
+        return tmp
     }
 }
