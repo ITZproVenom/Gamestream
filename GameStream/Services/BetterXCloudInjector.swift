@@ -115,6 +115,85 @@ final class BetterXCloudInjector {
     })();
     """
 
+    /// Hide Xbox website chrome while streaming so Play feels like a player, not a browser.
+    static let streamIsolationJS = """
+    (function() {
+        if (window.__gsStreamIsolation) return;
+        window.__gsStreamIsolation = true;
+        const CSS_ID = 'gamestream-stream-isolation-v1';
+        const css = `
+        header, footer, nav,
+        [class*="Navigation"], [class*="navigation"],
+        [class*="NavBar"], [class*="nav-bar"],
+        [class*="Footer"], [class*="footer"],
+        [class*="Header"], [class*="header"]:not([class*="stream"]):not([class*="Stream"]),
+        [data-testid*="nav"], [data-testid*="header"], [data-testid*="footer"],
+        [class*="Cookie"], [class*="cookie"],
+        [class*="banner"], [class*="Banner"]:not([class*="stream"]),
+        [class*="social"], [class*="Social"],
+        [class*="upsell"], [class*="Upsell"],
+        [class*="marketing"], [class*="Marketing"] {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            max-height: 0 !important;
+            overflow: hidden !important;
+            pointer-events: none !important;
+        }
+        html, body {
+            background: #000 !important;
+            overflow: hidden !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        video, #game-stream, [class*="stream-video"], [class*="StreamVideo"],
+        [class*="video-player"], [class*="VideoPlayer"] {
+            max-width: 100vw !important;
+            max-height: 100vh !important;
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: contain !important;
+            background: #000 !important;
+        }
+        `;
+        function applyCss() {
+            let style = document.getElementById(CSS_ID);
+            if (!style) {
+                style = document.createElement('style');
+                style.id = CSS_ID;
+                (document.head || document.documentElement).appendChild(style);
+            }
+            if (style.textContent !== css) style.textContent = css;
+        }
+        applyCss();
+
+        function tryAutoStart() {
+            try {
+                const href = (location.href || '').toLowerCase();
+                if (href.indexOf('/play/launch') === -1 && href.indexOf('/launch/') === -1) return;
+                const vids = document.querySelectorAll('video');
+                for (const v of vids) {
+                    if (v && !v.paused && v.readyState >= 2) return;
+                }
+                const labels = ['play', 'start', 'resume', 'continue'];
+                const nodes = Array.from(document.querySelectorAll('button, a, [role="button"]'));
+                for (const el of nodes) {
+                    const text = ((el.innerText || el.textContent || el.getAttribute('aria-label') || '') + '').trim().toLowerCase();
+                    if (!text || text.length > 40) continue;
+                    if (labels.some(l => text === l || text.startsWith(l + ' '))) {
+                        el.click();
+                        return;
+                    }
+                }
+            } catch (e) {}
+        }
+        setTimeout(tryAutoStart, 400);
+        setTimeout(tryAutoStart, 1200);
+        setTimeout(tryAutoStart, 2500);
+        setTimeout(tryAutoStart, 4500);
+    })();
+    """
+
     private init() {
         if let cached = UserDefaults.standard.string(forKey: cacheKey) {
             cachedScript = Self.stripUserScriptHeader(cached)
@@ -143,6 +222,7 @@ final class BetterXCloudInjector {
         if let script = cachedScript, !script.isEmpty {
             webView.evaluateJavaScript(script, completionHandler: nil)
             webView.evaluateJavaScript(Self.modernUIOverridesJS, completionHandler: nil)
+            webView.evaluateJavaScript(Self.streamIsolationJS, completionHandler: nil)
             return
         }
 
@@ -151,22 +231,26 @@ final class BetterXCloudInjector {
             DispatchQueue.main.async {
                 webView.evaluateJavaScript(source, completionHandler: nil)
                 webView.evaluateJavaScript(Self.modernUIOverridesJS, completionHandler: nil)
+                webView.evaluateJavaScript(Self.streamIsolationJS, completionHandler: nil)
             }
         }
     }
 
-    private static func stripUserScriptHeader(_ source: String) -> String {
-        if let end = source.range(of: "// ==/UserScript==") {
-            return String(source[end.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        return source
-    }
-
     private func refreshIfNeeded() {
-        let lastDate = UserDefaults.standard.object(forKey: cacheDateKey) as? Date ?? .distantPast
-        if Date().timeIntervalSince(lastDate) > 7 * 24 * 3600 {
+        let last = UserDefaults.standard.object(forKey: cacheDateKey) as? Date ?? .distantPast
+        if Date().timeIntervalSince(last) > 86400 {
             fetchScript { _ in }
         }
+    }
+
+    private static func stripUserScriptHeader(_ source: String) -> String {
+        var lines = source.components(separatedBy: "\n")
+        if lines.first?.contains("==UserScript==") == true {
+            if let end = lines.firstIndex(where: { $0.contains("==/UserScript==") }) {
+                lines = Array(lines.suffix(from: end + 1))
+            }
+        }
+        return lines.joined(separator: "\n")
     }
 
     private func fetchScript(completion: @escaping (String?) -> Void) {
@@ -181,7 +265,6 @@ final class BetterXCloudInjector {
 
         var request = URLRequest(url: scriptURL)
         request.cachePolicy = .reloadIgnoringLocalCacheData
-
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             defer {
                 self?.lock.lock()
