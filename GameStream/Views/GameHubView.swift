@@ -6,6 +6,7 @@ enum HubBrowseFilter: Hashable {
     case favorites
     case recents
     case lists
+    case activity
     case genre(String)
 
     var title: String {
@@ -15,6 +16,7 @@ enum HubBrowseFilter: Hashable {
         case .favorites: return "Favorites"
         case .recents: return "Recents"
         case .lists: return "Lists"
+        case .activity: return "Activity"
         case .genre(let name): return name
         }
     }
@@ -25,6 +27,7 @@ struct GameHubView: View {
     @ObservedObject private var artwork = ArtworkStore.shared
     @ObservedObject private var lists = CollectionStore.shared
     @ObservedObject private var queue = PlayQueueStore.shared
+    @ObservedObject private var activity = PlayActivityStore.shared
     @State private var featuredIndex = 0
     @State private var hubQuery = ""
     @State private var detailGame: CatalogGame?
@@ -50,6 +53,7 @@ struct GameHubView: View {
             return lists.collections.flatMap { list in
                 lists.games(inCollection: list.id, favorites: session.favorites, recents: session.recents)
             }
+        case .activity: return activity.gamesForHub()
         case .genre(let name): return GameCatalog.games.filter { $0.genre == name }
         }
     }
@@ -63,6 +67,11 @@ struct GameHubView: View {
                     liveResults
                 } else {
                     playNextBanner
+                    if filter == .all {
+                        GameHubActivityBanner(detailGame: $detailGame) {
+                            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { filter = .activity }
+                        }
+                    }
                     if filter == .all, let continueGame = session.continueGame {
                         continueHero(GameCatalog.catalog(from: continueGame))
                     }
@@ -76,6 +85,8 @@ struct GameHubView: View {
                         xboxCloudRow
                     } else if filter == .lists {
                         GameHubListsSection(showingLists: $showingLists, detailGame: $detailGame)
+                    } else if filter == .activity {
+                        GameHubActivitySection(detailGame: $detailGame)
                     } else {
                         filteredGrid
                     }
@@ -224,6 +235,7 @@ struct GameHubView: View {
                 chip(.forYou)
                 chip(.favorites)
                 chip(.recents)
+                chip(.activity)
                 chip(.lists)
                 ForEach(genreChips, id: \.self) { item in chip(item) }
             }
@@ -345,6 +357,7 @@ struct GameHubView: View {
         case .favorites: return "No favorites yet"
         case .recents: return "Nothing played yet"
         case .forYou: return "Play a few games first"
+        case .activity: return "No activity this week"
         default: return "No titles here"
         }
     }
@@ -354,6 +367,7 @@ struct GameHubView: View {
         case .favorites: return "Star a game from the hub, search, or stream chrome to pin it here."
         case .recents: return "Launch a title and it will appear in Recents so you can resume quickly."
         case .forYou: return "Favorites and recently played titles teach For You which genres to surface."
+        case .activity: return "Stream a game for at least 20 seconds and it will appear in Activity."
         default: return "Try another filter or search Xbox Cloud for more games."
         }
     }
