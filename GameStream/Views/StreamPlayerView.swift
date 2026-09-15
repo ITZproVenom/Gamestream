@@ -12,12 +12,9 @@ struct StreamPlayerView: View {
                 .ignoresSafeArea()
 
             if isLoading {
-                ZStack {
-                    Color.black.opacity(0.45).ignoresSafeArea()
-                    ProgressView()
-                        .controlSize(.large)
-                        .tint(.white)
-                }
+                PlayLoadingView(title: session.currentGame?.title ?? "")
+                    .transition(.opacity)
+                    .zIndex(2)
             }
 
             HStack(spacing: 8) {
@@ -48,7 +45,12 @@ struct StreamPlayerView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .webViewLoadingChanged)) { note in
             if let loading = note.object as? Bool {
-                isLoading = loading
+                if isLoading && !loading {
+                    SoundManager.playReady()
+                }
+                withAnimation(.easeOut(duration: 0.35)) {
+                    isLoading = loading
+                }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .webViewDidFail)) { note in
