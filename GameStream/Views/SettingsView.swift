@@ -18,7 +18,6 @@ struct SettingsView: View {
 
     var body: some View {
         ZStack {
-            AnimatedBackground().ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Settings")
@@ -214,10 +213,10 @@ struct SettingsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
-                        Text("Made with 🤍 by Bestin")
+                        Text("Made with \u2764\ufe0f by Bestin")
                             .font(.subheadline.weight(.semibold))
                             .padding(.top, 6)
-                            .accessibilityLabel("Made with 🤍 by Bestin")
+                            .accessibilityLabel("Made with heart by Bestin")
                     }
                 }
                 .padding(.horizontal, 20)
