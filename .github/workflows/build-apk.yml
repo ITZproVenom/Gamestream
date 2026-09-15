@@ -89,13 +89,17 @@ jobs:
           import sys, zipfile
           path = sys.argv[1]
           z = zipfile.ZipFile(path)
-          names = [n for n in z.namelist() if "ic_launcher" in n]
-          print("launcher entries:")
-          for n in names:
-              info = z.getinfo(n)
-              print(f"  {n} {info.file_size} bytes")
-          if not names:
-              sys.exit("APK missing ic_launcher resources")
+          names = z.namelist()
+          print("entries:", len(names))
+          for required in ("AndroidManifest.xml", "resources.arsc", "classes.dex"):
+              if required not in names:
+                  sys.exit(f"APK missing {required}")
+          pngs = [n for n in names if n.endswith(".png") or n.endswith(".webp")]
+          print("image entries:", len(pngs))
+          for n in pngs[:20]:
+              print(f"  {n} {z.getinfo(n).file_size} bytes")
+          if not pngs:
+              sys.exit("APK missing packaged image resources")
           PY
 
       - name: Upload APK artifact
