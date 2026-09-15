@@ -6,7 +6,7 @@ struct ContinuePlayingCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Continue playing")
+            Text("Jump back in")
                 .font(.title3.weight(.semibold))
                 .lineLimit(1)
 
@@ -17,18 +17,23 @@ struct ContinuePlayingCard: View {
                     .minimumScaleFactor(0.85)
                     .fixedSize(horizontal: false, vertical: true)
 
+                Text(GameCatalog.relativePlayLabel(for: game.lastSeen))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
                 HStack(spacing: 8) {
                     Button {
-                        session.playGame(game)
+                        _ = session.resumeLastStream()
                     } label: {
-                        Text("Play now")
+                        Text("Resume")
                             .font(.subheadline.weight(.semibold))
                             .lineLimit(1)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
                     }
                     .buttonStyle(.glassProminent)
-                    .accessibilityLabel("Play \(game.title)")
+                    .accessibilityLabel("Resume \(game.title)")
 
                     Button {
                         session.openGame(game)
@@ -43,6 +48,18 @@ struct ContinuePlayingCard: View {
                     .fixedSize(horizontal: true, vertical: false)
                     .accessibilityLabel("Open details for \(game.title)")
                 }
+
+                Toggle(isOn: Binding(
+                    get: { session.resumeLastOnOpen },
+                    set: { session.resumeLastOnOpen = $0 }
+                )) {
+                    Text("Resume next launch")
+                        .font(.caption.weight(.medium))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+                .tint(.green)
+                .accessibilityLabel("Resume last game the next time GameStream opens")
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
