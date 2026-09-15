@@ -213,7 +213,7 @@ struct SettingsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
-                        Text("Made with \u{2764}\u{FE0F} by Bestin")
+                        Text("Made with \u{2665} by Bestin")
                             .font(.subheadline.weight(.semibold))
                             .padding(.top, 6)
                             .accessibilityLabel("Made with heart by Bestin")
