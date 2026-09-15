@@ -12,6 +12,10 @@ struct SettingsView: View {
     private let resolutions = ["Auto", "720p", "1080p", "1080p HQ"]
     private let regions = ["Auto", "North America", "Europe", "Asia", "Australia"]
 
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.3.7"
+    }
+
     var body: some View {
         ZStack {
             AnimatedBackground().ignoresSafeArea()
@@ -206,7 +210,7 @@ struct SettingsView: View {
                     }
 
                     section("About") {
-                        Text("GameStream iOS 1.3.2 — native GameHub and Xbox Cloud client with Better xCloud.")
+                        Text("GameStream iOS \(appVersion) — native GameHub and Xbox Cloud client with Better xCloud.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
