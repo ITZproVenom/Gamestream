@@ -297,8 +297,36 @@ final class SessionStore: ObservableObject {
         }
     }
 
+    /// Clears network, catalog, artwork, and Better xCloud script caches without signing out.
+    func clearCache() {
+        URLCache.shared.removeAllCachedResponses()
+        CloudCatalogService.clearDiskCache()
+        ArtworkStore.shared.clear()
+        BetterXCloudInjector.shared.invalidateCache()
+        UserDefaults.standard.removeObject(forKey: "BetterXCloud.Script.v2")
+        UserDefaults.standard.removeObject(forKey: "BetterXCloud.Script.Date.v2")
+        betterXCloudRefreshToken += 1
+        let store = WKWebsiteDataStore.default()
+        var types = WKWebsiteDataStore.allWebsiteDataTypes()
+        types.remove(WKWebsiteDataTypeCookies)
+        types.remove(WKWebsiteDataTypeLocalStorage)
+        types.remove(WKWebsiteDataTypeSessionStorage)
+        types.remove(WKWebsiteDataTypeIndexedDBDatabases)
+        types.remove(WKWebsiteDataTypeWebSQLDatabases)
+        store.removeData(ofTypes: types, modifiedSince: .distantPast) { [weak self] in
+            Task { @MainActor in
+                self?.reloadNonce += 1
+                BetterXCloudInjector.shared.preload()
+            }
+        }
+    }
+
     func clearWebData() {
         PlayActivityStore.shared.end()
+        URLCache.shared.removeAllCachedResponses()
+        CloudCatalogService.clearDiskCache()
+        ArtworkStore.shared.clear()
+        BetterXCloudInjector.shared.invalidateCache()
         let store = WKWebsiteDataStore.default()
         store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) { [weak self] in
             Task { @MainActor in
