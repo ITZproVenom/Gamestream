@@ -23,7 +23,7 @@ struct FeaturedGameCard: View {
                 Text(game.title).font(.title2.weight(.bold)).foregroundStyle(.white).lineLimit(2).minimumScaleFactor(0.8)
                 Text(game.tagline).font(.caption).foregroundStyle(.white.opacity(0.85)).lineLimit(2)
                 HStack(spacing: 8) {
-                    Button(action: play) { Text("Play").font(.subheadline.weight(.semibold)).lineLimit(1).padding(.horizontal, 16).padding(.vertical, 8) }.buttonStyle(.glassProminent)
+                    Button(action: { SoundManager.playSuccess(); play() }) { Text("Play").font(.subheadline.weight(.semibold)).lineLimit(1).padding(.horizontal, 16).padding(.vertical, 8) }.buttonStyle(.glassProminent)
                     Button(action: favorite) { Image(systemName: isFavorite() ? "star.fill" : "star").font(.system(size: 13, weight: .semibold)).frame(width: 36, height: 34) }.buttonStyle(.glass)
                 }
             }
@@ -56,7 +56,7 @@ struct GamePosterCard: View {
             HStack(spacing: 6) {
                 Text(game.provider).font(.caption2).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
                 Spacer(minLength: 0)
-                Button(action: onPlay) { Text("Play").font(.caption2.weight(.semibold)).lineLimit(1).padding(.horizontal, 8).padding(.vertical, 5) }.buttonStyle(.glassProminent)
+                Button(action: { SoundManager.playTap(); onPlay() }) { Text("Play").font(.caption2.weight(.semibold)).lineLimit(1).padding(.horizontal, 8).padding(.vertical, 5) }.buttonStyle(.glassProminent)
             }
         }
     }
