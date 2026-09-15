@@ -47,6 +47,7 @@ struct GameStreamApp: App {
             }
             .onAppear {
                 session.revalidatePersistedLogin()
+                CloudCatalogService.refreshIfNeeded()
             }
             .onChange(of: session.isSignedIn) { _, signedIn in
                 if signedIn { showingMicrosoftLogin = false }
