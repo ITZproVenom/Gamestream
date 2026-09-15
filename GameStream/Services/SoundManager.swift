@@ -1,29 +1,19 @@
 import AudioToolbox
 import AVFoundation
-import UIKit
 
+/// UI SFX. Never touch AVAudioSession / AVAudioPlayer / files during app startup.
+/// First audio work happens only on an explicit play* call after launch.
 enum SoundManager {
     private static var players: [String: AVAudioPlayer] = [:]
     private static var decoded: [String: Data] = [:]
-
-    private static var sessionConfigured = false
-    private static func ensureSession() {
-        guard !sessionConfigured else { return }
-        sessionConfigured = true
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
-        try? session.setActive(true, options: [])
-    }
+    private static var categoryConfigured = false
+    private static let lock = NSLock()
 
     private static var soundsEnabled: Bool {
         if UserDefaults.standard.object(forKey: "GameStream.uiSoundsEnabled") == nil {
             return true
         }
         return UserDefaults.standard.bool(forKey: "GameStream.uiSoundsEnabled")
-    }
-
-    private static var isMuted: Bool {
-        AVAudioSession.sharedInstance().secondaryAudioShouldBeSilencedHint
     }
 
     static func playTap() { playBundled("tap", systemFallback: 1104) }
@@ -39,51 +29,87 @@ enum SoundManager {
     }
 
     private static func playBundled(_ name: String, systemFallback: SystemSoundID) {
-        guard soundsEnabled, !isMuted else { return }
-        ensureSession()
-        if let player = cachedPlayer(name) {
-            player.currentTime = 0
-            player.play()
-            return
-        }
+        guard soundsEnabled else { return }
+        // Never query AVAudioSession.sharedInstance() just to decide mute — that
+        // initializes the session. System sounds and ambient playback already
+        // respect the Silent switch / mix-with-others.
+        if playCustom(name) { return }
         AudioServicesPlaySystemSound(systemFallback)
     }
 
-    private static func cachedPlayer(_ name: String) -> AVAudioPlayer? {
-        if let existing = players[name] { return existing }
-        guard let data = soundData(name) else { return nil }
-        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("gs-\(name).wav")
-        try? data.write(to: tmp, options: .atomic)
-        guard let player = try? AVAudioPlayer(contentsOf: tmp) else { return nil }
+    @discardableResult
+    private static func playCustom(_ name: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if let existing = players[name] {
+            existing.currentTime = 0
+            return existing.play()
+        }
+        guard let data = soundData(name), !data.isEmpty else { return false }
+        configureCategoryIfNeeded()
+        guard let player = try? AVAudioPlayer(data: data) else { return false }
         player.prepareToPlay()
         players[name] = player
-        return player
+        return player.play()
+    }
+
+    /// Category only — never setActive. Activating the session at launch/play
+    /// is what crashed sideloaded builds after the v1.5.0 audio work.
+    private static func configureCategoryIfNeeded() {
+        guard !categoryConfigured else { return }
+        categoryConfigured = true
+        do {
+            try AVAudioSession.sharedInstance().setCategory(
+                .ambient,
+                mode: .default,
+                options: [.mixWithOthers]
+            )
+        } catch {
+            // Non-fatal: custom playback may still work; otherwise system sound.
+        }
     }
 
     private static func soundData(_ name: String) -> Data? {
-        if let cached = decoded[name] { return cached }
+        if let cached = decoded[name], !cached.isEmpty { return cached }
         if let url = Bundle.main.url(forResource: name, withExtension: "wav", subdirectory: "Sounds")
             ?? Bundle.main.url(forResource: name, withExtension: "wav"),
-           let data = try? Data(contentsOf: url) {
+           let data = try? Data(contentsOf: url),
+           data.count > 44 {
+            decoded[name] = data
+            return data
+        }
+        if let data = decodeB64File(name) {
             decoded[name] = data
             return data
         }
         loadEmbeddedIfNeeded()
-        if let data = decoded[name] { return data }
+        if let data = decoded[name], data.count > 44 { return data }
         return nil
     }
 
+    private static func decodeB64File(_ name: String) -> Data? {
+        let url = Bundle.main.url(forResource: name, withExtension: "wav.b64", subdirectory: "Sounds")
+            ?? Bundle.main.url(forResource: name, withExtension: "wav.b64")
+        guard let url,
+              let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let raw = Data(base64Encoded: trimmed), raw.count > 44 else { return nil }
+        return raw
+    }
+
     private static func loadEmbeddedIfNeeded() {
-        guard decoded.isEmpty else { return }
         let url = Bundle.main.url(forResource: "embedded", withExtension: "json", subdirectory: "Sounds")
             ?? Bundle.main.url(forResource: "embedded", withExtension: "json")
         guard let url,
               let data = try? Data(contentsOf: url),
               let map = try? JSONSerialization.jsonObject(with: data) as? [String: String] else { return }
         for (key, b64) in map {
-            if let raw = Data(base64Encoded: b64) {
-                decoded[key] = raw
-            }
+            if decoded[key] != nil { continue }
+            let trimmed = b64.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmed.count > 16,
+                  let raw = Data(base64Encoded: trimmed),
+                  raw.count > 44 else { continue }
+            decoded[key] = raw
         }
     }
 }
