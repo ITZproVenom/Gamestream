@@ -17,10 +17,19 @@ struct CatalogGame: Identifiable, Hashable {
     }
 }
 
-enum GameCatalog {
-    static let genreNames = ["Racing", "Shooter", "Action", "Adventure", "Sandbox", "RPG", "Survival", "Platformer"]
+extension Notification.Name {
+    static let catalogDidChange = Notification.Name("GameStreamCatalogDidChange")
+}
 
-    static let games: [CatalogGame] = [
+@MainActor
+final class CatalogLiveStore: ObservableObject {
+    static let shared = CatalogLiveStore()
+    @Published private(set) var revision: Int = 0
+    func bump() { revision += 1 }
+}
+
+enum GameCatalog {
+    private static let seed: [CatalogGame] = [
         item("9NNX1VVR3KNQ", "forza-horizon-5", "Forza Horizon 5",
              "Open-world racing across Mexico", "Racing", true, 0xE85D04,
              "https://store-images.s-microsoft.com/image/apps.56329.13734397844529069.202e3fc9-37d6-4853-a58b-fabe504b71e8.b2447b97-7903-48de-8a49-9669d0495c4f"),
@@ -68,10 +77,8 @@ enum GameCatalog {
              "https://store-images.s-microsoft.com/image/apps.36678.13527301958862136.ffa8c20b-226b-443c-8d6c-cce51dca9945.7170663c-a4e2-46db-a81b-aa22c30d6d44")
     ]
 
-    static var featured: [CatalogGame] { games.filter(\.featured) }
-
     static func game(id: String) -> CatalogGame? {
-        games.first(where: { $0.id == id })
+        games.first(where: { $0.id.caseInsensitiveCompare(id) == .orderedSame })
     }
 
     static func catalog(from tracked: TrackedGame) -> CatalogGame {
@@ -133,6 +140,39 @@ enum GameCatalog {
             posterURL: URL(string: poster)
         )
     }
+
+    private static var live: [CatalogGame] = seed
+
+    static var games: [CatalogGame] { live }
+
+    static var genreNames: [String] {
+        let known = ["Racing", "Shooter", "Action", "Adventure", "Sandbox", "RPG", "Survival", "Platformer", "Sports", "Strategy", "Simulation", "Fighting", "Puzzle"]
+        let present = Set(live.map(\.genre))
+        return known.filter { present.contains($0) } + present.subtracting(known).sorted()
+    }
+
+    static var featured: [CatalogGame] { games.filter(\.featured) }
+
+    @MainActor
+    static func installLiveCatalog(_ incoming: [CatalogGame]) {
+        var seen = Set<String>()
+        var unique: [CatalogGame] = []
+        unique.reserveCapacity(incoming.count)
+        for game in incoming {
+            let key = game.id.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard !key.isEmpty, seen.insert(key).inserted else { continue }
+            unique.append(game)
+        }
+        guard unique.count >= 20 else { return }
+        live = unique.enumerated().map { index, game in
+            var copy = game
+            copy.featured = index < 8 || seed.contains(where: { $0.id.caseInsensitiveCompare(game.id) == .orderedSame && $0.featured })
+            return copy
+        }
+        ArtworkStore.shared.ingest(live)
+        CatalogLiveStore.shared.bump()
+        NotificationCenter.default.post(name: .catalogDidChange, object: nil)
+    }
 }
 
 @MainActor
@@ -142,7 +182,11 @@ final class ArtworkStore: ObservableObject {
     private var inflight: Set<String> = []
 
     init() {
-        for game in GameCatalog.games {
+        ingest(GameCatalog.games)
+    }
+
+    func ingest(_ games: [CatalogGame]) {
+        for game in games {
             if let poster = game.posterURL {
                 urls[game.id] = poster
             }
