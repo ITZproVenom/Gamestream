@@ -1,5 +1,8 @@
 package com.gamestream.app
 
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.snapshots.SnapshotStateList
+
 data class CatalogGame(
     val id: String,
     val slug: String,
@@ -18,7 +21,7 @@ data class CatalogGame(
 }
 
 object GameCatalog {
-    val games: List<CatalogGame> = listOf(
+    private val seed: List<CatalogGame> = listOf(
         CatalogGame("9NNX1VVR3KNQ", "forza-horizon-5", "Forza Horizon 5", "Open-world racing across Mexico", "Racing", featured = true, accent = 0xFFE85D04,
             posterUrl = "https://store-images.s-microsoft.com/image/apps.56329.13734397844529069.202e3fc9-37d6-4853-a58b-fabe504b71e8.b2447b97-7903-48de-8a49-9669d0495c4f"),
         CatalogGame("9NP1P1WFS0LB", "halo-infinite", "Halo Infinite", "Master Chief returns to the ring", "Shooter", featured = true, accent = 0xFF2D6A4F,
@@ -50,6 +53,25 @@ object GameCatalog {
         CatalogGame("9NB0115C9WNM", "cuphead", "Cuphead", "Run-and-gun with jazz-age style", "Action", accent = 0xFFD00000,
             posterUrl = "https://store-images.s-microsoft.com/image/apps.36678.13527301958862136.ffa8c20b-226b-443c-8d6c-cce51dca9945.7170663c-a4e2-46db-a81b-aa22c30d6d44")
     )
+
+    private val live: SnapshotStateList<CatalogGame> = mutableStateListOf<CatalogGame>().also { it.addAll(seed) }
+
+    val games: List<CatalogGame> get() = live
+
+    fun installLiveCatalog(incoming: List<CatalogGame>) {
+        val unique = incoming
+            .map { it.copy(id = it.id.trim()) }
+            .filter { it.id.isNotEmpty() }
+            .distinctBy { it.id.uppercase() }
+        if (unique.size < 20) return
+        val featuredIds = seed.filter { it.featured }.map { it.id.uppercase() }.toSet()
+        live.clear()
+        live.addAll(
+            unique.mapIndexed { index, game ->
+                game.copy(featured = index < 8 || game.id.uppercase() in featuredIds)
+            }
+        )
+    }
 
     val featured: List<CatalogGame> get() = games.filter { it.featured }
     val genreNames: List<String> get() = games.map { it.genre }.distinct()
