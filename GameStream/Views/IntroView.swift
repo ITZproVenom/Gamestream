@@ -9,7 +9,7 @@ struct IntroView: View {
     @State private var artShift: CGFloat = 0
 
     private var posters: [URL] {
-        Array(GameCatalog.games.compactMap(\ .posterURL).prefix(12))
+        Array(GameCatalog.games.compactMap(\.posterURL).prefix(12))
     }
 
     var body: some View {
