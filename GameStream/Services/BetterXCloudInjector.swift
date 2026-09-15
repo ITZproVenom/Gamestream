@@ -204,13 +204,19 @@ final class BetterXCloudInjector {
 
     /// Offline floor: script shipped inside the IPA so first launch / offline still works.
     private static func loadBundledScript() -> String? {
-        let url =
-            Bundle.main.url(forResource: "better-xcloud.user", withExtension: "js")
-            ?? Bundle.main.url(forResource: "better-xcloud.user", withExtension: "js", subdirectory: nil)
-        guard let url, let raw = try? String(contentsOf: url, encoding: .utf8), raw.count > 1000 else {
-            return nil
+        let candidates: [URL?] = [
+            Bundle.main.url(forResource: "better-xcloud.user", withExtension: "js"),
+            Bundle.main.url(forResource: "better-xcloud.user", withExtension: "js", subdirectory: "Resources"),
+            Bundle.main.url(forResource: "better-xcloud.user", withExtension: "js", subdirectory: "Sounds"),
+            Bundle.main.resourceURL.map { $0.appendingPathComponent("better-xcloud.user.js") },
+            Bundle.main.resourceURL.map { $0.appendingPathComponent("Resources/better-xcloud.user.js") },
+        ]
+        for case let url? in candidates {
+            if let raw = try? String(contentsOf: url, encoding: .utf8), raw.count > 1000 {
+                return stripUserScriptHeader(raw)
+            }
         }
-        return stripUserScriptHeader(raw)
+        return nil
     }
 
     func preload() {
