@@ -66,7 +66,13 @@ struct RootView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(AnimatedBackground())
+        .background {
+            if session.isStreaming {
+                Color.black.ignoresSafeArea()
+            } else {
+                AnimatedBackground()
+            }
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !hideTabBar {
                 glassNavigation
@@ -77,14 +83,14 @@ struct RootView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: hideTabBar)
-        .animation(.spring(response: 0.35, dampingFraction: 0.86), value: showingHub)
+        .animation(.easeInOut(duration: 0.2), value: hideTabBar)
+        .animation(.easeInOut(duration: 0.2), value: showingHub)
         .onChange(of: selectedTab) { _, newValue in
             UserDefaults.standard.set(newValue.rawValue, forKey: Self.tabStorageKey)
         }
         .onChange(of: session.requestedTab) { _, newValue in
             if let tab = newValue {
-                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                withAnimation(.easeInOut(duration: 0.18)) {
                     selectedTab = tab
                 }
                 session.requestedTab = nil
@@ -95,7 +101,7 @@ struct RootView: View {
             if streaming {
                 hub.showNativeHub = false
                 if selectedTab != .library {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                    withAnimation(.easeInOut(duration: 0.18)) {
                         selectedTab = .library
                     }
                 }
@@ -145,7 +151,7 @@ struct RootView: View {
             if tab == .library {
                 session.returnToHub()
             }
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+            withAnimation(.easeInOut(duration: 0.18)) {
                 selectedTab = tab
             }
         } label: {
