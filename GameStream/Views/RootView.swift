@@ -88,7 +88,7 @@ struct RootView: View {
         }
         .onChange(of: session.requestedTab) { _, tab in
             if let tab {
-                withAnimation(.easeInOut(duration: 0.18)) {
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
                     selectedTab = tab
                 }
                 session.requestedTab = nil
@@ -130,14 +130,14 @@ struct RootView: View {
     }
 
     private var glassNavigation: some View {
-        GSGlassContainer(spacing: 4) {
+        GlassEffectContainer(spacing: 8) {
             HStack(spacing: 0) {
                 ForEach(Tab.allCases, id: \.self) { tab in
                     navItem(tab)
                 }
             }
             .padding(5)
-            .gsGlass(in: Capsule())
+            .glassEffect(.regular, in: Capsule())
         }
     }
 
@@ -148,13 +148,14 @@ struct RootView: View {
             if tab == .library {
                 session.returnToHub()
             }
-            withAnimation(.easeInOut(duration: 0.18)) {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
                 selectedTab = tab
             }
         } label: {
             VStack(spacing: 3) {
                 Image(systemName: tab.icon)
                     .font(.system(size: 18, weight: .semibold))
+                    .symbolRenderingMode(.hierarchical)
                 Text(tab.rawValue)
                     .font(.system(size: 10, weight: .medium))
                     .lineLimit(1)
@@ -167,11 +168,12 @@ struct RootView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(tab.rawValue)
+        .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
         .background {
             if selectedTab == tab {
                 Capsule()
-                    .gsGlassInteractive()
-                    .matchedGeometryEffect(id: "selectedTab", in: navNamespace)
+                    .glassEffect(.regular.interactive())
+                    .glassEffectID(tab.rawValue, in: navNamespace)
             }
         }
     }
