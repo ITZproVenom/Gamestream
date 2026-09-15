@@ -2,7 +2,7 @@ name: GameStream
 options:
   bundleIdPrefix: com.gamestream
   deploymentTarget:
-    iOS: "26.0"
+    iOS: "17.0"
   xcodeVersion: "26"
 
 # No SPM packages — native GameHub + Better xCloud service layer
@@ -28,8 +28,8 @@ targets:
       properties:
         CFBundleDisplayName: GameStream
         CFBundleName: GameStream
-        CFBundleShortVersionString: "1.5.4"
-        CFBundleVersion: "42"
+        CFBundleShortVersionString: "1.5.5"
+        CFBundleVersion: "43"
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
