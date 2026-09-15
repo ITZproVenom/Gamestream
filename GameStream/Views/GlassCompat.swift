@@ -1,60 +1,98 @@
 import SwiftUI
 
-// Safe stand-ins for iOS 26 Liquid Glass so launch never depends on fragile system glass.
+// MARK: - Liquid Glass (iOS 26) — full native implementation
+//
+// Uses system Liquid Glass only: glassEffect, GlassEffectContainer,
+// .glass / .glassProminent button styles. No material fallbacks.
 
-struct GSGlassButtonStyle: ButtonStyle {
-    var prominent: Bool = false
+enum LiquidGlass {
+    /// Standard floating glass for cards and panels.
+    static var regular: Glass { .regular }
 
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundStyle(prominent ? Color.white : Color.primary)
-            .background {
-                if prominent {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.accentColor.opacity(configuration.isPressed ? 0.75 : 1))
-                } else {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .opacity(configuration.isPressed ? 0.7 : 1)
-                }
-            }
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    /// Interactive glass that reacts to touch (tabs, chips, controls).
+    static var interactive: Glass { .regular.interactive() }
+}
+
+extension View {
+    /// Apply Liquid Glass in a shape (cards, docks, panels).
+    func liquidGlass(
+        _ glass: Glass = .regular,
+        in shape: some Shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+    ) -> some View {
+        self.glassEffect(glass, in: shape)
+    }
+
+    /// Interactive Liquid Glass (buttons, selected tab pill, chips).
+    func liquidGlassInteractive(
+        in shape: some Shape = Capsule()
+    ) -> some View {
+        self.glassEffect(.regular.interactive(), in: shape)
+    }
+
+    /// Clear / subtle glass for overlays that should stay airy.
+    func liquidGlassClear(
+        in shape: some Shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+    ) -> some View {
+        self.glassEffect(.clear, in: shape)
     }
 }
 
-struct GSGlassContainer<Content: View>: View {
+/// Groups morphing glass elements so the system can blend them (tab bars, toolbars).
+struct LiquidGlassContainer<Content: View>: View {
     var spacing: CGFloat = 0
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        HStack(spacing: spacing) {
+        GlassEffectContainer(spacing: spacing) {
             content()
         }
     }
 }
 
-extension View {
-    /// Material glass that works on iOS 17+ and never crashes at launch.
-    @ViewBuilder
-    func gsGlass(in shape: some Shape = RoundedRectangle(cornerRadius: 18, style: .continuous)) -> some View {
-        if #available(iOS 26.0, *) {
-            self.glassEffect(.regular, in: shape)
-        } else {
-            self.background(.ultraThinMaterial, in: shape)
-        }
-    }
+struct LiquidGlassCard<Content: View>: View {
+    var cornerRadius: CGFloat = 20
+    var padding: CGFloat = 16
+    @ViewBuilder var content: () -> Content
 
-    @ViewBuilder
-    func gsGlassInteractive(in shape: some Shape = Capsule()) -> some View {
-        if #available(iOS 26.0, *) {
-            self.glassEffect(.regular.interactive(), in: shape)
-        } else {
-            self.background(.ultraThinMaterial, in: shape)
-        }
+    var body: some View {
+        content()
+            .padding(padding)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
+}
 
-    func gsGlassButton(prominent: Bool = false) -> some View {
-        self.buttonStyle(GSGlassButtonStyle(prominent: prominent))
+struct LiquidGlassActionButton: View {
+    let title: String
+    var systemImage: String? = nil
+    var role: ButtonRole? = nil
+    var prominent: Bool = true
+    let action: () -> Void
+
+    var body: some View {
+        Button(role: role, action: action) {
+            HStack(spacing: 10) {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                }
+                Text(title).fontWeight(.semibold)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+        }
+        .buttonStyle(prominent ? .glassProminent : .glass)
+    }
+}
+
+struct LiquidGlassIconButton: View {
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 17, weight: .semibold))
+                .frame(width: 42, height: 42)
+        }
+        .buttonStyle(.glass)
     }
 }
