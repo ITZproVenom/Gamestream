@@ -145,8 +145,7 @@ struct RootView: View {
 
     private func navItem(_ tab: Tab) -> some View {
         Button {
-            let generator = UIImpactFeedbackGenerator(style: .light)
-            generator.impactOccurred()
+            HapticManager.tap()
             SoundManager.playTap()
             if tab == .library {
                 session.returnToHub()
