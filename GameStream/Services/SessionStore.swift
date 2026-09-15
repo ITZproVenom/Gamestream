@@ -86,6 +86,7 @@ final class SessionStore: ObservableObject {
     }
 
     func signOut() {
+        PlayActivityStore.shared.end()
         clearLocalAuthFlag()
         isStreaming = false
         offerPlayNext = false
@@ -146,6 +147,7 @@ final class SessionStore: ObservableObject {
     }
 
     func openHome() {
+        PlayActivityStore.shared.end()
         webURL = URL(string: "https://www.xbox.com/play")!
         isStreaming = false
         offerPlayNext = nextQueuedGame != nil
@@ -189,6 +191,7 @@ final class SessionStore: ObservableObject {
         } else if !streaming {
             currentGame = nil
         }
+        syncPlayActivity(streaming: streaming)
     }
 
     func toggleFavoriteCurrent() { guard let game = currentGame else { return }; toggleFavorite(game) }
@@ -329,6 +332,7 @@ final class SessionStore: ObservableObject {
     }
 
     func clearWebData() {
+        PlayActivityStore.shared.end()
         let store = WKWebsiteDataStore.default()
         store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) { [weak self] in
             Task { @MainActor in
