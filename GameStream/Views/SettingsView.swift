@@ -13,7 +13,7 @@ struct SettingsView: View {
     private let regions = ["Auto", "North America", "Europe", "Asia", "Australia"]
 
     private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.3.7"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.3.9"
     }
 
     var body: some View {
@@ -214,10 +214,10 @@ struct SettingsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
-                        Text("Made with ❤️ by Bestin")
+                        Text("Made with 🤍 by Bestin")
                             .font(.subheadline.weight(.semibold))
                             .padding(.top, 6)
-                            .accessibilityLabel("Made with love by Bestin")
+                            .accessibilityLabel("Made with 🤍 by Bestin")
                     }
                 }
                 .padding(.horizontal, 20)
