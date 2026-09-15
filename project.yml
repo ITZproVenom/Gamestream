@@ -13,6 +13,8 @@ targets:
     platform: iOS
     sources:
       - path: GameStream
+        excludes:
+          - "Resources/**"
     resources:
       - path: GameStream/Assets.xcassets
       - path: GameStream/Resources
