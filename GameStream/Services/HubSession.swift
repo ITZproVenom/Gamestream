@@ -11,20 +11,16 @@ extension SessionStore {
     static let idleWebURL = URL(string: "about:blank")!
     static let xboxHomeURL = URL(string: "https://www.xbox.com/play")!
 
+    /// Native GameHub is the catalog. Do not load xbox.com as a screen.
     func openXboxCloud() {
-        PlayActivityStore.shared.end()
-        pendingJavaScript = nil
-        webURL = Self.xboxHomeURL
-        isStreaming = false
-        offerPlayNext = false
-        HubState.shared.showNativeHub = false
-        requestedTab = .library
+        returnToHub()
     }
 
     func openCatalogGame(_ game: CatalogGame) {
-        HubState.shared.showNativeHub = false
+        HubState.shared.showNativeHub = true
         offerPlayNext = false
-        openGame(game.tracked)
+        requestedTab = .library
+        noteOpenedGame(game.tracked)
     }
 
     func playCatalogGame(_ game: CatalogGame) {
@@ -35,10 +31,7 @@ extension SessionStore {
         PlayActivityStore.shared.end()
         pendingJavaScript = nil
         isStreaming = false
-        // Unload the Xbox site while GameHub is the UI so the website is not the app.
-        if webURL.host?.contains("xbox.com") == true {
-            webURL = Self.idleWebURL
-        }
+        webURL = Self.idleWebURL
         HubState.shared.showNativeHub = true
         requestedTab = .library
     }
@@ -59,5 +52,15 @@ extension SessionStore {
         offerPlayNext = false
         if playNextQueued() { return }
         exitStreamToHub()
+    }
+
+    fileprivate func noteOpenedGame(_ game: TrackedGame) {
+        currentGame = TrackedGame(
+            id: game.id,
+            slug: game.slug,
+            title: game.title,
+            lastSeen: Date(),
+            isFavorite: isFavorite(game.id)
+        )
     }
 }
