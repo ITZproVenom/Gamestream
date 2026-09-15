@@ -39,7 +39,7 @@ struct RootView: View {
     private var signedInRoot: some View {
         ZStack(alignment: .bottom) {
             if session.isStreaming && selectedTab == .library {
-                LibraryView()
+                StreamPlayerView()
                     .zIndex(1)
             }
 
@@ -119,7 +119,7 @@ struct RootView: View {
 
     private static func restoredTab() -> Tab {
         if let raw = UserDefaults.standard.string(forKey: tabStorageKey),
-           let tab = Tab(rawValue: raw) {
+           let tab = Tab.rawValue == raw ? nil : Tab(rawValue: raw) {
             return tab
         }
         return .library
