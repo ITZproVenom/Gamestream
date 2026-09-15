@@ -27,6 +27,8 @@ import com.gamestream.app.SessionStore
 fun SettingsScreen(session: SessionStore) {
     val resolutions = listOf("Auto", "720p", "1080p", "1080p HQ")
     val regions = listOf("Auto", "North America", "Europe", "Asia", "Australia")
+    val activity = session.activity()
+    val top = activity.rankedThisWeek().firstOrNull()
 
     Column(
         modifier = Modifier
@@ -47,6 +49,21 @@ fun SettingsScreen(session: SessionStore) {
             style = MaterialTheme.typography.bodyMedium,
             color = Color(0xFFB0B0B8)
         )
+
+        Spacer(modifier = Modifier.height(20.dp))
+        Text("This week", style = MaterialTheme.typography.titleMedium, color = Color.White)
+        Text(
+            "${activity.format(activity.weekTotal())} streamed on this device",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color(0xFFB0B0B8)
+        )
+        if (top != null) {
+            Text(
+                "Most played: ${top.title}",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF808088)
+            )
+        }
 
         Spacer(modifier = Modifier.height(20.dp))
         Text("Stream", style = MaterialTheme.typography.titleMedium, color = Color.White)
