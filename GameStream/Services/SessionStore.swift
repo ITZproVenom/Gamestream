@@ -130,17 +130,17 @@ final class SessionStore: ObservableObject {
     func updateFromWebURL(_ url: URL, pageTitle: String? = nil) {
         let streaming = Self.isStreamingURL(url.absoluteString)
         if isStreaming && !streaming {
-            offerPlayNext = nextQueuedGame != nil
+            return
         }
-        if isStreaming != streaming { isStreaming = streaming }
-        if streaming { offerPlayNext = false }
+        if streaming {
+            offerPlayNext = false
+            if !isStreaming { isStreaming = true }
+        }
         if let parsed = GameURLParser.parse(url.absoluteString) {
             let title = GameURLParser.displayTitle(fromPageTitle: pageTitle, slug: parsed.slug, productId: parsed.productId)
             noteGame(id: parsed.productId, slug: parsed.slug, title: title, markRecent: streaming)
-        } else if !streaming {
-            currentGame = nil
         }
-        syncPlayActivity(streaming: streaming)
+        syncPlayActivity(streaming: isStreaming)
     }
 
     func toggleFavoriteCurrent() { guard let game = currentGame else { return }; toggleFavorite(game) }
