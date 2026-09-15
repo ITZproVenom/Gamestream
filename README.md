@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/gamestream-icon.svg" alt="GameStream" width="120" height="120" />
+</p>
+
 <h1 align="center">GameStream</h1>
 
 <p align="center">
@@ -47,29 +51,22 @@ gradle wrapper --gradle-version 8.9   # if needed
 
 APK: `android/app/build/outputs/apk/release/app-release.apk`
 
-Or open `android/` in Android Studio.  
-CI: `.github/workflows/build-apk.yml` → APK on Releases.
+Or open `android/` in Android Studio.
 
-See [android/README.md](android/README.md).
+CI: `.github/workflows/build-apk.yml`.
 
 ---
 
-## Features (both)
+## Features
 
-- Library / Search / Settings
-- Better xCloud always on + modern UI overrides
-- Stream resolution & region → BX prefs
-- Chrome hides while streaming
-- Persistent session cookies
+- Native GameHub / Search / Settings (no website catalog UI)
+- WebView only for Microsoft auth + active cloud stream
+- Better xCloud quality prefs (resolution, clarity, codec, bitrate)
+- Custom Play loading screen with UI sounds
+- Favorites, recents, continue playing
 
 ---
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
-## Disclaimer
-
-Unofficial client. Xbox / xCloud trademarks belong to Microsoft.
-
-Made with 🤍 by Bestin
