@@ -1,14 +1,15 @@
 import AudioToolbox
 import AVFoundation
+import UIKit
 
 enum SoundManager {
-    private static let tapSound: SystemSoundID = 1104
-    private static let successSound: SystemSoundID = 1025
-    private static let errorSound: SystemSoundID = 1053
-    /// Soft begin tone when Play is tapped.
-    private static let launchSound: SystemSoundID = 1113
-    /// Confirm when stream shell is ready.
-    private static let readySound: SystemSoundID = 1114
+    private static var players: [String: AVAudioPlayer] = [:]
+    private static let sessionConfigured: Bool = {
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
+        try? session.setActive(true, options: [])
+        return true
+    }()
 
     private static var soundsEnabled: Bool {
         if UserDefaults.standard.object(forKey: "GameStream.uiSoundsEnabled") == nil {
@@ -22,27 +23,48 @@ enum SoundManager {
     }
 
     static func playTap() {
-        guard soundsEnabled, !isMuted else { return }
-        AudioServicesPlaySystemSound(tapSound)
+        playBundled("tap", systemFallback: 1104)
     }
 
     static func playSuccess() {
-        guard soundsEnabled, !isMuted else { return }
-        AudioServicesPlaySystemSound(successSound)
+        playBundled("ready", systemFallback: 1025)
     }
 
     static func playError() {
-        guard soundsEnabled, !isMuted else { return }
-        AudioServicesPlaySystemSound(errorSound)
+        playBundled("error", systemFallback: 1053)
     }
 
     static func playLaunch() {
-        guard soundsEnabled, !isMuted else { return }
-        AudioServicesPlaySystemSound(launchSound)
+        playBundled("launch", systemFallback: 1113)
+        HapticManager.impact()
     }
 
     static func playReady() {
+        playBundled("ready", systemFallback: 1114)
+        HapticManager.success()
+    }
+
+    private static func playBundled(_ name: String, systemFallback: SystemSoundID) {
         guard soundsEnabled, !isMuted else { return }
-        AudioServicesPlaySystemSound(readySound)
+        _ = sessionConfigured
+
+        if let player = cachedPlayer(name) {
+            player.currentTime = 0
+            player.play()
+            return
+        }
+        AudioServicesPlaySystemSound(systemFallback)
+    }
+
+    private static func cachedPlayer(_ name: String) -> AVAudioPlayer? {
+        if let existing = players[name] { return existing }
+        let url =
+            Bundle.main.url(forResource: name, withExtension: "wav", subdirectory: "Sounds")
+            ?? Bundle.main.url(forResource: name, withExtension: "wav")
+        guard let url,
+              let player = try? AVAudioPlayer(contentsOf: url) else { return nil }
+        player.prepareToPlay()
+        players[name] = player
+        return player
     }
 }

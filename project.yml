@@ -15,13 +15,14 @@ targets:
       - path: GameStream
     resources:
       - path: GameStream/Assets.xcassets
+      - path: GameStream/Resources
     info:
       path: GameStream/Info.plist
       properties:
         CFBundleDisplayName: GameStream
         CFBundleName: GameStream
-        CFBundleShortVersionString: "1.4.3"
-        CFBundleVersion: "37"
+        CFBundleShortVersionString: "1.5.0"
+        CFBundleVersion: "38"
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
