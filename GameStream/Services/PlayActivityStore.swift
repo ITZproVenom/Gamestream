@@ -33,6 +33,11 @@ final class PlayActivityStore: ObservableObject {
     }
 
     func begin(id: String, title: String, slug: String) {
+        if activeId == id {
+            activeTitle = title
+            ensureStat(id: id, title: title, slug: slug)
+            return
+        }
         endActiveIfNeeded()
         guard !id.isEmpty else { return }
         activeId = id
