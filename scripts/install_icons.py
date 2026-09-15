@@ -57,6 +57,8 @@ def decode_bundled() -> bytes:
     if not os.path.isfile(B64):
         raise SystemExit(f"missing bundled icon source: {B64}")
     raw = open(B64, "r", encoding="utf-8").read().strip()
+    if len(raw) < 1000 or not raw.startswith("iVBOR"):
+        raise SystemExit(f"bundled icon1024.b64 is invalid/placeholder ({len(raw)} chars)")
     try:
         data = base64.b64decode(raw, validate=True)
     except Exception as e:
@@ -65,12 +67,11 @@ def decode_bundled() -> bytes:
     return data
 
 
-def try_generate() -> bytes | None:
+def try_generate() -> bytes:
     try:
         import PIL  # noqa: F401
-    except ImportError:
-        print("Pillow not installed; using bundled 1024x1024 PNG")
-        return None
+    except ImportError as e:
+        raise SystemExit(f"Pillow required to generate App Icon: {e}")
     subprocess.check_call([sys.executable, GEN])
     path = os.path.join(IOS_OUT, "icon-1024.png")
     data = open(path, "rb").read()
@@ -86,28 +87,25 @@ def write_ios(data: bytes) -> str:
         f.write(data)
     with open(os.path.join(IOS_OUT, "Contents.json"), "w", encoding="utf-8") as f:
         f.write(CONTENTS)
-    try:
-        from PIL import Image
-        import io
-        master = Image.open(io.BytesIO(data)).convert("RGBA")
-        r, g, b, a = master.split()
-        master = Image.merge("RGBA", (r, g, b, a.point(lambda _: 255)))
-        sizes = {
-            "fiona.g@example.net": 40,
-            "carlos.r@example.net": 60,
-            "icon-60@2x.png": 120,
-            "icon-60@3x.png": 180,
-            "icon-76.png": 76,
-            "icon-76@2x.png": 152,
-            "icon-83.5@2x.png": 167,
-        }
-        for name, sz in sizes.items():
-            resized = master.resize((sz, sz), Image.Resampling.LANCZOS)
-            out = os.path.join(IOS_OUT, name)
-            resized.save(out, "PNG", optimize=True)
-            print(f"wrote {out} ({sz}x{sz})")
-    except Exception as e:
-        print(f"size expansion skipped: {e}")
+    from PIL import Image
+    import io
+    master = Image.open(io.BytesIO(data)).convert("RGBA")
+    r, g, b, a = master.split()
+    master = Image.merge("RGBA", (r, g, b, a.point(lambda _: 255)))
+    sizes = {
+        "fiona.g@example.net": 40,
+        "carlos.r@example.net": 60,
+        "icon-60@2x.png": 120,
+        "icon-60@3x.png": 180,
+        "icon-76.png": 76,
+        "icon-76@2x.png": 152,
+        "icon-83.5@2x.png": 167,
+    }
+    for name, sz in sizes.items():
+        resized = master.resize((sz, sz), Image.Resampling.LANCZOS)
+        out = os.path.join(IOS_OUT, name)
+        resized.save(out, "PNG", optimize=True)
+        print(f"wrote {out} ({sz}x{sz})")
     print(f"wrote {path} ({len(data)} bytes, 1024x1024)")
     return path
 
@@ -140,16 +138,8 @@ def write_android(data: bytes) -> None:
 
 
 def main() -> None:
-    generated = None
-    try:
-        generated = try_generate()
-    except SystemExit:
-        raise
-    except Exception as e:
-        print(f"generate_app_icons.py failed: {e}", file=sys.stderr)
-        print("Will use bundled 1024x1024 PNG (must still be valid).", file=sys.stderr)
-
-    data = generated if generated is not None else decode_bundled()
+    # Always generate a fresh opaque multi-size icon set in CI
+    data = try_generate()
     require_icon(data, "final icon")
     write_ios(data)
     write_android(data)
