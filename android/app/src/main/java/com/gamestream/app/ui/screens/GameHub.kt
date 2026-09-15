@@ -49,6 +49,7 @@ import com.gamestream.app.ArtworkStore
 import com.gamestream.app.CatalogGame
 import com.gamestream.app.ForYouCatalog
 import com.gamestream.app.GameCatalog
+import com.gamestream.app.GameDiscovery
 import com.gamestream.app.SessionStore
 
 @Composable
@@ -62,13 +63,15 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
     val favs = session.favoriteGames()
     val forYou = remember(session.favoriteIds, session.recentIds) { ForYouCatalog.forYou(favs, recents) }
     val because = remember(session.recentIds) { ForYouCatalog.becauseYouPlayed(recents) }
-    val chips = listOf("All", "For You", "Favorites", "Recents") + ForYouCatalog.genreNames
+    val modeTitles = GameDiscovery.run { com.gamestream.app.DiscoveryMode.entries.map { it.title } }
+    val chips = listOf("All", "For You", "Favorites", "Recents") + modeTitles + ForYouCatalog.genreNames
     val filteredGames = when (filter) {
         "For You" -> forYou
         "Favorites" -> favs
         "Recents" -> recents
         "All" -> GameCatalog.games
-        else -> GameCatalog.games.filter { it.genre == filter }
+        else -> GameDiscovery.fromTitle(filter)?.let { GameDiscovery.games(it) }
+            ?: GameCatalog.games.filter { it.genre == filter }
     }
     val shelves = remember(session.favoriteIds, session.recentIds, session.queueIds) {
         buildList {
@@ -79,6 +82,7 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
             if (forYou.isNotEmpty()) add("For You" to forYou)
             because.forEach { add(it) }
             add("Popular on Cloud" to GameCatalog.games.take(8))
+            addAll(GameDiscovery.shelves())
             GameCatalog.games.groupBy { it.genre }.forEach { (genre, items) ->
                 if (items.size >= 2) add(genre to items)
             }
