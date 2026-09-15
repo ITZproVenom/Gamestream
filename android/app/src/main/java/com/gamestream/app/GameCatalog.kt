@@ -65,10 +65,20 @@ object GameCatalog {
             .distinctBy { it.id.uppercase() }
         if (unique.size < 20) return
         val featuredIds = seed.filter { it.featured }.map { it.id.uppercase() }.toSet()
+        var marked = 0
         live.clear()
         live.addAll(
-            unique.mapIndexed { index, game ->
-                game.copy(featured = index < 8 || game.id.uppercase() in featuredIds)
+            unique.map { game ->
+                val prefer = game.id.uppercase() in featuredIds || !game.posterUrl.isNullOrBlank()
+                val featured = if (prefer && marked < 10) {
+                    marked += 1
+                    true
+                } else {
+                    val seedHit = game.id.uppercase() in featuredIds
+                    if (seedHit) marked += 1
+                    seedHit
+                }
+                game.copy(featured = featured)
             }
         )
     }
