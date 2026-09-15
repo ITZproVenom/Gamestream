@@ -119,8 +119,22 @@ jobs:
           print("sound pack", {k: len(v) for k, v in pack.items()})
           PY
 
+      - name: Verify Resources on disk
+        run: |
+          set -euo pipefail
+          echo "Resources tree:"
+          find GameStream/Resources -type f -exec ls -la {} \;
+          test -s GameStream/Resources/better-xcloud.user.js
+          test -s GameStream/Resources/Sounds/embedded.json || test -f GameStream/Resources/Sounds/launch.wav
+          BYTES=$(wc -c < GameStream/Resources/better-xcloud.user.js | tr -d ' ')
+          echo "Pre-xcodegen BX bytes=${BYTES}"
+
       - name: Generate Xcode project
-        run: xcodegen generate
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          echo "--- pbxproj resource refs ---"
+          rg -n "better-xcloud|Resources|embedded\\.json|\\.wav" GameStream.xcodeproj/project.pbxproj | head -40 || true
 
       - name: Archive (unsigned)
         run: |
@@ -135,6 +149,34 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             COMPILER_INDEX_STORE_ENABLE=NO
+
+      - name: Inject Resources into app bundle
+        run: |
+          set -euo pipefail
+          APP="build/GameStream.xcarchive/Products/Applications/GameStream.app"
+          test -d "$APP"
+          mkdir -p "$APP/Resources/Sounds"
+          if [ -f GameStream/Resources/better-xcloud.user.js ]; then
+            cp -f GameStream/Resources/better-xcloud.user.js "$APP/better-xcloud.user.js"
+            cp -f GameStream/Resources/better-xcloud.user.js "$APP/Resources/better-xcloud.user.js"
+          fi
+          if [ -d GameStream/Resources/Sounds ]; then
+            cp -f GameStream/Resources/Sounds/* "$APP/Resources/Sounds/" 2>/dev/null || true
+            cp -f GameStream/Resources/Sounds/* "$APP/" 2>/dev/null || true
+          fi
+          if [ -f GameStream/Resources/offline-stream.html ]; then
+            cp -f GameStream/Resources/offline-stream.html "$APP/offline-stream.html"
+            cp -f GameStream/Resources/offline-stream.html "$APP/Resources/offline-stream.html"
+          fi
+          echo "App bundle after resource inject:"
+          find "$APP" -type f | head -40
+          ls -la "$APP/better-xcloud.user.js" "$APP/Resources/better-xcloud.user.js"
+          BX=$(stat -f%z "$APP/better-xcloud.user.js")
+          echo "BX in app: ${BX} bytes"
+          if [ "$BX" -lt 50000 ]; then
+            echo "BX missing from app bundle" >&2
+            exit 1
+          fi
 
       - name: Package IPA
         run: |
@@ -164,14 +206,15 @@ jobs:
           echo "App payload:"
           unzip -l GameStream-unsigned.ipa
           IPA_SIZE=$(stat -f%z GameStream-unsigned.ipa)
-          if [ "$IPA_SIZE" -lt 80000 ]; then
-            echo "IPA is only ${IPA_SIZE} bytes — packaging regression" >&2
+          if [ "$IPA_SIZE" -lt 400000 ]; then
+            echo "IPA is only ${IPA_SIZE} bytes — expected ~1MB+ with BX bundled" >&2
             exit 1
           fi
           python3 - <<'PY'
           import zipfile, sys
           z = zipfile.ZipFile("GameStream-unsigned.ipa")
-          cars = [n for n in z.namelist() if n.endswith("Assets.car")]
+          names = z.namelist()
+          cars = [n for n in names if n.endswith("Assets.car")]
           print("Assets.car entries:", cars)
           if not cars:
               sys.exit("IPA missing Assets.car — icon catalog not packaged")
@@ -179,6 +222,16 @@ jobs:
           print(f"Assets.car size={len(car)}")
           if len(car) < 10000:
               sys.exit("Assets.car too small — likely missing app icon")
+          bx = [n for n in names if "better-xcloud" in n.lower() or n.endswith(".user.js")]
+          print("BX entries:", bx)
+          if not bx:
+              sys.exit("IPA missing better-xcloud.user.js — Resources not packaged")
+          bx_data = z.read(bx[0])
+          print(f"BX size={len(bx_data)}")
+          if len(bx_data) < 50000:
+              sys.exit("BX script too small in IPA")
+          sounds = [n for n in names if "embedded.json" in n or n.endswith(".wav")]
+          print("Sound entries:", sounds)
           PY
 
       - name: Build changelog + release identity
