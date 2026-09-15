@@ -9,6 +9,7 @@ final class HubState: ObservableObject {
 
 extension SessionStore {
     func openXboxCloud() {
+        PlayActivityStore.shared.end()
         webURL = URL(string: "https://www.xbox.com/play")!
         isStreaming = false
         offerPlayNext = false
@@ -29,12 +30,14 @@ extension SessionStore {
     }
 
     func returnToHub() {
+        PlayActivityStore.shared.end()
         isStreaming = false
         HubState.shared.showNativeHub = true
         requestedTab = .library
     }
 
     func exitStreamToHub() {
+        PlayActivityStore.shared.end()
         let hasNext = nextQueuedGame != nil
         webURL = URL(string: "https://www.xbox.com/play")!
         isStreaming = false
@@ -44,6 +47,7 @@ extension SessionStore {
     }
 
     func playNextFromStream() {
+        PlayActivityStore.shared.end()
         offerPlayNext = false
         if playNextQueued() { return }
         exitStreamToHub()
