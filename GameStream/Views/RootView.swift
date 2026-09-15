@@ -27,7 +27,6 @@ struct RootView: View {
         session.isStreaming && selectedTab == .library
     }
 
-    /// Native GameHub is the Library tab. WebView exists only while streaming.
     private var showingHub: Bool {
         selectedTab == .library && !session.isStreaming
     }
@@ -78,18 +77,17 @@ struct RootView: View {
                 glassNavigation
                     .padding(.horizontal, 24)
                     .padding(.top, 6)
-                    .padding(.bottom, 8)
-                    .frame(maxWidth: .infinity)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .padding(.bottom, 10)
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: hideTabBar)
-        .animation(.easeInOut(duration: 0.2), value: showingHub)
-        .onChange(of: selectedTab) { _, newValue in
-            UserDefaults.standard.set(newValue.rawValue, forKey: Self.tabStorageKey)
+        .onChange(of: selectedTab) { _, tab in
+            UserDefaults.standard.set(tab.rawValue, forKey: Self.tabStorageKey)
+            if tab == .library {
+                session.returnToHub()
+            }
         }
-        .onChange(of: session.requestedTab) { _, newValue in
-            if let tab = newValue {
+        .onChange(of: session.requestedTab) { _, tab in
+            if let tab {
                 withAnimation(.easeInOut(duration: 0.18)) {
                     selectedTab = tab
                 }
@@ -132,14 +130,14 @@ struct RootView: View {
     }
 
     private var glassNavigation: some View {
-        GlassEffectContainer(spacing: 4) {
+        GSGlassContainer(spacing: 4) {
             HStack(spacing: 0) {
                 ForEach(Tab.allCases, id: \.self) { tab in
                     navItem(tab)
                 }
             }
             .padding(5)
-            .glassEffect(.regular, in: Capsule())
+            .gsGlass(in: Capsule())
         }
     }
 
@@ -172,7 +170,7 @@ struct RootView: View {
         .background {
             if selectedTab == tab {
                 Capsule()
-                    .glassEffect(.regular.interactive())
+                    .gsGlassInteractive()
                     .matchedGeometryEffect(id: "selectedTab", in: navNamespace)
             }
         }

@@ -2,7 +2,7 @@ name: GameStream
 options:
   bundleIdPrefix: com.gamestream
   deploymentTarget:
-    iOS: "17.0"
+    iOS: "26.0"
   xcodeVersion: "26"
 
 # No SPM packages — native GameHub + Better xCloud service layer
