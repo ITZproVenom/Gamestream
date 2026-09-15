@@ -172,7 +172,8 @@ struct RootView: View {
         .background {
             if selectedTab == tab {
                 Capsule()
-                    .glassEffect(.regular.interactive())
+                    .fill(.clear)
+                    .glassEffect(.regular.interactive(), in: Capsule())
                     .matchedGeometryEffect(id: "selectedTab", in: navNamespace)
             }
         }
