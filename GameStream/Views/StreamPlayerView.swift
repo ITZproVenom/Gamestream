@@ -132,7 +132,7 @@ struct XboxCloudWebView: UIViewRepresentable {
                 setTimeout(notify, 50);
             };
             window.addEventListener('popstate', function() { setTimeout(notify, 50); });
-            setInterval(notify, 1500);
+            // No setInterval — polling stole main-thread time from the stream decoder.
         })();
         """
         contentController.addUserScript(WKUserScript(
