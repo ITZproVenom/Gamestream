@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.gamestream.app.BetterXCloudInjector
+import com.gamestream.app.CloudCatalogService
 import com.gamestream.app.OnboardingPrefs
 import com.gamestream.app.SessionStore
 import com.gamestream.app.ui.screens.IntroScreen
@@ -46,8 +47,10 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
     var introCompleted by remember { mutableStateOf(OnboardingPrefs.isIntroDone(context)) }
 
     LaunchedEffect(Unit) {
+        CloudCatalogService.refreshIfNeeded(context.applicationContext)
         withContext(Dispatchers.IO) {
             BetterXCloudInjector.ensureFetched(context.applicationContext)
+            CloudCatalogService.fetchAndInstall(context.applicationContext)
         }
     }
 
