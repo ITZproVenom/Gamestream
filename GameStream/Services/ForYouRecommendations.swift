@@ -75,6 +75,7 @@ extension GameCatalog {
         }
         rows.append(contentsOf: becauseYouPlayed(recents: recents))
         rows.append(("Popular on Cloud", Array(games.prefix(8))))
+        rows.append(contentsOf: discoveryShelves())
         for genre in genreNames {
             let items = games.filter { $0.genre == genre }
             if items.count >= 2 {
