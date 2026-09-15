@@ -30,6 +30,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
     var showNativeHub by mutableStateOf(true)
     var offerPlayNext by mutableStateOf(false)
     var resumeLastOnOpen by mutableStateOf(prefs.getBoolean(KEY_RESUME, false))
+        private set
     var favoriteIds by mutableStateOf(prefs.getStringSet(KEY_FAVS, emptySet())?.toSet() ?: emptySet())
         private set
     var recentIds by mutableStateOf(prefs.getString("recent_ids", "")?.split(",")?.filter { it.isNotBlank() } ?: emptyList())
