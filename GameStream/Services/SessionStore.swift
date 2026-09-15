@@ -12,7 +12,7 @@ final class SessionStore: ObservableObject {
         didSet { UserDefaults.standard.set(accountLabel, forKey: Keys.accountLabel) }
     }
 
-    @Published var webURL: URL = URL(string: "https://www.xbox.com/play")!
+    @Published var webURL: URL = URL(string: "about:blank")!
     @Published var requestedTab: RootView.Tab? = nil
     @Published var isStreaming: Bool = false
     @Published var pendingJavaScript: String?
@@ -91,7 +91,7 @@ final class SessionStore: ObservableObject {
         isStreaming = false
         offerPlayNext = false
         currentGame = nil
-        webURL = URL(string: "https://www.xbox.com/play")!
+        webURL = Self.idleWebURL
         let store = WKWebsiteDataStore.default()
         store.fetchDataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes()) { records in
             let xboxRecords = records.filter {
@@ -110,20 +110,14 @@ final class SessionStore: ObservableObject {
     }
 
     func openHome() {
-        PlayActivityStore.shared.end()
-        webURL = Self.idleWebURL
-        isStreaming = false
-        offerPlayNext = nextQueuedGame != nil
-        HubState.shared.showNativeHub = true
-        requestedTab = .library
+        returnToHub()
     }
 
     func openGame(_ game: TrackedGame) {
-        guard let url = game.catalogURL else { return }
-        webURL = url
+        requestedTab = .library
+        HubState.shared.showNativeHub = true
         isStreaming = false
         offerPlayNext = false
-        requestedTab = .library
         noteGame(id: game.id, slug: game.slug, title: game.title, markRecent: true)
     }
 
