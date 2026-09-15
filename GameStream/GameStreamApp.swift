@@ -11,62 +11,70 @@ struct GameStreamApp: App {
         )
     }
 
-    // SessionStore is owned by the scene. AppearanceStore is a process-wide singleton —
-    // never wrap singletons in @StateObject (that pattern crashes on launch).
+    // SessionStore is owned by the scene. AppearanceStore is observed below on a View —
+    // never wrap singletons in @StateObject, and never put @ObservedObject on App.
     @StateObject private var session = SessionStore()
+
+    var body: some Scene {
+        WindowGroup {
+            GameStreamRootView(session: session)
+        }
+    }
+}
+
+private struct GameStreamRootView: View {
+    @ObservedObject var session: SessionStore
     @ObservedObject private var appearance = AppearanceStore.shared
     @State private var showIntro = !OnboardingStore.hasCompletedIntro
     @State private var showingMicrosoftLogin = false
     @State private var didBootstrap = false
 
-    var body: some Scene {
-        WindowGroup {
-            Group {
-                if session.isSignedIn {
-                    RootView()
-                } else if showIntro {
-                    IntroView {
-                        OnboardingStore.markIntroCompleted()
-                        withAnimation(.easeInOut(duration: 0.45)) {
-                            showIntro = false
-                        }
-                    }
-                } else {
-                    WelcomeView {
-                        showingMicrosoftLogin = true
+    var body: some View {
+        Group {
+            if session.isSignedIn {
+                RootView()
+            } else if showIntro {
+                IntroView {
+                    OnboardingStore.markIntroCompleted()
+                    withAnimation(.easeInOut(duration: 0.45)) {
+                        showIntro = false
                     }
                 }
-            }
-            .environmentObject(session)
-            .preferredColorScheme(appearance.mode.colorScheme)
-            .tint(appearance.accent.tint)
-            .sheet(isPresented: $showingMicrosoftLogin) {
-                NavigationStack {
-                    SignInWebView()
-                        .navigationTitle("Microsoft account")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .cancellationAction) {
-                                Button("Close") { showingMicrosoftLogin = false }
-                            }
-                        }
+            } else {
+                WelcomeView {
+                    showingMicrosoftLogin = true
                 }
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .interactiveDismissDisabled(false)
-                .environmentObject(session)
             }
-            .onAppear {
-                bootstrapOnce()
-            }
-            .onChange(of: session.isSignedIn) { _, signedIn in
-                if signedIn { showingMicrosoftLogin = false }
-            }
-            .animation(.easeInOut(duration: 0.35), value: session.isSignedIn)
-            .animation(.easeInOut(duration: 0.35), value: showIntro)
-            .animation(.easeInOut(duration: 0.35), value: appearance.mode)
-            .animation(.easeInOut(duration: 0.35), value: appearance.accent)
         }
+        .environmentObject(session)
+        .preferredColorScheme(appearance.mode.colorScheme)
+        .tint(appearance.accent.tint)
+        .sheet(isPresented: $showingMicrosoftLogin) {
+            NavigationStack {
+                SignInWebView()
+                    .navigationTitle("Microsoft account")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Close") { showingMicrosoftLogin = false }
+                        }
+                    }
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .interactiveDismissDisabled(false)
+            .environmentObject(session)
+        }
+        .onAppear {
+            bootstrapOnce()
+        }
+        .onChange(of: session.isSignedIn) { _, signedIn in
+            if signedIn { showingMicrosoftLogin = false }
+        }
+        .animation(.easeInOut(duration: 0.35), value: session.isSignedIn)
+        .animation(.easeInOut(duration: 0.35), value: showIntro)
+        .animation(.easeInOut(duration: 0.35), value: appearance.mode)
+        .animation(.easeInOut(duration: 0.35), value: appearance.accent)
     }
 
     private func bootstrapOnce() {
