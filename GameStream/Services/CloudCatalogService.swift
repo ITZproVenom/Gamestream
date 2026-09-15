@@ -2,7 +2,7 @@ import Foundation
 
 enum CloudCatalogService {
     private static let siglURL = URL(string: "https://catalog.gamepass.com/sigls/v2?id=29a81209-df6f-41fd-a528-2ae6b91f719c&language=en-us&market=US")!
-    private static let cacheName = "xcloud-catalog-v1.json"
+    private static let cacheName = "xcloud-catalog-v2.json"
     private static var started = false
 
     static func refreshIfNeeded() {
@@ -15,39 +15,68 @@ enum CloudCatalogService {
         }
         Task.detached(priority: .utility) {
             do {
-                let remote = try await fetchRemote()
-                if remote.count >= 20 {
-                    saveCache(remote)
-                    await MainActor.run {
-                        GameCatalog.installLiveCatalog(remote)
-                    }
-                }
+                try await fetchRemoteProgressive()
             } catch {
             }
         }
     }
 
-    private static func fetchRemote() async throws -> [CatalogGame] {
+    private static func fetchRemoteProgressive() async throws {
         let (data, _) = try await URLSession.shared.data(from: siglURL)
-        guard let raw = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            return []
-        }
-        var ids: [String] = []
-        var seen = Set<String>()
-        for row in raw {
-            guard let id = row["id"] as? String else { continue }
-            let key = id.uppercased()
-            if seen.insert(key).inserted { ids.append(id) }
-        }
-        var games: [CatalogGame] = []
+        let ids = parseIds(from: data)
+        guard ids.count >= 20 else { return }
+
+        var collected: [CatalogGame] = []
+        collected.reserveCapacity(ids.count)
         let chunk = 20
         var index = 0
+        var published = false
         while index < ids.count {
-            let slice = Array(ids[index..<min(index + chunk, ids.count)])
-            index += chunk
-            games.append(contentsOf: try await hydrate(slice))
+            let end = min(index + chunk, ids.count)
+            let slice = Array(ids[index..<end])
+            index = end
+            do {
+                collected.append(contentsOf: try await hydrate(slice))
+            } catch {
+                continue
+            }
+            if !published && collected.count >= 24 {
+                let snapshot = collected
+                await MainActor.run {
+                    GameCatalog.installLiveCatalog(snapshot)
+                }
+                published = true
+            }
         }
-        return games
+        let unique = dedupe(collected)
+        guard unique.count >= 20 else { return }
+        saveCache(unique)
+        await MainActor.run {
+            GameCatalog.installLiveCatalog(unique)
+        }
+    }
+
+    private static func parseIds(from data: Data) -> [String] {
+        var ids: [String] = []
+        var seen = Set<String>()
+        func take(_ id: String) {
+            let key = id.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard !key.isEmpty, seen.insert(key).inserted else { return }
+            ids.append(id.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        guard let raw = try? JSONSerialization.jsonObject(with: data) else { return [] }
+        if let rows = raw as? [[String: Any]] {
+            for row in rows {
+                if let id = row["id"] as? String { take(id) }
+            }
+        } else if let dict = raw as? [String: Any] {
+            if let rows = dict["sigls"] as? [[String: Any]] {
+                for row in rows {
+                    if let id = row["id"] as? String { take(id) }
+                }
+            }
+        }
+        return ids
     }
 
     private static func hydrate(_ ids: [String]) async throws -> [CatalogGame] {
@@ -73,11 +102,10 @@ enum CloudCatalogService {
                 ?? "Cloud"
             let images = loc?["Images"] as? [[String: Any]] ?? []
             let poster = pickPoster(images)
-            let slug = slugify(title)
             out.append(
                 CatalogGame(
                     id: id,
-                    slug: slug,
+                    slug: slugify(title),
                     title: title,
                     tagline: String(tagline.prefix(140)),
                     genre: shortenGenre(genre),
@@ -96,15 +124,18 @@ enum CloudCatalogService {
         for purpose in preferred {
             if let match = images.first(where: { ($0["ImagePurpose"] as? String) == purpose }),
                let raw = match["Uri"] as? String {
-                if raw.hasPrefix("//") { return URL(string: "https:" + raw) }
-                return URL(string: raw)
+                return normalizedImageURL(raw)
             }
         }
         if let raw = images.first?["Uri"] as? String {
-            if raw.hasPrefix("//") { return URL(string: "https:" + raw) }
-            return URL(string: raw)
+            return normalizedImageURL(raw)
         }
         return nil
+    }
+
+    private static func normalizedImageURL(_ raw: String) -> URL? {
+        if raw.hasPrefix("//") { return URL(string: "https:" + raw) }
+        return URL(string: raw)
     }
 
     private static func slugify(_ title: String) -> String {
@@ -140,6 +171,18 @@ enum CloudCatalogService {
         if value.contains("adventure") { return "Adventure" }
         if value.contains("action") { return "Action" }
         return raw
+    }
+
+    private static func dedupe(_ incoming: [CatalogGame]) -> [CatalogGame] {
+        var seen = Set<String>()
+        var out: [CatalogGame] = []
+        for game in incoming {
+            let key = game.id.uppercased()
+            if seen.insert(key).inserted {
+                out.append(game)
+            }
+        }
+        return out
     }
 
     private static func cacheURL() -> URL? {
