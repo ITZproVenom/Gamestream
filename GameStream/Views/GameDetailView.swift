@@ -4,6 +4,7 @@ struct GameDetailView: View {
     @EnvironmentObject var session: SessionStore
     @ObservedObject private var artwork = ArtworkStore.shared
     @ObservedObject private var lists = CollectionStore.shared
+    @ObservedObject private var activity = PlayActivityStore.shared
     @State private var showingLists = false
     @State private var newListName = ""
     @State private var showingNewList = false
@@ -206,6 +207,14 @@ struct GameDetailView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            if let stat = activity.stat(for: game.id) {
+                Text("\(PlayActivityStore.format(stat.totalSeconds)) played · \(stat.sessionCount) sessions · \(PlayActivityStore.format(stat.weekSeconds)) this week")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             HStack(spacing: 8) {
                 pill(game.genre)
                 pill(game.provider)
