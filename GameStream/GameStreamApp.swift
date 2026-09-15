@@ -11,10 +11,13 @@ struct GameStreamApp: App {
         )
     }
 
+    // SessionStore is owned by the scene. AppearanceStore is a process-wide singleton —
+    // never wrap singletons in @StateObject (that pattern crashes on launch).
     @StateObject private var session = SessionStore()
-    @StateObject private var appearance = AppearanceStore.shared
+    @ObservedObject private var appearance = AppearanceStore.shared
     @State private var showIntro = !OnboardingStore.hasCompletedIntro
     @State private var showingMicrosoftLogin = false
+    @State private var didBootstrap = false
 
     var body: some Scene {
         WindowGroup {
@@ -23,7 +26,6 @@ struct GameStreamApp: App {
                     RootView()
                 } else if showIntro {
                     IntroView {
-                        // Get Started only dismisses intro. It never signs the user in.
                         OnboardingStore.markIntroCompleted()
                         withAnimation(.easeInOut(duration: 0.45)) {
                             showIntro = false
@@ -55,11 +57,7 @@ struct GameStreamApp: App {
                 .environmentObject(session)
             }
             .onAppear {
-                // Never crash on launch from secondary services
-                session.revalidatePersistedLogin()
-                DispatchQueue.main.async {
-                    CloudCatalogService.refreshIfNeeded()
-                }
+                bootstrapOnce()
             }
             .onChange(of: session.isSignedIn) { _, signedIn in
                 if signedIn { showingMicrosoftLogin = false }
@@ -68,6 +66,20 @@ struct GameStreamApp: App {
             .animation(.easeInOut(duration: 0.35), value: showIntro)
             .animation(.easeInOut(duration: 0.35), value: appearance.mode)
             .animation(.easeInOut(duration: 0.35), value: appearance.accent)
+        }
+    }
+
+    private func bootstrapOnce() {
+        guard !didBootstrap else { return }
+        didBootstrap = true
+        // Never leave a stuck streaming flag from a previous kill.
+        if session.isStreaming {
+            session.exitStreamToHub()
+        }
+        session.revalidatePersistedLogin()
+        // Defer network/catalog so the first frame never races secondary services.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            CloudCatalogService.refreshIfNeeded()
         }
     }
 }

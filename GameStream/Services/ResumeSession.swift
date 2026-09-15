@@ -21,10 +21,15 @@ extension SessionStore {
     }
 
     /// Optional one-shot resume when the signed-in app first appears.
+    /// Deferred so first-frame Liquid Glass + hub layout never race a WKWebView load.
     func consumeLaunchResumeIfNeeded() {
         guard !Self.didConsumeLaunchResume else { return }
         Self.didConsumeLaunchResume = true
         guard resumeLastOnOpen, isSignedIn, !isStreaming, continueGame != nil else { return }
-        _ = resumeLastStream()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            guard let self else { return }
+            guard self.resumeLastOnOpen, self.isSignedIn, !self.isStreaming, self.continueGame != nil else { return }
+            _ = self.resumeLastStream()
+        }
     }
 }
