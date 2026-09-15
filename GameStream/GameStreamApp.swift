@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct GameStreamApp: App {
     @StateObject private var session = SessionStore()
+    @StateObject private var appearance = AppearanceStore.shared
     @State private var showIntro = !OnboardingStore.hasCompletedIntro
     @State private var showingMicrosoftLogin = false
 
@@ -26,7 +27,8 @@ struct GameStreamApp: App {
                 }
             }
             .environmentObject(session)
-            .preferredColorScheme(.dark)
+            .preferredColorScheme(appearance.mode.colorScheme)
+            .tint(appearance.accent.tint)
             .sheet(isPresented: $showingMicrosoftLogin) {
                 NavigationStack {
                     SignInWebView()
@@ -51,6 +53,8 @@ struct GameStreamApp: App {
             }
             .animation(.easeInOut(duration: 0.35), value: session.isSignedIn)
             .animation(.easeInOut(duration: 0.35), value: showIntro)
+            .animation(.easeInOut(duration: 0.35), value: appearance.mode)
+            .animation(.easeInOut(duration: 0.35), value: appearance.accent)
         }
     }
 }

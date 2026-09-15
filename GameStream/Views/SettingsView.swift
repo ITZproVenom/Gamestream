@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var session: SessionStore
     @ObservedObject private var activity = PlayActivityStore.shared
+    @ObservedObject private var appearance = AppearanceStore.shared
     @State private var keepAwake: Bool = false
     @State private var resumeOnOpen: Bool = false
     @State private var resolution: String = SessionStore.storedResolution
@@ -28,6 +29,25 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
                             .minimumScaleFactor(0.85)
+                    }
+
+                    section("Look") {
+                        Text("Appearance")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        chipRow(options: AppAppearanceMode.allCases.map(\.title), selected: appearance.mode.title) { title in
+                            if let mode = AppAppearanceMode.allCases.first(where: { $0.title == title }) {
+                                appearance.mode = mode
+                            }
+                        }
+                        Text("Accent")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        chipRow(options: AccentTheme.allCases.map(\.title), selected: appearance.accent.title) { title in
+                            if let theme = AccentTheme.allCases.first(where: { $0.title == title }) {
+                                appearance.accent = theme
+                            }
+                        }
                     }
 
                     section("Jump back in") {
@@ -139,7 +159,7 @@ struct SettingsView: View {
                     }
 
                     section("About") {
-                        Text("GameStream iOS 1.2.8 — native GameHub and Xbox Cloud client with Better xCloud.")
+                        Text("GameStream iOS 1.2.9 — native GameHub and Xbox Cloud client with Better xCloud.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)

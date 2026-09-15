@@ -56,7 +56,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
 
     fun activity(): PlayActivity = playActivity
     fun clearPendingJs() { pendingJs = null }
-    fun setResumeLastOnOpen(enabled: Boolean) {
+    fun updateResumeLastOnOpen(enabled: Boolean) {
         resumeLastOnOpen = enabled
         prefs.edit().putBoolean(KEY_RESUME, enabled).apply()
     }

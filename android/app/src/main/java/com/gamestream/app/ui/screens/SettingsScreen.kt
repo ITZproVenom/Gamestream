@@ -64,7 +64,7 @@ fun SettingsScreen(session: SessionStore) {
         Spacer(modifier = Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Resume last game on launch", color = Color.White, modifier = Modifier.weight(1f), maxLines = 2)
-            Switch(checked = session.resumeLastOnOpen, onCheckedChange = { session.setResumeLastOnOpen(it) })
+            Switch(checked = session.resumeLastOnOpen, onCheckedChange = { session.updateResumeLastOnOpen(it) })
         }
         if (last != null) {
             Spacer(modifier = Modifier.height(8.dp))

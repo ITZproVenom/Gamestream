@@ -1,19 +1,21 @@
 import SwiftUI
 
 struct AnimatedBackground: View {
+    @ObservedObject private var appearance = AppearanceStore.shared
+
     var body: some View {
         TimelineView(.animation) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
+            let accent = appearance.accent
+            let light = appearance.mode == .light
 
             ZStack {
-                // Deep base
-                Color.black
+                (light ? Color(red: 0.93, green: 0.94, blue: 0.98) : Color.black)
 
-                // Primary moving light (purple)
                 RadialGradient(
                     colors: [
-                        Color(red: 0.45, green: 0.15, blue: 0.85).opacity(0.55),
-                        Color(red: 0.35, green: 0.10, blue: 0.70).opacity(0.25),
+                        accent.primaryGlow.opacity(light ? 0.28 : 0.55),
+                        accent.primaryGlow.opacity(light ? 0.12 : 0.25),
                         .clear
                     ],
                     center: UnitPoint(
@@ -24,11 +26,10 @@ struct AnimatedBackground: View {
                     endRadius: 420
                 )
 
-                // Secondary light (blue)
                 RadialGradient(
                     colors: [
-                        Color(red: 0.15, green: 0.35, blue: 0.95).opacity(0.45),
-                        Color(red: 0.10, green: 0.25, blue: 0.80).opacity(0.20),
+                        accent.secondaryGlow.opacity(light ? 0.22 : 0.45),
+                        accent.secondaryGlow.opacity(light ? 0.10 : 0.20),
                         .clear
                     ],
                     center: UnitPoint(
@@ -39,10 +40,9 @@ struct AnimatedBackground: View {
                     endRadius: 480
                 )
 
-                // Accent glow (cyan / teal)
                 RadialGradient(
                     colors: [
-                        Color(red: 0.10, green: 0.75, blue: 0.85).opacity(0.22),
+                        accent.tint.opacity(light ? 0.16 : 0.22),
                         .clear
                     ],
                     center: UnitPoint(
@@ -53,19 +53,20 @@ struct AnimatedBackground: View {
                     endRadius: 280
                 )
 
-                // Subtle top vignette for depth
                 LinearGradient(
                     colors: [
-                        Color.black.opacity(0.35),
+                        (light ? Color.white : Color.black).opacity(light ? 0.18 : 0.35),
                         .clear,
                         .clear,
-                        Color.black.opacity(0.45)
+                        (light ? Color.white : Color.black).opacity(light ? 0.22 : 0.45)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
             }
             .ignoresSafeArea()
+            .animation(.easeInOut(duration: 0.35), value: appearance.accent)
+            .animation(.easeInOut(duration: 0.35), value: appearance.mode)
         }
     }
 }
