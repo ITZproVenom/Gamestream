@@ -5,6 +5,7 @@ extension SessionStore {
     /// Never bounce through /play/games first — that race is what broke /play.
     func playGame(_ game: TrackedGame) {
         guard let url = game.launchURL else { return }
+        SoundManager.playLaunch()
         pendingJavaScript = nil
         HubState.shared.showNativeHub = false
         offerPlayNext = false
