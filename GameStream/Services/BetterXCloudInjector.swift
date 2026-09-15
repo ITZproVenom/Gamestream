@@ -110,9 +110,8 @@ final class BetterXCloudInjector {
             if (style.textContent !== css) style.textContent = css;
         }
         apply();
-        const obs = new MutationObserver(function() { apply(); });
-        obs.observe(document.documentElement, { childList: true, subtree: true });
-        setInterval(apply, 2000);
+        // Single apply on inject. MutationObserver(subtree) + 2s polling
+        // competed with WebRTC decode and drove packet loss up over time.
     })();
     """
 
