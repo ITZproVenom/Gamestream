@@ -2,8 +2,9 @@ import UIKit
 import GameController
 import CoreHaptics
 
-/// Dual-path haptics: Taptic Engine on device + controller haptics when a gamepad is connected.
-/// UIImpactFeedbackGenerator alone does nothing for pure controller input.
+/// Dual-path haptics: Taptic Engine + controller haptics when a gamepad is connected.
+/// Nothing here runs at process start. GameController / CoreHaptics are touched
+/// only from an explicit play() after launch. All failures are swallowed.
 enum HapticManager {
     enum Style {
         case light, medium, heavy, success, error
@@ -35,15 +36,14 @@ enum HapticManager {
     }
 
     private static func playController(_ style: Style) {
+        // Do not start CHHapticEngine / scan controllers unless one is already present.
         let controllers = GCController.controllers()
-        let targets = controllers.isEmpty
-            ? (GCController.current.map { [$0] } ?? [])
-            : controllers
+        guard !controllers.isEmpty else { return }
+        guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else { return }
 
-        for controller in targets {
+        for controller in controllers {
             guard let deviceHaptics = controller.haptics else { continue }
-            let localities: [GCHapticsLocality] = [.default, .handles]
-            for locality in localities {
+            for locality in [GCHapticsLocality.default, .handles] {
                 guard let engine = deviceHaptics.createEngine(withLocality: locality) else { continue }
                 do {
                     try engine.start()
