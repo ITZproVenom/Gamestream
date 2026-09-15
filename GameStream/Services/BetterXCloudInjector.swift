@@ -110,12 +110,9 @@ final class BetterXCloudInjector {
             if (style.textContent !== css) style.textContent = css;
         }
         apply();
-        // Single apply on inject. MutationObserver(subtree) + 2s polling
-        // competed with WebRTC decode and drove packet loss up over time.
     })();
     """
 
-    /// Hide Xbox website chrome while streaming so Play feels like a player, not a browser.
     static let streamIsolationJS = """
     (function() {
         if (window.__gsStreamIsolation) return;
@@ -166,7 +163,6 @@ final class BetterXCloudInjector {
             if (style.textContent !== css) style.textContent = css;
         }
         applyCss();
-
         function tryAutoStart() {
             try {
                 const href = (location.href || '').toLowerCase();
@@ -195,9 +191,26 @@ final class BetterXCloudInjector {
     """
 
     private init() {
-        if let cached = UserDefaults.standard.string(forKey: cacheKey) {
-            cachedScript = Self.stripUserScriptHeader(cached)
+        if let bundled = Self.loadBundledScript(), !bundled.isEmpty {
+            cachedScript = bundled
         }
+        if let cached = UserDefaults.standard.string(forKey: cacheKey) {
+            let stripped = Self.stripUserScriptHeader(cached)
+            if stripped.count > (cachedScript?.count ?? 0) {
+                cachedScript = stripped
+            }
+        }
+    }
+
+    /// Offline floor: script shipped inside the IPA so first launch / offline still works.
+    private static func loadBundledScript() -> String? {
+        let url =
+            Bundle.main.url(forResource: "better-xcloud.user", withExtension: "js")
+            ?? Bundle.main.url(forResource: "better-xcloud.user", withExtension: "js", subdirectory: nil)
+        guard let url, let raw = try? String(contentsOf: url, encoding: .utf8), raw.count > 1000 else {
+            return nil
+        }
+        return stripUserScriptHeader(raw)
     }
 
     func preload() {
