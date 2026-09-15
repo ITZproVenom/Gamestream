@@ -57,12 +57,12 @@ fun XboxWebView(
             webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                     url?.let { session.updateStreamingFromUrl(it) }
-                    inject(view)
+                    inject(view, session)
                 }
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     url?.let { session.updateStreamingFromUrl(it) }
-                    inject(view)
+                    inject(view, session)
                     view?.evaluateJavascript(SPA_BRIDGE, null)
                     CookieManager.getInstance().flush()
                 }
@@ -112,9 +112,10 @@ fun XboxWebView(
     )
 }
 
-private fun inject(view: WebView?) {
+private fun inject(view: WebView?, session: SessionStore) {
     if (view == null) return
     view.evaluateJavascript(BetterXCloudInjector.bootstrapAndModernCss(), null)
+    view.evaluateJavascript(session.betterXCloudPrefsJs(reloadIfXbox = false), null)
     val script = BetterXCloudInjector.currentScript(view.context) ?: return
     view.evaluateJavascript(
         "(function(){ if (window.__gsBxScript) return true; window.__gsBxScript = true; return false; })();",
