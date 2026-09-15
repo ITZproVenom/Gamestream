@@ -5,17 +5,19 @@ struct AnimatedBackground: View {
 
     var body: some View {
         TimelineView(.animation) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
+            let animate = appearance.backgroundStyle == .aurora && appearance.animationIntensity == .full && appearance.effectsMode != .performance
+            let t = animate ? timeline.date.timeIntervalSinceReferenceDate : 0
             let accent = appearance.accent
             let light = appearance.mode == .light
+            let glowScale: Double = appearance.effectsMode == .performance ? 0.35 : appearance.glassIntensity
 
             ZStack {
                 (light ? Color(red: 0.93, green: 0.94, blue: 0.98) : Color.black)
 
                 RadialGradient(
                     colors: [
-                        accent.primaryGlow.opacity(light ? 0.28 : 0.55),
-                        accent.primaryGlow.opacity(light ? 0.12 : 0.25),
+                        accent.primaryGlow.opacity((light ? 0.28 : 0.55) * glowScale),
+                        accent.primaryGlow.opacity((light ? 0.12 : 0.25) * glowScale),
                         .clear
                     ],
                     center: UnitPoint(
