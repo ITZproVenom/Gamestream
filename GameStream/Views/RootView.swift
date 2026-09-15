@@ -173,7 +173,7 @@ struct RootView: View {
             if selectedTab == tab {
                 Capsule()
                     .glassEffect(.regular.interactive())
-                    .glassEffectID(tab.rawValue, in: navNamespace)
+                    .matchedGeometryEffect(id: "selectedTab", in: navNamespace)
             }
         }
     }
