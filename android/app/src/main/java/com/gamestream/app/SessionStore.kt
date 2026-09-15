@@ -83,7 +83,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
     fun openHome() { playActivity.end(); webUrl = IDLE_URL; isStreaming = false; offerPlayNext = queuedGames().isNotEmpty(); showNativeHub = true; requestedTab = "library" }
     fun openXboxCloud() { playActivity.end(); webUrl = HOME_URL; isStreaming = false; offerPlayNext = false; showNativeHub = false; requestedTab = "library" }
     fun openGame(game: CatalogGame) { webUrl = game.catalogUrl; isStreaming = false; offerPlayNext = false; showNativeHub = false; requestedTab = "library"; rememberRecent(game.id) }
-    fun playGame(game: CatalogGame) { webUrl = game.launchUrl; isStreaming = false; offerPlayNext = false; showNativeHub = false; requestedTab = "library"; rememberRecent(game.id) }
+    fun playGame(game: CatalogGame) { pendingJs = null; webUrl = game.launchUrl; isStreaming = true; offerPlayNext = false; showNativeHub = false; requestedTab = "library"; rememberRecent(game.id) }
     fun resumeLastStream(): Boolean {
         val game = recentGames().firstOrNull() ?: return false
         playGame(game)
@@ -211,28 +211,60 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         }
         applyBxPref("server.region", mapped)
     }
-    fun refreshBetterXCloud() { bxRefreshToken++; pendingJs = "try { location.reload(); } catch(e){}"; requestedTab = "library" }
-    private fun applyBxPref(key: String, value: String) {
-        val ek = key.replace("\\", "\\\\").replace("'", "\\'")
-        val ev = value.replace("\\", "\\\\").replace("'", "\\'")
-        pendingJs = """
+    fun refreshBetterXCloud() {
+        bxRefreshToken++
+        if (isStreaming && webUrl.contains("xbox.com")) {
+            pendingJs = "try { location.reload(); } catch(e){}"
+        }
+    }
+
+    fun betterXCloudPrefsJs(reloadIfXbox: Boolean): String {
+        val map = storedBxPrefs()
+        val assignments = map.entries.joinToString("\n") { (k, v) ->
+            val ek = k.replace("\\", "\\\\").replace("'", "\\'")
+            val ev = v.replace("\\", "\\\\").replace("'", "\\'")
+            "data['$ek']='$ev'; try { localStorage.setItem('BetterXcloud.$ek','$ev'); } catch(e){}"
+        }
+        val reload = if (reloadIfXbox) "if (/xbox\\.com/i.test(location.host)) { setTimeout(function(){ location.reload(); }, 80); }" else ""
+        return """
             (function(){
               try {
+                if (!location.host || location.host.indexOf('xbox.com') === -1) return;
                 var k='BetterXcloud';
                 var d={};
                 try { d=JSON.parse(localStorage.getItem(k)||'{}')||{}; } catch(e){}
-                d['$ek']='$ev';
-                localStorage.setItem(k, JSON.stringify(d));
-                try { localStorage.setItem('BetterXcloud.$ek','$ev'); } catch(e){}
-                setTimeout(function(){ location.reload(); }, 120);
+                var data=d;
+                $assignments
+                localStorage.setItem(k, JSON.stringify(data));
+                $reload
               } catch(e){}
             })();
         """.trimIndent()
-        requestedTab = "library"
-        isStreaming = false
-        showNativeHub = false
-        if (!webUrl.contains("xbox.com/play")) webUrl = HOME_URL
     }
+
+    private fun storedBxPrefs(): Map<String, String> {
+        val raw = prefs.getString(KEY_BX_PREFS, "") ?: ""
+        if (raw.isBlank()) return emptyMap()
+        return raw.split('|').mapNotNull { part ->
+            val idx = part.indexOf('=')
+            if (idx <= 0) null else part.substring(0, idx) to part.substring(idx + 1)
+        }.toMap()
+    }
+
+    private fun persistBxPrefs(map: Map<String, String>) {
+        val raw = map.entries.joinToString("|") { "${it.key}=${it.value}" }
+        prefs.edit().putString(KEY_BX_PREFS, raw).apply()
+    }
+
+    private fun applyBxPref(key: String, value: String) {
+        val map = storedBxPrefs().toMutableMap()
+        map[key] = value
+        persistBxPrefs(map)
+        if (isStreaming && webUrl.contains("xbox.com")) {
+            pendingJs = betterXCloudPrefsJs(reloadIfXbox = true)
+        }
+    }
+
     companion object {
         const val HOME_URL = "https://www.xbox.com/play"
         const val IDLE_URL = "about:blank"
@@ -244,6 +276,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         private const val KEY_REGION = "region"
         private const val KEY_FAVS = "favorite_ids"
         private const val KEY_RESUME = "resume_last_on_open"
+        private const val KEY_BX_PREFS = "bx_prefs_v1"
         fun isStreamingUrl(url: String): Boolean {
             val lower = url.lowercase()
             if (lower.contains("/play/games")) return false
