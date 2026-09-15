@@ -15,8 +15,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -29,6 +31,7 @@ fun SettingsScreen(session: SessionStore) {
     val regions = listOf("Auto", "North America", "Europe", "Asia", "Australia")
     val activity = session.activity()
     val top = activity.rankedThisWeek().firstOrNull()
+    val last = session.recentGames().firstOrNull()
 
     Column(
         modifier = Modifier
@@ -49,6 +52,26 @@ fun SettingsScreen(session: SessionStore) {
             style = MaterialTheme.typography.bodyMedium,
             color = Color(0xFFB0B0B8)
         )
+
+        Spacer(modifier = Modifier.height(20.dp))
+        Text("Jump back in", style = MaterialTheme.typography.titleMedium, color = Color.White)
+        Text(
+            last?.title ?: "Play a game and Resume will appear here.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color(0xFFB0B0B8),
+            maxLines = 1
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Resume last game on launch", color = Color.White, modifier = Modifier.weight(1f), maxLines = 2)
+            Switch(checked = session.resumeLastOnOpen, onCheckedChange = { session.setResumeLastOnOpen(it) })
+        }
+        if (last != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(onClick = { session.resumeLastStream() }, modifier = Modifier.fillMaxWidth()) {
+                Text("Resume ${last.title}", maxLines = 1)
+            }
+        }
 
         Spacer(modifier = Modifier.height(20.dp))
         Text("This week", style = MaterialTheme.typography.titleMedium, color = Color.White)
