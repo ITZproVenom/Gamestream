@@ -2,10 +2,59 @@ import SwiftUI
 import WebKit
 
 struct StreamPlayerView: View {
+    @EnvironmentObject var session: SessionStore
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+
     var body: some View {
-        XboxCloudWebView(url: .constant(URL(string: "https://www.xbox.com/play")!))
-            .ignoresSafeArea()
-            .navigationBarTitleDisplayMode(.inline)
+        ZStack(alignment: .top) {
+            XboxCloudWebView(url: $session.webURL)
+                .ignoresSafeArea()
+
+            if isLoading {
+                ZStack {
+                    Color.black.opacity(0.45).ignoresSafeArea()
+                    ProgressView()
+                        .controlSize(.large)
+                        .tint(.white)
+                }
+            }
+
+            HStack(spacing: 8) {
+                Button {
+                    session.exitStreamToHub()
+                } label: {
+                    Text("Exit")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                }
+                .buttonStyle(.glass)
+
+                Button {
+                    session.returnToHub()
+                } label: {
+                    Text("Hub")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                }
+                .buttonStyle(.glass)
+
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .webViewLoadingChanged)) { note in
+            if let loading = note.object as? Bool {
+                isLoading = loading
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .webViewDidFail)) { note in
+            errorMessage = note.object as? String
+            isLoading = false
+        }
     }
 }
 
@@ -24,7 +73,6 @@ struct XboxCloudWebView: UIViewRepresentable {
         config.allowsPictureInPictureMediaPlayback = true
         config.preferences.javaScriptCanOpenWindowsAutomatically = false
         config.websiteDataStore = .default()
-        // Same process pool as sign-in so auth cookies are shared
         config.processPool = SignInWebViewRepresentable.processPool
 
         let prefs = WKWebpagePreferences()
@@ -95,7 +143,7 @@ struct XboxCloudWebView: UIViewRepresentable {
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
-        webView.allowsBackForwardNavigationGestures = true
+        webView.allowsBackForwardNavigationGestures = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.delaysContentTouches = false
         webView.scrollView.isOpaque = false
@@ -107,7 +155,9 @@ struct XboxCloudWebView: UIViewRepresentable {
         context.coordinator.webView = webView
         BetterXCloudInjector.shared.ensureInjected(into: webView)
 
-        webView.load(URLRequest(url: url))
+        if url.absoluteString != "about:blank" {
+            webView.load(URLRequest(url: url))
+        }
         context.coordinator.lastLoadedURL = url
         context.coordinator.lastReloadNonce = session.reloadNonce
 
@@ -115,13 +165,15 @@ struct XboxCloudWebView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: WKWebView, context: Context) {
-        // Only load when the *app* changed the destination URL
         if context.coordinator.lastLoadedURL != url {
             context.coordinator.lastLoadedURL = url
-            uiView.load(URLRequest(url: url))
+            if url.absoluteString == "about:blank" {
+                uiView.stopLoading()
+            } else {
+                uiView.load(URLRequest(url: url))
+            }
         }
 
-        // Hard reload when user taps refresh (URL may be unchanged)
         if context.coordinator.lastReloadNonce != session.reloadNonce {
             context.coordinator.lastReloadNonce = session.reloadNonce
             uiView.reload()
@@ -166,16 +218,7 @@ struct XboxCloudWebView: UIViewRepresentable {
                let url = URL(string: href) {
                 let title = body["title"] as? String
                 Task { @MainActor in
-                    // Streaming state only — must not rewrite session.webURL
                     session?.updateFromWebURL(url, pageTitle: title)
-                }
-            }
-
-            if let streaming = body["streaming"] as? Bool {
-                Task { @MainActor in
-                    if session?.isStreaming != streaming {
-                        session?.isStreaming = streaming
-                    }
                 }
             }
         }
