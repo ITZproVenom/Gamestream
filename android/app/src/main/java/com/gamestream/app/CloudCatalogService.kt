@@ -12,7 +12,7 @@ import java.net.URL
 object CloudCatalogService {
     private const val SIGL =
         "https://catalog.gamepass.com/sigls/v2?id=29a81209-df6f-41fd-a528-2ae6b91f719c&language=en-us&market=US"
-    private const val CACHE = "xcloud-catalog-v1.json"
+    private const val CACHE = "xcloud-catalog-v2.json"
     @Volatile private var started = false
 
     fun refreshIfNeeded(context: Context) {
@@ -24,7 +24,7 @@ object CloudCatalogService {
     suspend fun fetchAndInstall(context: Context) = withContext(Dispatchers.IO) {
         refreshIfNeeded(context)
         try {
-            val remote = fetchRemote()
+            val remote = fetchRemoteProgressive(context)
             if (remote.size >= 20) {
                 saveCache(context, remote)
                 withContext(Dispatchers.Main) {
@@ -35,7 +35,7 @@ object CloudCatalogService {
         }
     }
 
-    private fun fetchRemote(): List<CatalogGame> {
+    private suspend fun fetchRemoteProgressive(context: Context): List<CatalogGame> {
         val raw = JSONArray(httpGet(SIGL))
         val ids = linkedSetOf<String>()
         for (i in 0 until raw.length()) {
@@ -46,10 +46,21 @@ object CloudCatalogService {
         val games = mutableListOf<CatalogGame>()
         val list = ids.toList()
         var index = 0
+        var published = false
         while (index < list.size) {
-            val slice = list.subList(index, minOf(index + 20, list.size))
+            val slice = list.subList(index, minOf(index + 20, list.size)).toList()
             index += 20
-            games += hydrate(slice)
+            try {
+                games += hydrate(slice)
+            } catch (_: Exception) {
+            }
+            if (!published && games.size >= 24) {
+                val snapshot = games.distinctBy { it.id.uppercase() }
+                withContext(Dispatchers.Main) {
+                    GameCatalog.installLiveCatalog(snapshot)
+                }
+                published = true
+            }
         }
         return games.distinctBy { it.id.uppercase() }
     }
