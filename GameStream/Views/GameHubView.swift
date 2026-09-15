@@ -66,26 +66,20 @@ struct GameHubView: View {
     var body: some View {
         ZStack {
             AnimatedBackground().ignoresSafeArea()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    header
-                    searchField
-                    if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        searchResults
-                    } else {
-                        JumpBackInDock()
-                        playNextBanner
-                        chipRow
-                        filterBody
-                    }
+            HubPage {
+                header
+                searchField
+                if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    searchResults
+                } else {
+                    JumpBackInDock()
+                    playNextBanner
+                    chipRow
+                    filterBody
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 130)
             }
-            .scrollIndicators(.hidden)
-            .scrollDismissesKeyboard(.interactively)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             artwork.prefetch(GameCatalog.games.map(\.id))
         }
@@ -241,21 +235,19 @@ struct GameHubView: View {
     }
 
     private var chipRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(chips, id: \.self) { chip in
-                    Button {
-                        filter = chip
-                    } label: {
-                        Text(chip.title)
-                            .font(.subheadline.weight(.medium))
-                            .lineLimit(1)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                    }
-                    .modifier(HubChipStyle(selected: filter == chip))
-                    .accessibilityLabel(chip.title)
+        HubCarousel(spacing: 8) {
+            ForEach(chips, id: \.self) { chip in
+                Button {
+                    filter = chip
+                } label: {
+                    Text(chip.title)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
                 }
+                .modifier(HubChipStyle(selected: filter == chip))
+                .accessibilityLabel(chip.title)
             }
         }
     }
@@ -282,19 +274,20 @@ struct GameHubView: View {
             Text("Featured")
                 .font(.title3.weight(.semibold))
                 .lineLimit(1)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 14) {
-                    ForEach(GameCatalog.featured) { game in
-                        FeaturedGameCard(
-                            game: game,
-                            artworkURL: artwork.url(for: game.id),
-                            play: { session.playCatalogGame(game) },
-                            favorite: { session.toggleFavorite(game.tracked) },
-                            isFavorite: { session.isFavorite(game.id) },
-                            openDetail: { detailGame = game }
-                        )
-                        .frame(width: 280, height: 176)
+            HubCarousel(spacing: 14) {
+                ForEach(GameCatalog.featured) { game in
+                    FeaturedGameCard(
+                        game: game,
+                        artworkURL: artwork.url(for: game.id),
+                        play: { session.playCatalogGame(game) },
+                        favorite: { session.toggleFavorite(game.tracked) },
+                        isFavorite: { session.isFavorite(game.id) },
+                        openDetail: { detailGame = game }
+                    )
+                    .containerRelativeFrame(.horizontal) { width, _ in
+                        HubMetrics.featuredCardWidth(containerWidth: width)
                     }
+                    .frame(height: 176)
                 }
             }
         }
@@ -309,12 +302,12 @@ struct GameHubView: View {
                         .font(.title3.weight(.semibold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
-                            ForEach(row.1) { game in
-                                poster(game)
-                                    .frame(width: 132)
-                            }
+                    HubCarousel(spacing: 12) {
+                        ForEach(row.1) { game in
+                            poster(game)
+                                .containerRelativeFrame(.horizontal) { width, _ in
+                                    HubMetrics.posterWidth(containerWidth: width)
+                                }
                         }
                     }
                 }
