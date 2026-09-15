@@ -4,6 +4,7 @@ extension SessionStore {
     /// Single Play path: hide GameHub and load the Xbox Cloud *launch* URL only.
     /// Never bounce through /play/games first — that race is what broke /play.
     func playGame(_ game: TrackedGame) {
+        guard let url = game.launchURL else { return }
         pendingJavaScript = nil
         HubState.shared.showNativeHub = false
         offerPlayNext = false
@@ -15,7 +16,6 @@ extension SessionStore {
             lastSeen: Date(),
             isFavorite: isFavorite(game.id)
         )
-        guard let url = game.launchURL else { return }
         if webURL != url {
             webURL = url
         }
