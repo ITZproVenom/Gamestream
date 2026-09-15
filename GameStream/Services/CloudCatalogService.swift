@@ -190,6 +190,11 @@ enum CloudCatalogService {
             .appendingPathComponent(cacheName)
     }
 
+    static func clearDiskCache() {
+        guard let url = cacheURL() else { return }
+        try? FileManager.default.removeItem(at: url)
+    }
+
     private static func saveCache(_ games: [CatalogGame]) {
         guard let url = cacheURL() else { return }
         let payload: [[String: String]] = games.map { game in
