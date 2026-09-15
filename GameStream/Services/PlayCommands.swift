@@ -19,10 +19,11 @@ extension SessionStore {
         // Seed Better xCloud quality prefs before the launch page loads.
         ensureDefaultStreamQualityPrefs()
         pendingJavaScript = Self.betterXCloudPrefsJS(Self.storedBetterXCloudPrefs(), reloadIfXbox: false)
+        // Show StreamPlayerView first, then load the *launch* URL (not the website catalog).
+        isStreaming = true
         if webURL != url {
             webURL = url
         }
-        isStreaming = true
     }
 
     /// Defaults tuned for readable mid-range detail (enemies, UI text) without a bitrate *cap*.
