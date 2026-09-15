@@ -2,6 +2,15 @@ import SwiftUI
 
 @main
 struct GameStreamApp: App {
+    init() {
+        // Bounded HTTP cache — posters + catalog without unbounded growth
+        URLCache.shared = URLCache(
+            memoryCapacity: 24 * 1024 * 1024,
+            diskCapacity: 96 * 1024 * 1024,
+            diskPath: "gamestream-url-cache"
+        )
+    }
+
     @StateObject private var session = SessionStore()
     @StateObject private var appearance = AppearanceStore.shared
     @State private var showIntro = !OnboardingStore.hasCompletedIntro
