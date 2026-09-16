@@ -78,7 +78,7 @@ final class SessionStore: ObservableObject {
         guard isSignedIn else { return }
         MicrosoftAuth.fetchAuthCookies { cookies in
             Task { @MainActor in
-                if !MicrosoftAuth.cookiesIndicateMicrosoftAuth(cookies) {
+                if !MicrosoftAuth.cookiesIndicateXboxSession(cookies) {
                     self.clearLocalAuthFlag()
                 }
             }

@@ -22,24 +22,23 @@ enum MicrosoftAuth {
         return href.contains("xbox.com") || href.contains("xboxlive.com")
     }
 
-    /// Presence on xbox.com/play is not proof of login.
-    static func cookiesIndicateMicrosoftAuth(_ cookies: [HTTPCookie]) -> Bool {
-        let authNames: Set<String> = [
-            "mspauth", "mspprof", "rpssecauth", "__host-msaauthp",
-            "__host-msauth", "xid", "xboxlive", "xbl"
-        ]
+    /// True only when a real xbox.com / xboxlive.com SESSION cookie is present
+    /// (RPSTAuth, XBL3, XBLX, xid, ...). That is what makes xbox.com treat the
+    /// WebView as signed in. login.live.com cookies alone are NOT sufficient —
+    /// without this the player webview lands "not logged in" and dumps the user
+    /// to the store/sign-in page.
+    static func cookiesIndicateXboxSession(_ cookies: [HTTPCookie]) -> Bool {
         for cookie in cookies {
             let name = cookie.name.lowercased()
             let domain = cookie.domain.lowercased()
             let value = cookie.value.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !value.isEmpty, value.count > 8 else { continue }
-            if authNames.contains(name) { return true }
-            if name.contains("mspauth") || name.contains("rpssec") { return true }
-            if (domain.contains("login.live.com") || domain.contains("live.com"))
-                && (name.contains("auth") || name.contains("token")) {
+            let onXbox = domain.contains("xbox.com") || domain.contains("xboxlive.com")
+            guard onXbox else { continue }
+            if ["rpstauth", "xbl3", "xblx", "xid", "xbl", "xbox-auth-token"].contains(name) {
                 return true
             }
-            if domain.contains("xboxlive.com") && (name.contains("auth") || name.contains("token") || name.contains("xbl")) {
+            if name.hasPrefix("rpst") || name.contains("xbl") || name.contains("xid") {
                 return true
             }
         }

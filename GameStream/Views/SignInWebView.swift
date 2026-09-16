@@ -1,7 +1,9 @@
 import SwiftUI
 import WebKit
 
-/// Sign-in surface — Microsoft's real hosted login, shared cookie store with Library webview.
+/// Sign-in surface — Microsoft's real hosted login, shared cookie store with the
+/// streaming WebView. Signed-in is only marked after an actual xbox.com session
+/// cookie appears in the store; login.live.com cookies alone are not enough.
 struct SignInWebView: View {
     var body: some View {
         SignInWebViewRepresentable(url: MicrosoftAuth.loginURL)
@@ -13,7 +15,7 @@ struct SignInWebViewRepresentable: UIViewRepresentable {
     let url: URL
     @EnvironmentObject var session: SessionStore
 
-    /// Shared with XboxCloudWebView so Microsoft login cookies survive into Library.
+    /// Shared with XboxCloudWebView so Microsoft login cookies survive into the stream.
     private static let sharedProcessPool = WKProcessPool()
 
     static var processPool: WKProcessPool { sharedProcessPool }
@@ -81,14 +83,26 @@ struct SignInWebViewRepresentable: UIViewRepresentable {
             // Landing on /play without visiting Microsoft login is not authentication.
             guard sawMicrosoftLoginHost, MicrosoftAuth.isXboxDestination(href) else { return }
             completing = true
+            pollForXboxSession(attempt: 0)
+        }
+
+        /// xbox.com sets its session cookies (RPSTAuth/XBL3) when it processes the
+        /// login redirect, which can lag the page-load finish event. Poll the shared
+        /// cookie store so we only mark signed-in when the session actually exists.
+        private func pollForXboxSession(attempt: Int) {
             MicrosoftAuth.fetchAuthCookies { cookies in
-                let ok = MicrosoftAuth.cookiesIndicateMicrosoftAuth(cookies)
-                Task { @MainActor in
-                    if ok {
+                if MicrosoftAuth.cookiesIndicateXboxSession(cookies) {
+                    Task { @MainActor in
                         self.session?.markSignedInAfterMicrosoftAuth()
-                    } else {
-                        self.completing = false
                     }
+                    return
+                }
+                guard attempt < 8 else {
+                    self.completing = false
+                    return
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    self.pollForXboxSession(attempt: attempt + 1)
                 }
             }
         }

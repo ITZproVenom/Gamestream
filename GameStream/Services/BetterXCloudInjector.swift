@@ -164,6 +164,7 @@ final class BetterXCloudInjector {
         }
         `;
         function applyCss() {
+            if (location.host && location.host.indexOf('xbox.com') === -1) return;
             let style = document.getElementById(CSS_ID);
             if (!style) {
                 style = document.createElement('style');
@@ -173,28 +174,45 @@ final class BetterXCloudInjector {
             if (style.textContent !== css) style.textContent = css;
         }
         applyCss();
+        let autoStreamTimer = (function() {
+            const timer = setInterval(tryAutoStart, 600);
+            return timer;
+        })();
         function tryAutoStart() {
             try {
                 const href = (location.href || '').toLowerCase();
-                if (href.indexOf('/play/launch') === -1 && href.indexOf('/launch/') === -1 && href.indexOf('/play/games') === -1) return;
+                const isGamePage = href.indexOf('/play/launch') !== -1 || href.indexOf('/launch/') !== -1 || href.indexOf('/play/games') !== -1;
+                if (!isGamePage) return;
                 const vids = document.querySelectorAll('video');
                 for (const v of vids) {
-                    if (v && !v.paused && v.readyState >= 2) return;
+                    if (v && !v.paused && v.readyState >= 2) {
+                        clearInterval(autoStreamTimer);
+                        return;
+                    }
                 }
-                const labels = ['play', 'start', 'resume', 'continue'];
+                const labels = ['play with ads', 'play now', 'resume', 'continue playing', 'continue', 'start', 'play', 'ok'];
                 const nodes = Array.from(document.querySelectorAll('button, a, [role="button"]'));
+                for (const l of labels) {
+                    const el = nodes.find(function(n) {
+                        const t = ((n.innerText || n.textContent || n.getAttribute('aria-label') || '') + '').trim().toLowerCase();
+                        return t === l;
+                    });
+                    if (el) {
+                        el.click();
+                        return;
+                    }
+                }
                 for (const el of nodes) {
-                    const text = ((el.innerText || el.textContent || el.getAttribute('aria-label') || '') + '').trim().toLowerCase();
-                    if (!text || text.length > 40) continue;
-                    if (labels.some(l => text === l || text.startsWith(l + ' '))) {
+                    const t = ((el.innerText || el.textContent || el.getAttribute('aria-label') || '') + '').trim().toLowerCase();
+                    if (!t || t.length > 60) continue;
+                    if (labels.slice(1).some(function(l) { return t.startsWith(l + ' '); })) {
                         el.click();
                         return;
                     }
                 }
             } catch (e) {}
         }
-        const autoStreamTimer = setInterval(tryAutoStart, 800);
-        setTimeout(function() { clearInterval(autoStreamTimer); }, 40000);
+        setTimeout(function() { clearInterval(autoStreamTimer); }, 45000);
     })();
     """
 

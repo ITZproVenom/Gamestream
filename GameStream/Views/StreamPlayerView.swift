@@ -1,6 +1,17 @@
 import SwiftUI
 import WebKit
 
+/// The player is a real, long-lived browser session dedicated to one game.
+///
+/// Pressing Play lands it on `xbox.com/play` (the authenticated cloud home).
+/// From there, in order, the same WebView:
+///   1. renders signed-in (shared cookie store) or drops to login.live.com where
+///      the user completes sign-in directly inside the player,
+///   2. is advanced to the game's `/play/launch/{slug}/{id}` page once the landing
+///      finishes without bouncing to a login host,
+///   3. auto-clicks the Play / Play with ads / Resume button (see streamIsolationJS)
+///      so the actual stream starts instead of parking on the game page.
+/// No navigation is ever cancelled — the player behaves like a browser.
 struct StreamPlayerView: View {
     @EnvironmentObject var session: SessionStore
     @State private var isLoading = true
@@ -52,6 +63,11 @@ struct StreamPlayerView: View {
                 withAnimation(.easeOut(duration: 0.35)) {
                     isLoading = loading
                 }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .playerStreamPageReached)) { _ in
+            withAnimation(.easeOut(duration: 0.25)) {
+                isLoading = false
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .webViewDidFail)) { note in
@@ -208,6 +224,8 @@ struct XboxCloudWebView: UIViewRepresentable {
         var lastReloadNonce: Int = 0
         weak var webView: WKWebView?
         private weak var session: SessionStore?
+        private var authBounces = 0
+        private var landingAdvanceWorkItem: DispatchWorkItem?
 
         init(session: SessionStore) {
             self.session = session
@@ -226,6 +244,11 @@ struct XboxCloudWebView: UIViewRepresentable {
                 let title = body["title"] as? String
                 Task { @MainActor in
                     session?.updateFromWebURL(url, pageTitle: title)
+                    if Self.isPlayerStreamingPage(url) {
+                        NotificationCenter.default.post(name: .playerStreamPageReached, object: nil)
+                    } else {
+                        scheduleAdvanceFromLanding(ifNeeded: url.absoluteString)
+                    }
                 }
             }
         }
@@ -243,6 +266,9 @@ struct XboxCloudWebView: UIViewRepresentable {
             if let url = webView.url {
                 Task { @MainActor in
                     session?.updateFromWebURL(url, pageTitle: webView.title)
+                    if Self.isPlayerStreamingPage(url) {
+                        NotificationCenter.default.post(name: .playerStreamPageReached, object: nil)
+                    }
                 }
             }
 
@@ -252,6 +278,12 @@ struct XboxCloudWebView: UIViewRepresentable {
                     session?.pendingJavaScript = nil
                 }
             }
+
+            advancePastAuthLanding(webView: webView)
+        }
+
+        static func isPlayerStreamingPage(_ url: URL) -> Bool {
+            SessionStore.isStreamingURL(url.absoluteString)
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -261,39 +293,89 @@ struct XboxCloudWebView: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
             NotificationCenter.default.post(name: .webViewLoadingChanged, object: false)
-            NotificationCenter.default.post(name: .webViewDidFail, object: error.localizedDescription)
+            if (error as NSError).code != NSURLErrorCancelled {
+                NotificationCenter.default.post(name: .webViewDidFail, object: error.localizedDescription)
+            }
         }
 
+        // Real browser: nothing blocks the stream, sign-in, or store navigation.
         func webView(
             _ webView: WKWebView,
             decidePolicyFor navigationAction: WKNavigationAction,
             decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
         ) {
-            guard let url = navigationAction.request.url else {
-                decisionHandler(.allow)
-                return
-            }
-            let raw = url.absoluteString.lowercased()
-            let host = (url.host ?? "").lowercased()
-
-            if raw == "about:blank"
-                || host.contains("login.live.com")
-                || host.contains("login.microsoftonline.com")
-                || host.contains("microsoft.com")
-                || host.contains("xboxlive.com")
-                || host.contains("microsoftonline.com") {
-                decisionHandler(.allow)
-                return
-            }
-
-            if session?.isStreaming == true {
-                if host.contains("xbox.com") || host.contains("xboxservices") || host.contains("gamepass") || host.contains("azure") || raw.contains("xcloud") {
-                    decisionHandler(.allow)
-                    return
-                }
-            }
-
             decisionHandler(.allow)
         }
+
+        /// The landing page can settle and then client-side navigate (pushState) to
+        /// the cloud dashboard without another didFinish. Debounce an advance so a
+        /// settled, non-login xbox.com destination still moves on to the launch page.
+        private func scheduleAdvanceFromLanding(ifNeeded current: String) {
+            guard session?.isStreaming == true,
+                  session?.webURL == MicrosoftAuth.playURL,
+                  MicrosoftAuth.isXboxDestination(current),
+                  !MicrosoftAuth.isLoginHost(current) else { return }
+            landingAdvanceWorkItem?.cancel()
+            let work = DispatchWorkItem { [weak session] in
+                Task { @MainActor in
+                    guard let session, session.isStreaming, session.webURL == MicrosoftAuth.playURL else { return }
+                    if let launch = session.currentGame?.launchURL, launch != MicrosoftAuth.playURL {
+                        session.webURL = launch
+                    }
+                }
+            }
+            landingAdvanceWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: work)
+        }
+
+        /// Play opens on xbox.com/play, the auth landing. It renders signed-in when
+        /// the shared cookie store has a session, or redirects to login.live.com
+        /// where the user signs in inside the same WebView. Once the landing
+        /// finishes on an xbox.com page — not a login host — advance to the game
+        /// launch page. If a login page appears after advancing (session dropped),
+        /// bounce back to the auth landing to re-sign-in, capped so a genuinely
+        /// broken account can't loop forever.
+        private func advancePastAuthLanding(webView: WKWebView) {
+            guard let session else { return }
+            guard session.isStreaming else { return }
+            guard let current = webView.url?.absoluteString else { return }
+
+            let onLoginHost = MicrosoftAuth.isLoginHost(current)
+
+            if session.webURL == MicrosoftAuth.playURL {
+                // Waiting for the landing to render signed-in (or the user to log in).
+                if onLoginHost {
+                    return
+                }
+                if let launch = session.currentGame?.launchURL, launch != MicrosoftAuth.playURL {
+                    authBounces = 0
+                    session.webURL = launch
+                    if !session.isSignedIn {
+                        MicrosoftAuth.fetchAuthCookies { cookies in
+                            Task { @MainActor in
+                                if MicrosoftAuth.cookiesIndicateXboxSession(cookies) {
+                                    session.markSignedInAfterMicrosoftAuth()
+                                }
+                            }
+                        }
+                    }
+                }
+                return
+            }
+
+            if onLoginHost {
+                if authBounces < 3 {
+                    authBounces += 1
+                    session.webURL = MicrosoftAuth.playURL
+                }
+                return
+            }
+
+            authBounces = 0
+        }
     }
+}
+
+extension Notification.Name {
+    static let playerStreamPageReached = Notification.Name("playerStreamPageReached")
 }

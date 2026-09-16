@@ -87,5 +87,9 @@ private struct GameStreamRootView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             CloudCatalogService.refreshIfNeeded()
         }
+        // A persisted "signed in" flag is only trustworthy when the shared cookie
+        // store actually still holds an xbox.com session. If not, drop to the
+        // sign-in surface instead of launching streams "not logged in".
+        session.revalidatePersistedLogin()
     }
 }
