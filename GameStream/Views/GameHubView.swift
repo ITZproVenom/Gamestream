@@ -2,6 +2,8 @@ import SwiftUI
 
 enum HubBrowseFilter: Hashable {
     case all
+    case mine
+    case browse
     case forYou
     case favorites
     case recents
@@ -13,6 +15,8 @@ enum HubBrowseFilter: Hashable {
     var title: String {
         switch self {
         case .all: return "All"
+        case .mine: return "My Library"
+        case .browse: return "All Games"
         case .forYou: return "For You"
         case .favorites: return "Favorites"
         case .recents: return "Recents"
@@ -34,7 +38,7 @@ struct GameHubView: View {
     @State private var showingLists = false
 
     private var chips: [HubBrowseFilter] {
-        var items: [HubBrowseFilter] = [.all, .forYou, .favorites, .recents, .lists, .activity]
+        var items: [HubBrowseFilter] = [.all, .mine, .browse, .forYou, .favorites, .recents, .lists, .activity]
         items.append(contentsOf: DiscoveryMode.allCases.map { .mode($0) })
         items.append(contentsOf: GameCatalog.genreNames.map { .genre($0) })
         return items
@@ -48,6 +52,12 @@ struct GameHubView: View {
         switch filter {
         case .all:
             return GameCatalog.games
+        case .browse:
+            return GameCatalog.games.sorted {
+                $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+            }
+        case .mine:
+            return personalGames
         case .forYou:
             return GameCatalog.forYou(favorites: session.favorites, recents: session.recents)
         case .favorites:
@@ -61,6 +71,19 @@ struct GameHubView: View {
         case .genre(let name):
             return GameCatalog.games.filter { $0.genre == name }
         }
+    }
+
+    /// Native "my library": pinned games first, then recents, deduped.
+    private var personalGames: [CatalogGame] {
+        var seen = Set<String>()
+        var games: [CatalogGame] = []
+        for tracked in session.favorites + session.recents {
+            let game = GameCatalog.catalog(from: tracked)
+            if seen.insert(game.id.uppercased()).inserted {
+                games.append(game)
+            }
+        }
+        return games
     }
 
     var body: some View {
@@ -337,6 +360,8 @@ struct GameHubView: View {
 
     private var emptyCopy: String {
         switch filter {
+        case .browse: return "The catalog hasn't loaded yet. Pull to try again."
+        case .mine: return "Star a game or play a title and it will live here."
         case .favorites: return "Star a game to pin it here."
         case .recents: return "Launch a title and it will appear here."
         case .forYou: return "Play or favorite a few games so For You can learn your genres."
@@ -346,28 +371,28 @@ struct GameHubView: View {
 
     private var cloudLibraryButton: some View {
         Button {
-            session.openXboxCloud()
+            filter = .browse
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: "cloud.fill")
+                Image(systemName: "square.grid.2x2.fill")
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Full Xbox Cloud library")
+                    Text("Browse all games")
                         .font(.headline)
                         .lineLimit(1)
-                    Text("Browse every title in the official catalog")
+                    Text("Every catalog title in a native grid")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 4)
-                Image(systemName: "arrow.up.right")
+                Image(systemName: "chevron.right")
                     .font(.caption.weight(.bold))
             }
             .padding(16)
         }
         .buttonStyle(.glass)
-        .accessibilityLabel("Open full Xbox Cloud library")
+        .accessibilityLabel("Browse all catalog games")
     }
 
     private func poster(_ game: CatalogGame) -> some View {
