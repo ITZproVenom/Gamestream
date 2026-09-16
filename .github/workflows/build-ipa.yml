@@ -140,6 +140,26 @@ jobs:
       - name: Generate Xcode project
         run: |
           set -euo pipefail
+          RUN="${{ github.run_number }}"
+          python3 - "$RUN" <<'PY'
+          import re, sys
+          from pathlib import Path
+          run = sys.argv[1]
+          p = Path("project.yml")
+          text = p.read_text()
+          text = re.sub(
+              r'CFBundleShortVersionString: "[^"]*"',
+              f'CFBundleShortVersionString: "1.5.8.{run}"',
+              text, count=1,
+          )
+          text = re.sub(
+              r'CFBundleVersion: "[^"]*"',
+              f'CFBundleVersion: "{run}"',
+              text, count=1,
+          )
+          p.write_text(text)
+          print(f"Stamped app version 1.5.8.{run} (CFBundleVersion {run})")
+          PY
           xcodegen generate
           echo "--- pbxproj resource refs ---"
           rg -n "better-xcloud|Resources|embedded\\.json|\\.wav" GameStream.xcodeproj/project.pbxproj | head -40 || true
