@@ -9,6 +9,7 @@ extension SessionStore {
         pendingJavaScript = nil
         HubState.shared.showNativeHub = false
         offerPlayNext = false
+        RemoteImageLoader.shared.clear()
         requestedTab = .library
         currentGame = TrackedGame(
             id: game.id,

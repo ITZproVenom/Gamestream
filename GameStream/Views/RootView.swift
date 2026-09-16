@@ -40,37 +40,35 @@ struct RootView: View {
                         .zIndex(4)
                 }
 
-                GameHubView()
-                    .ignoresSafeArea(
-                        edges: (selectedTab == .library && !session.isStreaming)
-                            ? [.bottom]
-                            : []
-                    )
-                    .opacity(selectedTab == .library && !session.isStreaming ? 1 : 0)
-                    .allowsHitTesting(selectedTab == .library && !session.isStreaming)
-                    .accessibilityHidden(selectedTab != .library || session.isStreaming)
-                    .zIndex(selectedTab == .library && !session.isStreaming ? 2 : 0)
+                if !session.isStreaming {
+                    GameHubView()
+                        .ignoresSafeArea(edges: selectedTab == .library ? [.bottom] : [])
+                        .opacity(selectedTab == .library ? 1 : 0)
+                        .allowsHitTesting(selectedTab == .library)
+                        .accessibilityHidden(selectedTab != .library)
+                        .zIndex(selectedTab == .library ? 2 : 0)
 
-                SearchHubView(isActive: selectedTab == .search && !session.isStreaming)
-                    .safeAreaInset(edge: .top, spacing: 0) {
-                        if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                           let game = session.continueGame {
-                            ContinuePlayingCard(game: game)
-                                .padding(.horizontal, 20)
-                                .padding(.top, 8)
-                                .padding(.bottom, 4)
+                    SearchHubView(isActive: selectedTab == .search)
+                        .safeAreaInset(edge: .top, spacing: 0) {
+                            if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                               let game = session.continueGame {
+                                ContinuePlayingCard(game: game)
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, 8)
+                                    .padding(.bottom, 4)
+                            }
                         }
-                    }
-                    .opacity(selectedTab == .search && !session.isStreaming ? 1 : 0)
-                    .allowsHitTesting(selectedTab == .search && !session.isStreaming)
-                    .accessibilityHidden(selectedTab != .search || session.isStreaming)
-                    .zIndex(selectedTab == .search && !session.isStreaming ? 2 : 0)
+                        .opacity(selectedTab == .search ? 1 : 0)
+                        .allowsHitTesting(selectedTab == .search)
+                        .accessibilityHidden(selectedTab != .search)
+                        .zIndex(selectedTab == .search ? 2 : 0)
 
-                SettingsView(isActive: selectedTab == .settings && !session.isStreaming)
-                    .opacity(selectedTab == .settings && !session.isStreaming ? 1 : 0)
-                    .allowsHitTesting(selectedTab == .settings && !session.isStreaming)
-                    .accessibilityHidden(selectedTab != .settings || session.isStreaming)
-                    .zIndex(selectedTab == .settings && !session.isStreaming ? 2 : 0)
+                    SettingsView(isActive: selectedTab == .settings)
+                        .opacity(selectedTab == .settings ? 1 : 0)
+                        .allowsHitTesting(selectedTab == .settings)
+                        .accessibilityHidden(selectedTab != .settings)
+                        .zIndex(selectedTab == .settings ? 2 : 0)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 

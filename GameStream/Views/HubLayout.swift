@@ -49,7 +49,7 @@ struct HubCarousel<Content: View>: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: spacing) {
+            LazyHStack(spacing: spacing) {
                 content()
             }
         }

@@ -17,8 +17,8 @@ final class RemoteImageLoader: ObservableObject {
     private var inflight: [URL: Bool] = [:]
 
     init() {
-        cache.countLimit = 300
-        cache.totalCostLimit = 240 * 1024 * 1024
+        cache.countLimit = 200
+        cache.totalCostLimit = 96 * 1024 * 1024
     }
 
     /// Synchronous cache hop for use from `body`; never performs network.
