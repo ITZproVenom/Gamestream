@@ -117,8 +117,8 @@ struct RootView: View {
             syncIdleTimer()
         }
         .onAppear {
-            ControllerManager.shared.onPress = { [weak self] press in
-                self?.handleControllerPress(press)
+            ControllerManager.shared.onPress = { press in
+                handleControllerPress(press)
             }
             ControllerManager.shared.start()
             BetterXCloudInjector.shared.preload()

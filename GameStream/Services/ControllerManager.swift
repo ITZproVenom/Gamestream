@@ -39,10 +39,14 @@ final class ControllerManager: ObservableObject {
         observersRegistered = true
         let center = NotificationCenter.default
         _ = center.addObserver(forName: .GCControllerDidConnect, object: nil, queue: .main) { [weak self] _ in
-            self?.refresh()
+            Task { @MainActor [weak self] in
+                self?.refresh()
+            }
         }
         _ = center.addObserver(forName: .GCControllerDidDisconnect, object: nil, queue: .main) { [weak self] _ in
-            self?.refresh()
+            Task { @MainActor [weak self] in
+                self?.refresh()
+            }
         }
     }
 
