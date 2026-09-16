@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       bundle_injection:
-        description: "Inject bundled resources/icons into the .app (diagnostic control: 'off' == last-working 2a31e1f packaging)"
+        description: "Inject bundled resources/icons into the .app (default 'none' == last-working 2a31e1f packaging; 'full' reproduces the crash-era d31852d packaging for diagnosis)"
         type: choice
         options: ["full", "none"]
-        default: "full"
+        default: "none"
   push:
     branches: [main]
     tags: ["v*"]
@@ -81,7 +81,7 @@ jobs:
           PY
 
       - name: Bundle Better xCloud + sound pack
-        if: ${{ github.event.inputs.bundle_injection != 'none' }}
+        if: ${{ github.event.inputs.bundle_injection == 'full' }}
         run: |
           set -euo pipefail
           mkdir -p GameStream/Resources/Sounds
@@ -127,7 +127,7 @@ jobs:
           PY
 
       - name: Verify Resources on disk
-        if: ${{ github.event.inputs.bundle_injection != 'none' }}
+        if: ${{ github.event.inputs.bundle_injection == 'full' }}
         run: |
           set -euo pipefail
           echo "Resources tree:"
@@ -159,7 +159,7 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO
 
       - name: Inject Resources into app bundle
-        if: ${{ github.event.inputs.bundle_injection != 'none' }}
+        if: ${{ github.event.inputs.bundle_injection == 'full' }}
         run: |
           set -euo pipefail
           APP="build/GameStream.xcarchive/Products/Applications/GameStream.app"
@@ -211,7 +211,7 @@ jobs:
 
       - name: Package IPA
         env:
-          BUNDLE_INJECTION: ${{ github.event.inputs.bundle_injection || 'full' }}
+          BUNDLE_INJECTION: ${{ github.event.inputs.bundle_injection || 'none' }}
         run: |
           set -euo pipefail
           APP="build/GameStream.xcarchive/Products/Applications/GameStream.app"
@@ -239,13 +239,13 @@ jobs:
           echo "App payload:"
           unzip -l GameStream-unsigned.ipa
           IPA_SIZE=$(stat -f%z GameStream-unsigned.ipa)
-          if [ "$IPA_SIZE" -lt 400000 ] && [ "${BUNDLE_INJECTION:-full}" != "none" ]; then
+          if [ "$IPA_SIZE" -lt 400000 ] && [ "${BUNDLE_INJECTION:-none}" != "none" ]; then
             echo "IPA is only ${IPA_SIZE} bytes - expected ~1MB+ with BX bundled" >&2
             exit 1
           fi
           python3 - <<'PY'
           import os, zipfile, sys
-          inject = os.environ.get("BUNDLE_INJECTION", "full") != "none"
+          inject = os.environ.get("BUNDLE_INJECTION", "none") != "none"
           z = zipfile.ZipFile("GameStream-unsigned.ipa")
           names = z.namelist()
           cars = [n for n in names if n.endswith("Assets.car")]
