@@ -12,7 +12,8 @@ struct TrackedGame: Codable, Identifiable, Equatable, Hashable {
     }
 
     var launchURL: URL? {
-        URL(string: "https://www.xbox.com/play/launch/\(id)")
+        let slugPart = slug.isEmpty ? id.lowercased() : slug
+        return URL(string: "https://www.xbox.com/play/games/\(slugPart)/\(id)")
     }
 }
 

@@ -303,10 +303,23 @@ struct XboxCloudWebView: UIViewRepresentable {
                         decisionHandler(.allow)
                         return
                     }
-                    if raw.contains("/play/games")
-                        || raw.hasSuffix("/play")
-                        || raw.hasSuffix("/play/")
-                        || (raw.contains("xbox.com/en-") && !raw.contains("/launch")) {
+                    if raw.contains("/play/games") {
+                        if let loaded = session?.webURL,
+                           loaded.path.lowercased().contains("/play/games"),
+                           url.path.lowercased().hasSuffix(loaded.path.lowercased()) {
+                            decisionHandler(.allow)
+                            return
+                        }
+                        decisionHandler(.cancel)
+                        return
+                    }
+                    if raw.contains("/games/store/")
+                        || (raw.contains("xbox.com/en-") && !raw.contains("/launch") && !raw.contains("/play/games")) {
+                        decisionHandler(.cancel)
+                        return
+                    }
+                    if raw.hasSuffix("/play")
+                        || raw.hasSuffix("/play/") {
                         decisionHandler(.cancel)
                         return
                     }

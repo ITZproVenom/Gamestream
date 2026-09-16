@@ -184,7 +184,7 @@ final class BetterXCloudInjector {
         function tryAutoStart() {
             try {
                 const href = (location.href || '').toLowerCase();
-                if (href.indexOf('/play/launch') === -1 && href.indexOf('/launch/') === -1) return;
+                if (href.indexOf('/play/launch') === -1 && href.indexOf('/launch/') === -1 && href.indexOf('/play/games') === -1) return;
                 const vids = document.querySelectorAll('video');
                 for (const v of vids) {
                     if (v && !v.paused && v.readyState >= 2) return;
