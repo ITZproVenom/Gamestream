@@ -4,6 +4,7 @@ struct SettingsView: View {
     @EnvironmentObject var session: SessionStore
     @ObservedObject private var activity = PlayActivityStore.shared
     @ObservedObject private var appearance = AppearanceStore.shared
+    @ObservedObject private var controller = ControllerManager.shared
     @State private var keepAwake: Bool = false
     @State private var resumeOnOpen: Bool = false
     @State private var resolution: String = SessionStore.storedResolution
@@ -233,6 +234,13 @@ struct SettingsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: 8) {
+                            Image(systemName: controller.isConnected ? "gamecontroller.fill" : "gamecontroller")
+                                .foregroundStyle(controller.isConnected ? .green : .secondary)
+                            Text(controller.isConnected ? "Controller connected" : "No controller")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                         Text("Made with \u{2665} by Bestin")
                             .font(.subheadline.weight(.semibold))
                             .padding(.top, 6)

@@ -4,6 +4,7 @@ import UIKit
 struct RootView: View {
     @EnvironmentObject var session: SessionStore
     @ObservedObject private var hub = HubState.shared
+    @ObservedObject private var controller = ControllerManager.shared
     @State private var selectedTab: Tab = RootView.restoredTab()
     @Namespace private var navNamespace
 
@@ -116,9 +117,51 @@ struct RootView: View {
             syncIdleTimer()
         }
         .onAppear {
+            ControllerManager.shared.onPress = { [weak self] press in
+                self?.handleControllerPress(press)
+            }
+            ControllerManager.shared.start()
             BetterXCloudInjector.shared.preload()
             syncIdleTimer()
             session.consumeLaunchResumeIfNeeded()
+        }
+    }
+
+    // MARK: - Controller navigation
+
+    private func handleControllerPress(_ press: ControllerManager.Press) {
+        // While streaming the game page owns the controller; never hijack it.
+        guard controller.isConnected, !session.isStreaming else { return }
+
+        switch press {
+        case .left:
+            advanceTab(-1)
+        case .right:
+            advanceTab(1)
+        case .menu:
+            HapticManager.impact()
+            session.returnToHub()
+        case .b:
+            // Back: a search/settings tab returns to the catalog.
+            if selectedTab == .search || selectedTab == .settings {
+                HapticManager.tap()
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                    selectedTab = .library
+                }
+            }
+        case .a, .up, .down, .x, .y:
+            break
+        }
+    }
+
+    private func advanceTab(_ delta: Int) {
+        let all = Tab.allCases
+        guard let index = all.firstIndex(of: selectedTab) else { return }
+        let next = all[(index + delta + all.count) % all.count]
+        guard next != selectedTab else { return }
+        HapticManager.tap()
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+            selectedTab = next
         }
     }
 
@@ -180,6 +223,13 @@ struct RootView: View {
                     .fill(.clear)
                     .glassEffect(.regular.interactive(), in: Capsule())
                     .matchedGeometryEffect(id: "selectedTab", in: navNamespace)
+                    .overlay {
+                        if controller.isConnected {
+                            Capsule()
+                                .stroke(Color.accentColor, lineWidth: 2)
+                                .padding(1.5)
+                        }
+                    }
             }
         }
     }
