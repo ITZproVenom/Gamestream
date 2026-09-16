@@ -287,30 +287,9 @@ struct XboxCloudWebView: UIViewRepresentable {
             }
 
             if session?.isStreaming == true {
-                if host.contains("xbox.com") {
-                    if raw.contains("/play/launch")
-                        || raw.contains("/launch/")
-                        || raw.contains("/launch?")
-                        || raw.contains("/stream/")
-                        || raw.contains("/streaming") {
-                        decisionHandler(.allow)
-                        return
-                    }
-                    if host.contains("xboxservices")
-                        || host.contains("gamepass")
-                        || host.contains("azure")
-                        || raw.contains("/api/")
-                        || raw.contains("xcloud") {
-                        decisionHandler(.allow)
-                        return
-                    }
-                    if raw.contains("/play/games")
-                        || raw.hasSuffix("/play")
-                        || raw.hasSuffix("/play/")
-                        || (raw.contains("xbox.com/en-") && !raw.contains("/launch")) {
-                        decisionHandler(.cancel)
-                        return
-                    }
+                if host.contains("xbox.com") || host.contains("xboxservices") || host.contains("gamepass") || host.contains("azure") || raw.contains("xcloud") {
+                    decisionHandler(.allow)
+                    return
                 }
             }
 
