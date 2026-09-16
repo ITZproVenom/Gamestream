@@ -69,13 +69,6 @@ struct XboxCloudWebView: UIViewRepresentable {
         Coordinator(session: session)
     }
 
-    private func cloudBindingJS(_ target: URL) -> String {
-        let escaped = target.absoluteString
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "'", with: "\\'")
-        return "try { window.__gsCloud = { relaunch: '\(escaped)' }; } catch(e) {}"
-    }
-
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
@@ -92,7 +85,7 @@ struct XboxCloudWebView: UIViewRepresentable {
         let contentController = config.userContentController
 
         contentController.addUserScript(WKUserScript(
-            source: BetterXCloudInjector.bootstrapJS + "\n" + BetterXCloudInjector.storeNavGuardJS + "\n" + BetterXCloudInjector.modernUIOverridesJS,
+            source: BetterXCloudInjector.bootstrapJS + "\n" + BetterXCloudInjector.modernUIOverridesJS,
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true
         ))
@@ -171,7 +164,6 @@ struct XboxCloudWebView: UIViewRepresentable {
 
         if url.absoluteString != "about:blank" {
             webView.load(URLRequest(url: url))
-            webView.evaluateJavaScript(cloudBindingJS(url), completionHandler: nil)
         }
         context.coordinator.lastLoadedURL = url
         context.coordinator.lastReloadNonce = session.reloadNonce
@@ -186,7 +178,6 @@ struct XboxCloudWebView: UIViewRepresentable {
                 uiView.stopLoading()
             } else {
                 uiView.load(URLRequest(url: url))
-                uiView.evaluateJavaScript(cloudBindingJS(url), completionHandler: nil)
             }
         }
 
@@ -234,12 +225,6 @@ struct XboxCloudWebView: UIViewRepresentable {
                let url = URL(string: href) {
                 let title = body["title"] as? String
                 Task { @MainActor in
-                    let raw = href.lowercased()
-                    if session?.isStreaming == true, raw.contains("/games/store/"),
-                       let webView = self.webView, let target = session?.webURL {
-                        webView.load(URLRequest(url: target))
-                        return
-                    }
                     session?.updateFromWebURL(url, pageTitle: title)
                 }
             }
@@ -319,23 +304,10 @@ struct XboxCloudWebView: UIViewRepresentable {
                         decisionHandler(.allow)
                         return
                     }
-                    if raw.contains("/play/games") {
-                        if let loaded = session?.webURL,
-                           loaded.path.lowercased().contains("/play/games"),
-                           url.path.lowercased().hasSuffix(loaded.path.lowercased()) {
-                            decisionHandler(.allow)
-                            return
-                        }
-                        decisionHandler(.cancel)
-                        return
-                    }
-                    if raw.contains("/games/store/")
-                        || (raw.contains("xbox.com/en-") && !raw.contains("/launch") && !raw.contains("/play/games")) {
-                        decisionHandler(.cancel)
-                        return
-                    }
-                    if raw.hasSuffix("/play")
-                        || raw.hasSuffix("/play/") {
+                    if raw.contains("/play/games")
+                        || raw.hasSuffix("/play")
+                        || raw.hasSuffix("/play/")
+                        || (raw.contains("xbox.com/en-") && !raw.contains("/launch")) {
                         decisionHandler(.cancel)
                         return
                     }
