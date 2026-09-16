@@ -19,6 +19,24 @@ final class BetterXCloudInjector {
     })();
     """
 
+    /// Blocks the Xbox SPA from client-side routing into the Store product page
+    /// (/games/store/...) via history.pushState/replaceState, which bypasses the
+    /// WKNavigationDelegate. Full navigations are cancelled separately in Swift.
+    static let storeNavGuardJS = """
+    (function() {
+        if (window.__gsStoreNavGuard) return;
+        window.__gsStoreNavGuard = true;
+        var isStore = function(u) { return typeof u === 'string' && /\\/games\\/store\\//i.test(u); };
+        var push = history.pushState.bind(history);
+        var replace = history.replaceState.bind(history);
+        history.pushState = function() { if (!isStore(arguments[2])) return push.apply(null, arguments); };
+        history.replaceState = function() { if (!isStore(arguments[2])) return replace.apply(null, arguments); };
+        if (isStore(location.pathname)) {
+            try { history.replaceState.call(history, {}, document.title, '/play'); } catch (e) {}
+        }
+    })();
+    """
+
     static let modernUIOverridesJS = """
     (function() {
         const CSS_ID = 'gamestream-bx-modern-v3';

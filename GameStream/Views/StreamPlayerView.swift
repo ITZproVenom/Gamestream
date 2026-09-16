@@ -84,7 +84,7 @@ struct XboxCloudWebView: UIViewRepresentable {
         let contentController = config.userContentController
 
         contentController.addUserScript(WKUserScript(
-            source: BetterXCloudInjector.bootstrapJS + "\n" + BetterXCloudInjector.modernUIOverridesJS,
+            source: BetterXCloudInjector.bootstrapJS + "\n" + BetterXCloudInjector.storeNavGuardJS + "\n" + BetterXCloudInjector.modernUIOverridesJS,
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true
         ))
