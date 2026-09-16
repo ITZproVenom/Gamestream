@@ -9,7 +9,7 @@ struct StreamPlayerView: View {
     var body: some View {
         ZStack(alignment: .top) {
             XboxCloudWebView(url: $session.webURL)
-                .ignoresSafeArea()
+                .ignoresSafeArea(edges: .all)
 
             if isLoading {
                 PlayLoadingView(title: session.currentGame?.title ?? "")
@@ -43,6 +43,7 @@ struct StreamPlayerView: View {
             .padding(.horizontal, 16)
             .padding(.top, 8)
         }
+        .edgesIgnoringSafeArea(.all)
         .onReceive(NotificationCenter.default.publisher(for: .webViewLoadingChanged)) { note in
             if let loading = note.object as? Bool {
                 if isLoading && !loading {

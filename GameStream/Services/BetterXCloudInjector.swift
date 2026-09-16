@@ -176,18 +176,28 @@ final class BetterXCloudInjector {
         [class*="social"], [class*="Social"],
         [class*="upsell"], [class*="Upsell"],
         [class*="marketing"], [class*="Marketing"] {
-            display: none !important;
-            visibility: hidden !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 0 !important;
             height: 0 !important;
             max-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
             overflow: hidden !important;
+            visibility: hidden !important;
             pointer-events: none !important;
+            z-index: -1 !important;
         }
         html, body {
             background: #000 !important;
             overflow: hidden !important;
             margin: 0 !important;
             padding: 0 !important;
+        }
+        body > div, body > main, body > section, body > article {
+            min-height: 100vh !important;
+            min-height: 100dvh !important;
         }
         video, #game-stream, [class*="stream-video"], [class*="StreamVideo"],
         [class*="video-player"], [class*="VideoPlayer"] {
