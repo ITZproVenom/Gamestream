@@ -68,6 +68,13 @@ struct XboxCloudWebView: UIViewRepresentable {
         Coordinator(session: session)
     }
 
+    private func cloudBindingJS(_ target: URL) -> String {
+        let escaped = target.absoluteString
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "'", with: "\\'")
+        return "try { window.__gsCloud = { relaunch: '\(escaped)' }; } catch(e) {}"
+    }
+
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
@@ -163,6 +170,7 @@ struct XboxCloudWebView: UIViewRepresentable {
 
         if url.absoluteString != "about:blank" {
             webView.load(URLRequest(url: url))
+            webView.evaluateJavaScript(cloudBindingJS(url), completionHandler: nil)
         }
         context.coordinator.lastLoadedURL = url
         context.coordinator.lastReloadNonce = session.reloadNonce
@@ -177,6 +185,7 @@ struct XboxCloudWebView: UIViewRepresentable {
                 uiView.stopLoading()
             } else {
                 uiView.load(URLRequest(url: url))
+                uiView.evaluateJavaScript(cloudBindingJS(url), completionHandler: nil)
             }
         }
 
@@ -224,6 +233,12 @@ struct XboxCloudWebView: UIViewRepresentable {
                let url = URL(string: href) {
                 let title = body["title"] as? String
                 Task { @MainActor in
+                    let raw = href.lowercased()
+                    if session?.isStreaming == true, raw.contains("/games/store/"),
+                       let webView = self.webView, let target = session.webURL {
+                        webView.load(URLRequest(url: target))
+                        return
+                    }
                     session?.updateFromWebURL(url, pageTitle: title)
                 }
             }

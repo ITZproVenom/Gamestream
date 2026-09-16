@@ -19,21 +19,49 @@ final class BetterXCloudInjector {
     })();
     """
 
-    /// Blocks the Xbox SPA from client-side routing into the Store product page
-    /// (/games/store/...) via history.pushState/replaceState, which bypasses the
-    /// WKNavigationDelegate. Full navigations are cancelled separately in Swift.
+    /// Keeps the Xbox SPA on the Cloud Gaming surface. Blocks client-side routing
+    /// into the Store product page (/games/store/...) via pushState/replaceState,
+    /// and a watcher snaps any in-page store route (popstate, location/replace,
+    /// SPA routers) back to the configured relaunch target. Full navigations are
+    /// cancelled separately in Swift.
     static let storeNavGuardJS = """
     (function() {
         if (window.__gsStoreNavGuard) return;
         window.__gsStoreNavGuard = true;
-        var isStore = function(u) { return typeof u === 'string' && /\\/games\\/store\\//i.test(u); };
+        var STORE_RE = /\\/games\\/store\\//i;
+        function corePath(p) {
+            p = String(p || '').toLowerCase();
+            return p.replace(/^\\/([a-z]{2}|[a-z]{2}-[a-z]{2})\\//, '/');
+        }
+        function relaunchTarget() {
+            try { var c = window.__gsCloud; if (c && c.relaunch) return String(c.relaunch); } catch (e) {}
+            return '/play';
+        }
+        var snaps = 0;
+        function snapAway() {
+            try {
+                if (!STORE_RE.test(location.pathname || '') && !STORE_RE.test(location.href || '')) return;
+                if (snaps > 6) return;
+                snaps++;
+                var target = relaunchTarget();
+                var start = target.indexOf('://');
+                var targetPath = start !== -1
+                    ? target.substring(target.indexOf('/', start + 3))
+                    : target;
+                if (corePath(location.pathname || '') === corePath(targetPath)) {
+                    history.replaceState.call(history, {}, document.title, target);
+                } else {
+                    location.href = target;
+                }
+            } catch (e) {}
+        }
         var push = history.pushState.bind(history);
         var replace = history.replaceState.bind(history);
-        history.pushState = function() { if (!isStore(arguments[2])) return push.apply(null, arguments); };
-        history.replaceState = function() { if (!isStore(arguments[2])) return replace.apply(null, arguments); };
-        if (isStore(location.pathname)) {
-            try { history.replaceState.call(history, {}, document.title, '/play'); } catch (e) {}
-        }
+        history.pushState = function() { if (!STORE_RE.test(String(arguments[2] || ''))) return push.apply(null, arguments); };
+        history.replaceState = function() { if (!STORE_RE.test(String(arguments[2] || ''))) return replace.apply(null, arguments); };
+        window.addEventListener('popstate', function() { setTimeout(snapAway, 25); });
+        setInterval(snapAway, 250);
+        setTimeout(snapAway, 0);
     })();
     """
 
@@ -201,10 +229,8 @@ final class BetterXCloudInjector {
                 }
             } catch (e) {}
         }
-        setTimeout(tryAutoStart, 400);
-        setTimeout(tryAutoStart, 1200);
-        setTimeout(tryAutoStart, 2500);
-        setTimeout(tryAutoStart, 4500);
+        const autoStreamTimer = setInterval(tryAutoStart, 800);
+        setTimeout(function() { clearInterval(autoStreamTimer); }, 40000);
     })();
     """
 
