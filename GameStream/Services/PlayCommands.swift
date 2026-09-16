@@ -1,12 +1,13 @@
 import Foundation
 
 extension SessionStore {
-    /// Single Play path: show the player, land it on the authenticated cloud home
-    /// (xbox.com/play), and let StreamPlayerView advance to the game *launch* page
-    /// once that page finishes without bouncing to a login host. This guarantees
-    /// the stream starts signed-in instead of dumping the user to the store page.
+    /// Single Play path: load the game's launch URL directly into the player.
+    /// The shared cookie store holds the xbox.com session established by
+    /// SignInWebView (verified via the strict xbox-session cookie check); the
+    /// streaming WebView picks it up, lands on the game page, and
+    /// streamIsolationJS auto-clicks Play to start the stream.
     func playGame(_ game: TrackedGame) {
-        guard game.launchURL != nil else { return }
+        guard let url = game.launchURL else { return }
         SoundManager.playLaunch()
         pendingJavaScript = nil
         HubState.shared.showNativeHub = false
@@ -24,8 +25,8 @@ extension SessionStore {
         ensureDefaultStreamQualityPrefs()
         pendingJavaScript = Self.betterXCloudPrefsJS(Self.storedBetterXCloudPrefs(), reloadIfXbox: false)
         isStreaming = true
-        if webURL != MicrosoftAuth.playURL {
-            webURL = MicrosoftAuth.playURL
+        if webURL != url {
+            webURL = url
         }
     }
 
