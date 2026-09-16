@@ -153,7 +153,9 @@ enum HapticManager {
             for locality in [GCHapticsLocality.default, GCHapticsLocality.handles] {
                 guard let engine = entry.engine(for: locality, haptics: haptics) else { continue }
                 do {
-                    if !engine.isRunning { try engine.start() }
+                    // start() is a no-op when the engine is already running, so
+                    // a stopped/reset engine is simply restarted on next play.
+                    try engine.start()
                     let player = try engine.makePlayer(with: pattern)
                     try player.start(atTime: 0)
                 } catch {
