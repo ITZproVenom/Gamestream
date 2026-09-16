@@ -149,7 +149,7 @@ jobs:
           text = p.read_text()
           text = re.sub(
               r'CFBundleShortVersionString: "[^"]*"',
-              f'CFBundleShortVersionString: "1.5.8.{run}"',
+              f'CFBundleShortVersionString: "{run}"',
               text, count=1,
           )
           text = re.sub(
@@ -158,7 +158,7 @@ jobs:
               text, count=1,
           )
           p.write_text(text)
-          print(f"Stamped app version 1.5.8.{run} (CFBundleVersion {run})")
+          print(f"Stamped app version {run} (CFBundleShortVersionString + CFBundleVersion {run})")
           PY
           xcodegen generate
           echo "--- pbxproj resource refs ---"
