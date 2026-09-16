@@ -33,63 +33,67 @@ struct RootView: View {
     }
 
     private var signedInRoot: some View {
-        ZStack {
-            // Full-screen background layer. A ZStack child would render past the
-            // safe-area frame (unlike `.background {}`, which clips to the view
-            // bounds) so the backdrop continues behind the bottom navigation and
-            // into the bottom safe area / home indicator region.
+        VStack(spacing: 0) {
+            ZStack {
+                if session.isStreaming && selectedTab == .library {
+                    StreamPlayerView()
+                        .zIndex(4)
+                }
+
+                GameHubView()
+                    .ignoresSafeArea(
+                        edges: (selectedTab == .library && !session.isStreaming)
+                            ? [.bottom]
+                            : []
+                    )
+                    .background {
+                        if selectedTab == .library && !session.isStreaming {
+                            AnimatedBackground()
+                        }
+                    }
+                    .opacity(selectedTab == .library && !session.isStreaming ? 1 : 0)
+                    .allowsHitTesting(selectedTab == .library && !session.isStreaming)
+                    .accessibilityHidden(selectedTab != .library || session.isStreaming)
+                    .zIndex(selectedTab == .library && !session.isStreaming ? 2 : 0)
+
+                SearchHubView(isActive: selectedTab == .search && !session.isStreaming)
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                           let game = session.continueGame {
+                            ContinuePlayingCard(game: game)
+                                .padding(.horizontal, 20)
+                                .padding(.top, 8)
+                                .padding(.bottom, 4)
+                        }
+                    }
+                    .opacity(selectedTab == .search && !session.isStreaming ? 1 : 0)
+                    .allowsHitTesting(selectedTab == .search && !session.isStreaming)
+                    .accessibilityHidden(selectedTab != .search || session.isStreaming)
+                    .zIndex(selectedTab == .search && !session.isStreaming ? 2 : 0)
+
+                SettingsView(isActive: selectedTab == .settings && !session.isStreaming)
+                    .opacity(selectedTab == .settings && !session.isStreaming ? 1 : 0)
+                    .allowsHitTesting(selectedTab == .settings && !session.isStreaming)
+                    .accessibilityHidden(selectedTab != .settings || session.isStreaming)
+                    .zIndex(selectedTab == .settings && !session.isStreaming ? 2 : 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if !hideTabBar {
+                glassNavigation
+                    .padding(.horizontal, 24)
+                    .padding(.top, 6)
+                    .padding(.bottom, 10)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background {
             if session.isStreaming {
                 Color.black.ignoresSafeArea()
             } else {
                 AnimatedBackground()
             }
-
-            VStack(spacing: 0) {
-                ZStack {
-                    if session.isStreaming && selectedTab == .library {
-                        StreamPlayerView()
-                            .zIndex(4)
-                    }
-
-                    GameHubView()
-                        .opacity(selectedTab == .library && !session.isStreaming ? 1 : 0)
-                        .allowsHitTesting(selectedTab == .library && !session.isStreaming)
-                        .accessibilityHidden(selectedTab != .library || session.isStreaming)
-                        .zIndex(selectedTab == .library && !session.isStreaming ? 2 : 0)
-
-                    SearchHubView(isActive: selectedTab == .search && !session.isStreaming)
-                        .safeAreaInset(edge: .top, spacing: 0) {
-                            if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                               let game = session.continueGame {
-                                ContinuePlayingCard(game: game)
-                                    .padding(.horizontal, 20)
-                                    .padding(.top, 8)
-                                    .padding(.bottom, 4)
-                            }
-                        }
-                        .opacity(selectedTab == .search && !session.isStreaming ? 1 : 0)
-                        .allowsHitTesting(selectedTab == .search && !session.isStreaming)
-                        .accessibilityHidden(selectedTab != .search || session.isStreaming)
-                        .zIndex(selectedTab == .search && !session.isStreaming ? 2 : 0)
-
-                    SettingsView(isActive: selectedTab == .settings && !session.isStreaming)
-                        .opacity(selectedTab == .settings && !session.isStreaming ? 1 : 0)
-                        .allowsHitTesting(selectedTab == .settings && !session.isStreaming)
-                        .accessibilityHidden(selectedTab != .settings || session.isStreaming)
-                        .zIndex(selectedTab == .settings && !session.isStreaming ? 2 : 0)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                if !hideTabBar {
-                    glassNavigation
-                        .padding(.horizontal, 24)
-                        .padding(.top, 6)
-                        .padding(.bottom, 10)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onChange(of: selectedTab) { _, tab in
             UserDefaults.standard.set(tab.rawValue, forKey: Self.tabStorageKey)
             if tab == .library {
