@@ -235,7 +235,7 @@ struct XboxCloudWebView: UIViewRepresentable {
                 Task { @MainActor in
                     let raw = href.lowercased()
                     if session?.isStreaming == true, raw.contains("/games/store/"),
-                       let webView = self.webView, let target = session.webURL {
+                       let webView = self.webView, let target = session?.webURL {
                         webView.load(URLRequest(url: target))
                         return
                     }
