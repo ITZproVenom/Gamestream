@@ -89,7 +89,7 @@ struct RootView: View {
         }
         .onChange(of: selectedTab) { _, tab in
             UserDefaults.standard.set(tab.rawValue, forKey: Self.tabStorageKey)
-            if tab == .library {
+            if tab == .library && !session.isStreaming {
                 session.returnToHub()
             }
         }
@@ -211,7 +211,7 @@ struct RootView: View {
         Button {
             HapticManager.tap()
             SoundManager.playTap()
-            if tab == .library {
+            if tab == .library && !session.isStreaming {
                 session.returnToHub()
             }
             withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
