@@ -140,11 +140,13 @@ struct RootView: View {
             advanceTab(1)
         case .menu:
             HapticManager.impact()
+            SoundManager.playTap()
             session.returnToHub()
         case .b:
             // Back: a search/settings tab returns to the catalog.
             if selectedTab == .search || selectedTab == .settings {
                 HapticManager.tap()
+                SoundManager.playTap()
                 withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
                     selectedTab = .library
                 }
@@ -160,6 +162,7 @@ struct RootView: View {
         let next = all[(index + delta + all.count) % all.count]
         guard next != selectedTab else { return }
         HapticManager.tap()
+        SoundManager.playTap()
         withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
             selectedTab = next
         }
