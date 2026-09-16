@@ -208,7 +208,6 @@ struct XboxCloudWebView: UIViewRepresentable {
         var lastReloadNonce: Int = 0
         weak var webView: WKWebView?
         private weak var session: SessionStore?
-        private var authBounces = 0
 
         init(session: SessionStore) {
             self.session = session
@@ -253,44 +252,6 @@ struct XboxCloudWebView: UIViewRepresentable {
                     session?.pendingJavaScript = nil
                 }
             }
-
-            advancePastAuthLanding(webView: webView)
-        }
-
-        /// xbox.com/play is the auth landing. Play opens there first so the WebView
-        /// either renders signed-in (cookies from the shared store) or redirects to
-        /// login.live.com for a fresh sign-in inside the same WebView. Once the
-        /// landing finishes on an xbox.com page — not a login host — the session is
-        /// live, so advance to the game launch page. If a login page appears after
-        /// we've advanced, bounce back to the auth landing to re-sign-in (capped so
-        /// a genuinely broken account can't loop forever).
-        private func advancePastAuthLanding(webView: WKWebView) {
-            guard let session else { return }
-            guard session.isStreaming else { return }
-            guard let current = webView.url?.absoluteString else { return }
-
-            let onLoginHost = MicrosoftAuth.isLoginHost(current)
-
-            if session.webURL == MicrosoftAuth.playURL {
-                if onLoginHost {
-                    return
-                }
-                if let launch = session.currentGame?.launchURL, launch != MicrosoftAuth.playURL {
-                    authBounces = 0
-                    session.webURL = launch
-                }
-                return
-            }
-
-            if onLoginHost {
-                if authBounces < 2 {
-                    authBounces += 1
-                    session.webURL = MicrosoftAuth.playURL
-                }
-                return
-            }
-
-            authBounces = 0
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
