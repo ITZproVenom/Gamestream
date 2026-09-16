@@ -9,6 +9,10 @@ struct SettingsView: View {
     @State private var resolution: String = SessionStore.storedResolution
     @State private var region: String = SessionStore.storedRegion
 
+    /// Set by RootView. The view stays mounted so tab switches never rebuild
+    /// this tree; on becoming visible it re-syncs transient @State from store.
+    var isActive: Bool = true
+
     private let resolutions = ["Auto", "720p", "1080p", "1080p HQ"]
     private let regions = ["Auto", "North America", "Europe", "Asia", "Australia"]
 
@@ -98,6 +102,7 @@ struct SettingsView: View {
                             Slider(value: $appearance.glassIntensity, in: 0.35...1.0)
                         }
                         Toggle("UI sounds", isOn: $appearance.uiSoundsEnabled)
+                        Toggle("Controller haptics", isOn: $appearance.controllerHapticsEnabled)
                     }
 
                     section("Jump back in") {
@@ -240,6 +245,13 @@ struct SettingsView: View {
             .scrollIndicators(.hidden)
         }
         .onAppear {
+            keepAwake = session.keepScreenAwake
+            resumeOnOpen = session.resumeLastOnOpen
+            resolution = SessionStore.storedResolution
+            region = SessionStore.storedRegion
+        }
+        .onChange(of: isActive) { _, active in
+            guard active else { return }
             keepAwake = session.keepScreenAwake
             resumeOnOpen = session.resumeLastOnOpen
             resolution = SessionStore.storedResolution

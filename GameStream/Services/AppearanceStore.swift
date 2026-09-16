@@ -142,6 +142,7 @@ final class AppearanceStore: ObservableObject {
     @Published var effectsMode: EffectsMode { didSet { UserDefaults.standard.set(effectsMode.rawValue, forKey: Keys.effects) } }
     @Published var glassIntensity: Double { didSet { UserDefaults.standard.set(glassIntensity, forKey: Keys.glass) } }
     @Published var uiSoundsEnabled: Bool { didSet { UserDefaults.standard.set(uiSoundsEnabled, forKey: Keys.sounds) } }
+    @Published var controllerHapticsEnabled: Bool { didSet { UserDefaults.standard.set(controllerHapticsEnabled, forKey: Keys.controllerHaptics) } }
 
     private enum Keys {
         static let mode = "GameStream.appearanceMode"
@@ -153,6 +154,7 @@ final class AppearanceStore: ObservableObject {
         static let effects = "GameStream.effectsMode"
         static let glass = "GameStream.glassIntensity"
         static let sounds = "GameStream.uiSoundsEnabled"
+        static let controllerHaptics = "GameStream.controllerHapticsEnabled"
     }
 
     private init() {
@@ -169,6 +171,11 @@ final class AppearanceStore: ObservableObject {
             uiSoundsEnabled = true
         } else {
             uiSoundsEnabled = UserDefaults.standard.bool(forKey: Keys.sounds)
+        }
+        if UserDefaults.standard.object(forKey: Keys.controllerHaptics) == nil {
+            controllerHapticsEnabled = true
+        } else {
+            controllerHapticsEnabled = UserDefaults.standard.bool(forKey: Keys.controllerHaptics)
         }
     }
 }

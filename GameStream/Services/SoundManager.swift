@@ -71,6 +71,12 @@ enum SoundManager {
 
     private static func soundData(_ name: String) -> Data? {
         if let cached = decoded[name], !cached.isEmpty { return cached }
+        // Code-first source: tones baked into the binary. This is the ONLY
+        // source present in the shipped (clean) bundle — no loose wav files.
+        if let embedded = EmbeddedSounds.wavData[name], embedded.count > 44 {
+            decoded[name] = embedded
+            return embedded
+        }
         if let url = Bundle.main.url(forResource: name, withExtension: "wav", subdirectory: "Sounds")
             ?? Bundle.main.url(forResource: name, withExtension: "wav"),
            let data = try? Data(contentsOf: url),

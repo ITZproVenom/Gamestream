@@ -8,6 +8,10 @@ struct SearchHubView: View {
     @State private var detailGame: CatalogGame?
     @ObservedObject private var artwork = ArtworkStore.shared
 
+    /// Set by RootView. The view stays mounted (for snappy tab switching) and
+    /// uses this to re-sync cached lists only when it becomes the visible tab.
+    var isActive: Bool = true
+
     private let popularTitles = ["Fortnite", "Minecraft", "Call of Duty", "Forza Horizon", "Roblox", "Sea of Thieves"]
 
     var body: some View {
@@ -38,6 +42,9 @@ struct SearchHubView: View {
             }
         }
         .onAppear { reload() }
+        .onChange(of: isActive) { _, active in
+            if active { reload() }
+        }
         .sheet(item: $detailGame) { game in
             GameDetailView(game: game) { detailGame = nil }
                 .environmentObject(session)
