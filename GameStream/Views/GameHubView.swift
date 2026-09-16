@@ -31,11 +31,19 @@ enum HubBrowseFilter: Hashable {
 struct GameHubView: View {
     @EnvironmentObject var session: SessionStore
     @ObservedObject private var artwork = ArtworkStore.shared
+    @ObservedObject private var nav = ControllerNavState.shared
     @FocusState private var searchFocused: Bool
     @State private var query = ""
     @State private var filter: HubBrowseFilter = .all
     @State private var detailGame: CatalogGame?
     @State private var showingLists = false
+    @State private var gridFocus: Int?
+    @State private var scrollProxy: ScrollViewProxy?
+
+    private let gridColumns = [
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12)
+    ]
 
     private var chips: [HubBrowseFilter] {
         var items: [HubBrowseFilter] = [.all, .mine, .browse, .forYou, .favorites, .recents, .lists, .activity]
@@ -86,6 +94,46 @@ struct GameHubView: View {
         return games
     }
 
+    /// The games currently shown in a native grid (search results or filtered
+    /// grid). Carousels/featured return empty — stick navigation targets grids.
+    private var activeGridGames: [CatalogGame] {
+        if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return catalogHits
+        }
+        switch filter {
+        case .all, .lists, .activity:
+            return []
+        default:
+            return filteredGames
+        }
+    }
+
+    private func handleGridNav(_ action: ControllerGameNav) {
+        let games = activeGridGames
+        guard !games.isEmpty else { return }
+        let count = games.count
+        if action == .activate {
+            guard let gridFocus, gridFocus < count else { return }
+            HapticManager.impact()
+            SoundManager.playSuccess()
+            detailGame = games[gridFocus]
+            return
+        }
+        let current = gridFocus ?? 0
+        let next: Int
+        switch action {
+        case .left: next = max(current - 1, 0)
+        case .right: next = min(current + 1, count - 1)
+        case .up: next = max(current - 2, 0)
+        case .down: next = min(current + 2, count - 1)
+        default: return
+        }
+        guard next != gridFocus else { return }
+        gridFocus = next
+        HapticManager.tap()
+        SoundManager.playTap()
+    }
+
     var body: some View {
         HubPage {
             header
@@ -102,6 +150,24 @@ struct GameHubView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             artwork.prefetch(GameCatalog.games.map(\.id))
+        }
+        .onChange(of: nav.token) { _, _ in
+            if let action = nav.action {
+                handleGridNav(action)
+            }
+        }
+        .onChange(of: filter) { _, _ in
+            gridFocus = nil
+        }
+        .onChange(of: query) { _, _ in
+            gridFocus = nil
+        }
+        .onChange(of: gridFocus) { _, _ in
+            let games = activeGridGames
+            guard let gridFocus, gridFocus < games.count else { return }
+            withAnimation(.easeInOut(duration: 0.25)) {
+                scrollProxy?.scrollTo(games[gridFocus].id, anchor: .center)
+            }
         }
         .sheet(item: $detailGame) { game in
             GameDetailView(game: game) { detailGame = nil }
@@ -181,10 +247,14 @@ struct GameHubView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 16) {
-                    ForEach(catalogHits) { game in
-                        poster(game)
+                ScrollViewReader { proxy in
+                    LazyVGrid(columns: gridColumns, spacing: 16) {
+                        ForEach(Array(catalogHits.enumerated()), id: \.element.id) { index, game in
+                            poster(game, isFocused: gridFocus == index)
+                                .id(game.id)
+                        }
                     }
+                    .onAppear { scrollProxy = proxy }
                 }
             }
             Button {
@@ -349,10 +419,14 @@ struct GameHubView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             } else {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 16) {
-                    ForEach(filteredGames) { game in
-                        poster(game)
+                ScrollViewReader { proxy in
+                    LazyVGrid(columns: gridColumns, spacing: 16) {
+                        ForEach(Array(filteredGames.enumerated()), id: \.element.id) { index, game in
+                            poster(game, isFocused: gridFocus == index)
+                                .id(game.id)
+                        }
                     }
+                    .onAppear { scrollProxy = proxy }
                 }
             }
         }
@@ -395,7 +469,7 @@ struct GameHubView: View {
         .accessibilityLabel("Browse all catalog games")
     }
 
-    private func poster(_ game: CatalogGame) -> some View {
+    private func poster(_ game: CatalogGame, isFocused: Bool = false) -> some View {
         GamePosterCard(
             game: game,
             artworkURL: artwork.url(for: game.id),
@@ -404,5 +478,13 @@ struct GameHubView: View {
             onOpen: { detailGame = game },
             onFavorite: { session.toggleFavorite(game.tracked) }
         )
+        .overlay {
+            if isFocused {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.accentColor, lineWidth: 3)
+                    .padding(2)
+                    .allowsHitTesting(false)
+            }
+        }
     }
 }

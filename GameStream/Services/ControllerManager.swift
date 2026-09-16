@@ -20,14 +20,15 @@ final class ControllerManager: ObservableObject {
 
     enum Press {
         case up, down, left, right
+        case lb, rb
         case a, b, x, y
         case menu
+        case stickLeft, stickRight, stickUp, stickDown
     }
 
     private var controllers: [GCController] = []
     private var attached = Set<ObjectIdentifier>()
     private var observersRegistered = false
-    private var stickLatch = false
 
     func start() {
         ensureObservers()
@@ -79,22 +80,37 @@ final class ControllerManager: ObservableObject {
         pad.buttonY.pressedChangedHandler = pressHandler(.y)
         pad.buttonMenu.pressedChangedHandler = pressHandler(.menu)
 
-        // Left stick left/right also navigates (edge-triggered on a pull past
-        // the threshold, waiting for recentering before it can fire again).
-        pad.leftThumbstick.valueChangedHandler = { [weak self] _, xValue, _ in
-            let x = Float(xValue)
+        // LB/RB cycle the top-level tabs.
+        pad.leftShoulder.pressedChangedHandler = pressHandler(.lb)
+        pad.rightShoulder.pressedChangedHandler = pressHandler(.rb)
+
+        // Both sticks drive in-content game navigation (edge-triggered: pull
+        // past the threshold fires once, then a recenter is required).
+        pad.leftThumbstick.valueChangedHandler = stickHandler(StickLatch())
+        pad.rightThumbstick.valueChangedHandler = stickHandler(StickLatch())
+    }
+
+    private final class StickLatch {
+        var engaged = false
+    }
+
+    private func stickHandler(_ latch: StickLatch) -> (GCControllerDirectionPad, Float, Float) -> Void {
+        { [weak self] _, xValue, yValue in
             guard let self else { return }
-            if self.stickLatch {
-                if abs(x) < 0.25 { self.stickLatch = false }
+            let x = Float(xValue), y = Float(yValue)
+            if latch.engaged {
+                if abs(x) < 0.25 && abs(y) < 0.25 { latch.engaged = false }
                 return
             }
-            if x > 0.55 {
-                self.stickLatch = true
-                self.emit(.right)
-            } else if x < -0.55 {
-                self.stickLatch = true
-                self.emit(.left)
+            guard abs(x) >= 0.55 || abs(y) >= 0.55 else { return }
+            latch.engaged = true
+            let press: Press
+            if abs(x) > abs(y) {
+                press = x > 0 ? .stickRight : .stickLeft
+            } else {
+                press = y > 0 ? .stickDown : .stickUp
             }
+            self.emit(press)
         }
     }
 

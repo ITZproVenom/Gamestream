@@ -40,9 +40,10 @@ struct IntroView: View {
                         Spacer(minLength: 0)
                     }
                     .padding(.horizontal, 20)
-                    .padding(.top, 12)
+                    .padding(.top, max(geo.safeAreaInsets.top + 8, 12))
 
-                    Spacer(minLength: 16)
+                    Spacer(minLength: 12)
+                        .frame(maxHeight: 56)
 
                     VStack(spacing: 16) {
                         Image(systemName: "gamecontroller.fill")
@@ -66,10 +67,11 @@ struct IntroView: View {
                             .foregroundStyle(.white.opacity(0.84))
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.horizontal, 4)
+                            .frame(maxWidth: 340)
                             .opacity(appeared ? 1 : 0)
                     }
                     .padding(.horizontal, 22)
-                    .padding(.vertical, 24)
+                    .padding(.vertical, 18)
                     .frame(maxWidth: 520)
                     .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
                     .padding(.horizontal, 24)
@@ -85,7 +87,7 @@ struct IntroView: View {
                     .buttonStyle(.glassProminent)
                     .padding(.horizontal, 28)
                     .padding(.top, 20)
-                    .padding(.bottom, 28)
+                    .padding(.bottom, max(geo.safeAreaInsets.bottom, 10) + 18)
                     .frame(maxWidth: 520)
                     .accessibilityLabel("Get Started")
                 }

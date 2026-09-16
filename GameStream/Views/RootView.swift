@@ -134,6 +134,10 @@ struct RootView: View {
         guard controller.isConnected, !session.isStreaming else { return }
 
         switch press {
+        case .lb:
+            advanceTab(-1)
+        case .rb:
+            advanceTab(1)
         case .left:
             advanceTab(-1)
         case .right:
@@ -151,7 +155,17 @@ struct RootView: View {
                     selectedTab = .library
                 }
             }
-        case .a, .up, .down, .x, .y:
+        case .stickLeft:
+            ControllerNavState.shared.send(.left)
+        case .stickRight:
+            ControllerNavState.shared.send(.right)
+        case .stickUp:
+            ControllerNavState.shared.send(.up)
+        case .stickDown:
+            ControllerNavState.shared.send(.down)
+        case .a:
+            ControllerNavState.shared.send(.activate)
+        case .up, .down, .x, .y:
             break
         }
     }
