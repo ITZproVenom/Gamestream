@@ -78,18 +78,13 @@ private struct GameStreamRootView: View {
         if session.isStreaming {
             session.exitStreamToHub()
         }
-        // WebKit cookie store must not initialize during the first SwiftUI frame.
-        Task { @MainActor in
-            // URLCache is useful for posters and catalog data, but it is not
-            // launch-critical. Configure it after the first frame instead of
-            // mutating the process-global cache from App.init().
-            await Task.yield()
-            URLCache.shared = URLCache(
-                memoryCapacity: 24 * 1024 * 1024,
-                diskCapacity: 96 * 1024 * 1024,
-                diskPath: "gamestream-url-cache"
-            )
-            session.revalidatePersistedLogin()
+        // Launch must not mutate process-global network state or start WebKit's
+        // website data store: the first frame is already loading posters and
+        // catalog data over URLSession.shared, and replacing URLCache.shared at
+        // that moment races those in-flight loads. Session staleness is already
+        // handled in SessionStore.init() from persisted state alone. Catalog
+        // refresh is network-only, so run it only after launch has settled.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             CloudCatalogService.refreshIfNeeded()
         }
     }
