@@ -1,10 +1,11 @@
 import Foundation
 
 extension SessionStore {
-    /// Single Play path: hide GameHub and load the Xbox Cloud *launch* URL only.
-    /// Never bounce through /play/games first — that race is what broke /play.
+    /// Single Play path: establish the authenticated xbox.com session on the cloud
+    /// home page first, then StreamPlayerView advances to the game *launch* page
+    /// once xbox.com/play finishes without bouncing to a login host.
     func playGame(_ game: TrackedGame) {
-        guard let url = game.launchURL else { return }
+        guard game.launchURL != nil else { return }
         SoundManager.playLaunch()
         pendingJavaScript = nil
         HubState.shared.showNativeHub = false
@@ -21,10 +22,13 @@ extension SessionStore {
         // Seed Better xCloud quality prefs before the launch page loads.
         ensureDefaultStreamQualityPrefs()
         pendingJavaScript = Self.betterXCloudPrefsJS(Self.storedBetterXCloudPrefs(), reloadIfXbox: false)
-        // Show StreamPlayerView first, then load the *launch* URL (not the website catalog).
+        // Show StreamPlayerView first, then land on the authenticated cloud home.
+        // The WebView shares the sign-in cookie store, so xbox.com/play either
+        // renders signed-in or redirects to login.live.com where the user can
+        // sign in directly — StreamPlayerView then advances to the launch URL.
         isStreaming = true
-        if webURL != url {
-            webURL = url
+        if webURL != MicrosoftAuth.playURL {
+            webURL = MicrosoftAuth.playURL
         }
     }
 
