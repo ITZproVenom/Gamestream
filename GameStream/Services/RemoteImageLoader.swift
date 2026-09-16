@@ -13,9 +13,6 @@ import SwiftUI
 final class RemoteImageLoader: ObservableObject {
     static let shared = RemoteImageLoader()
 
-    /// Bumped when a decode finishes so observing views re-evaluate.
-    @Published private(set) var completed = 0
-
     private let cache = NSCache<NSURL, UIImage>()
     private var inflight: [URL: Bool] = [:]
 
@@ -44,7 +41,7 @@ final class RemoteImageLoader: ObservableObject {
                 let cost = Int(image.size.width * image.size.height * 4)
                 self.cache.setObject(image, forKey: url as NSURL, cost: max(cost, 1))
             }
-            self.completed += 1
+            NotificationCenter.default.post(name: .remoteImageLoaded, object: url)
         }
     }
 
@@ -79,15 +76,17 @@ final class RemoteImageLoader: ObservableObject {
 }
 
 /// Fetches one image via `RemoteImageLoader` and renders it filled to its frame.
-/// Shows the placeholder until the image finishes decoding.
+/// Shows the placeholder until the image finishes decoding. Each instance reacts
+/// only to its own URL completing, so one image loading never re-renders the
+/// whole grid.
 struct RemoteImage<Placeholder: View>: View {
     let url: URL?
     @ViewBuilder var placeholder: () -> Placeholder
-    @ObservedObject private var loader = RemoteImageLoader.shared
+    @State private var loaded: UIImage?
 
     var body: some View {
         Group {
-            if let image = loader.stored(url) {
+            if let image = loaded ?? RemoteImageLoader.shared.stored(url) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -95,9 +94,19 @@ struct RemoteImage<Placeholder: View>: View {
                 placeholder()
             }
         }
-        .onAppear { loader.request(url) }
-        .onChange(of: loader.completed) { _, _ in
-            loader.request(url)
+        .onAppear {
+            RemoteImageLoader.shared.request(url)
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: .remoteImageLoaded)
+                .compactMap { $0.object as? URL }
+                .filter { url != nil && $0 == url! }
+        ) { _ in
+            loaded = RemoteImageLoader.shared.stored(url)
         }
     }
+}
+
+extension Notification.Name {
+    static let remoteImageLoaded = Notification.Name("GameStreamRemoteImageLoaded")
 }

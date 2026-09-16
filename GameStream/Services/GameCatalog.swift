@@ -142,13 +142,17 @@ enum GameCatalog {
     }
 
     private static var live: [CatalogGame] = seed
+    private static var _cachedGenreNames: [String]?
 
     static var games: [CatalogGame] { live }
 
     static var genreNames: [String] {
+        if let cached = _cachedGenreNames { return cached }
         let known = ["Racing", "Shooter", "Action", "Adventure", "Sandbox", "RPG", "Survival", "Platformer", "Sports", "Strategy", "Simulation", "Fighting", "Puzzle"]
         let present = Set(live.map(\.genre))
-        return known.filter { present.contains($0) } + present.subtracting(known).sorted()
+        let result = known.filter { present.contains($0) } + present.subtracting(known).sorted()
+        _cachedGenreNames = result
+        return result
     }
 
     static var featured: [CatalogGame] { games.filter(\.featured) }
@@ -169,6 +173,7 @@ enum GameCatalog {
             copy.featured = index < 8 || seed.contains(where: { $0.id.caseInsensitiveCompare(game.id) == .orderedSame && $0.featured })
             return copy
         }
+        _cachedGenreNames = nil
         ArtworkStore.shared.ingest(live)
         CatalogLiveStore.shared.bump()
         NotificationCenter.default.post(name: .catalogDidChange, object: nil)
@@ -222,18 +227,16 @@ final class ArtworkStore: ObservableObject {
         do {
             let (data, _) = try await URLSession.shared.data(from: endpoint)
             let parsed = Self.parseAllPosters(from: data)
-            var updated = urls
-            for (id, url) in parsed { updated[id] = url }
-            for id in ids where updated[id] == nil {
-                if let single = await fetchOne(id) { updated[id] = single }
+            for (id, url) in parsed where urls[id] != url {
+                urls[id] = url
             }
-            urls = updated
+            for id in ids where urls[id] == nil {
+                if let single = await fetchOne(id) { urls[id] = single }
+            }
         } catch {
-            var updated = urls
-            for id in ids where updated[id] == nil {
-                if let single = await fetchOne(id) { updated[id] = single }
+            for id in ids where urls[id] == nil {
+                if let single = await fetchOne(id) { urls[id] = single }
             }
-            urls = updated
         }
     }
 
