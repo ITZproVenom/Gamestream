@@ -46,11 +46,6 @@ struct RootView: View {
                             ? [.bottom]
                             : []
                     )
-                    .background {
-                        if selectedTab == .library && !session.isStreaming {
-                            AnimatedBackground()
-                        }
-                    }
                     .opacity(selectedTab == .library && !session.isStreaming ? 1 : 0)
                     .allowsHitTesting(selectedTab == .library && !session.isStreaming)
                     .accessibilityHidden(selectedTab != .library || session.isStreaming)

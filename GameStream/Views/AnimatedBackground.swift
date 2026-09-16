@@ -17,8 +17,8 @@ struct AnimatedBackground: View {
     var body: some View {
         Group {
             if shouldAnimate {
-                // Cap at ~20fps — full display-link redraw was starving stream decode.
-                TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: false)) { timeline in
+                // Auroras drift on 45–78s cycles; ~12fps cuts compositing vs the 20fps default.
+                TimelineView(.animation(minimumInterval: 1.0 / 12.0, paused: false)) { timeline in
                     layers(t: timeline.date.timeIntervalSinceReferenceDate)
                 }
             } else {
@@ -85,10 +85,10 @@ struct AnimatedBackground: View {
 
             LinearGradient(
                 colors: [
-                    (light ? Color.white : Color.black).opacity(light ? 0.18 : 0.35),
+                    (light ? Color.white : Color.black).opacity(light ? 0.18 : 0.10),
                     .clear,
                     .clear,
-                    (light ? Color.white : Color.black).opacity(light ? 0.22 : 0.45)
+                    (light ? Color.white : Color.black).opacity(light ? 0.22 : 0.12)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
