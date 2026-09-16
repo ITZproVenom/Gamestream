@@ -7,8 +7,13 @@ import Foundation
 /// proven-working #273 packaging (no injected Resources/ files) while still
 /// giving SoundManager custom tap/launch/ready/error tones.
 enum EmbeddedSounds {
+    private static func decode(_ jumbled: String) -> Data {
+        let base64Alphabet = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=")
+        return Data(base64Encoded: String(jumbled.filter { base64Alphabet.contains($0) })) ?? Data()
+    }
+
     static let wavData: [String: Data] = [
-    "tap": decode("""
+        "tap": decode("""
             "UklGRsAIAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YZwIAAAA"
             "AAcAHAA+AGcAlADAAOUA/QAFAfgA1QCbAEsA6v96/wL/i/4d/r/9ef1S/VD9"
             "d/3G/T3+1/6P/1sAMQEGAswCeAP+A1QEcQRTBPUDWwOKAosBaQAz//n9zPy9"
@@ -60,7 +65,7 @@ enum EmbeddedSounds {
             "2wFMAbMAFwCD//z+if4v/vL90/3T/fH9J/5z/s/+Nf+f/wYAZgC5APwALQFJ"
             "AVEBRwEsAQMB0ACYAF0AJQDz/8j/p/+R/4b/hv+P/5//s//I/93/7//7/w=="
         """),
-    "launch": decode("""
+        "launch": decode("""
             "UklGRiYfAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQIfAAAA"
             "AAcAHgBCAHIAqwDqACoBaQGjAdMB9gEKAgsC+QHTAZgBSgHrAH4ABQCH/wX/"
             "hf4M/p/9QP31/L/8ofyb/K782fwa/W39z/07/q7+Iv+R//j/UACZAM0A7AD1"
@@ -240,7 +245,7 @@ enum EmbeddedSounds {
             "NP5Q/nf+pP7W/gr/Pv9v/53/xf/n/wEAFQAiACkAKwAoACIAGgARAAgAAAD6"
             "//X/8v/y//P/9v/5//3///8="
         """),
-    "ready": decode("""
+        "ready": decode("""
             "UklGRgomAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YeYlAAAA"
             "AAoAJwBTAIoAxAD6ACQBPgFBASwBAAG9AGoADACu/1T/B//O/q3+pf62/t3+"
             "E/9R/5D/xv/t/wAA+v/c/6j/ZP8X/8r+h/5Y/kT+Uf6B/tP+Qv/H/1YA5gBp"
@@ -459,7 +464,7 @@ enum EmbeddedSounds {
             "ASoB+wC0AFsA9v+K/yD/v/5t/jL+Ef4L/iD+T/6T/uf+Q/+i//3/TQCQAMEA"
             "3wDqAOUA0QCzAI8AagBGACgAEAABAPv/+/8="
         """),
-    "error": decode("""
+        "error": decode("""
             "UklGRjQrAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YRArAAAA"
             "AAIACwAaAC8ASQBpAI4AuADnABoBUQGMAcoBCwJPApQC2wIiA2oDsgP5Az8E"
             "gwTEBAMFPgV2BagF1gX+BSEGPQZSBmAGZwZmBl0GSwYxBg4G4wWvBXEFKwXc"
@@ -707,9 +712,5 @@ enum EmbeddedSounds {
             "hf1g/UD9JP0N/fr86/zh/Nr82Pza/N/86Pz1/AX9GP0t/UX9YP19/Zv9u/3c"
             "/f79If5F/mj+jP6v/tL+9P4U/zP/Uf9t/4f/n/+1/8j/2P/m//H/+f/+/w=="
         """),
-        private static func decode(_ jumbled: String) -> Data {
-            let base64Alphabet = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=")
-            return Data(base64Encoded: String(jumbled.filter { base64Alphabet.contains($0) })) ?? Data()
-        }
-]
+    ]
 }
