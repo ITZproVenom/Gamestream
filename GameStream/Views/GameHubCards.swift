@@ -69,14 +69,7 @@ struct GameArtView: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color(hex: accent).gradient)
-            if let url {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image): image.resizable().scaledToFill()
-                    default: artFallback
-                    }
-                }
-            } else { artFallback }
+            RemoteImage(url: url) { artFallback }
         }.clipped()
     }
     private var artFallback: some View {

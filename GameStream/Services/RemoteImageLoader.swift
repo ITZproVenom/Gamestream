@@ -1,0 +1,104 @@
+import Foundation
+import UIKit
+import ImageIO
+
+/// Memory-cached, downsample-on-load image fetcher used instead of AsyncImage.
+/// Microsoft store posters are multi-megapixel; AsyncImage re-downloads and
+/// decodes every card at full resolution with no memory cache, which makes the
+/// hub janky while scrolling. This loads each image once, decodes it to a small
+/// thumbnail (we never display larger), and serves repeat requests synchronously
+/// from NSCache. Network + downsample run off the main actor.
+@MainActor
+final class RemoteImageLoader: ObservableObject {
+    static let shared = RemoteImageLoader()
+
+    /// Bumped when a decode finishes so observing views re-evaluate.
+    @Published private(set) var completed = 0
+
+    private let cache = NSCache<NSURL, UIImage>()
+    private var inflight: [URL: Bool] = [:]
+
+    init() {
+        cache.countLimit = 300
+        cache.totalCostLimit = 240 * 1024 * 1024
+    }
+
+    /// Synchronous cache hop for use from `body`; never performs network.
+    func stored(_ url: URL?) -> UIImage? {
+        guard let url else { return nil }
+        return cache.object(forKey: url as NSURL)
+    }
+
+    /// Starts a download only if not cached and not already in flight.
+    func request(_ url: URL?) {
+        guard let url else { return }
+        guard inflight[url] == nil, stored(url) == nil else { return }
+        inflight[url] = true
+        let download = Task { await Self.image(for: url) }
+        Task { [weak self] in
+            let image = await download.value
+            guard let self else { return }
+            self.inflight[url] = nil
+            if let image {
+                let cost = Int(image.size.width * image.size.height * 4)
+                self.cache.setObject(image, forKey: url as NSURL, cost: max(cost, 1))
+            }
+            self.completed += 1
+        }
+    }
+
+    func clear() {
+        cache.removeAllObjects()
+        inflight.removeAll(keepingCapacity: true)
+    }
+
+    nonisolated private static func image(for url: URL) async -> UIImage? {
+        guard let data = await data(for: url) else { return nil }
+        return downsample(data, maxPixel: 720)
+    }
+
+    nonisolated private static func data(for url: URL) async -> Data? {
+        (try? await URLSession.shared.data(from: url))?.0
+    }
+
+    /// ImageIO thumbnail: decodes to ~720px instead of the poster's full size.
+    nonisolated private static func downsample(_ data: Data, maxPixel: CGFloat) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+        return UIImage(cgImage: cgImage)
+    }
+}
+
+/// Fetches one image via `RemoteImageLoader` and renders it filled to its frame.
+/// Shows the placeholder until the image finishes decoding.
+struct RemoteImage<Placeholder: View>: View {
+    let url: URL?
+    @ViewBuilder var placeholder: () -> Placeholder
+    @ObservedObject private var loader = RemoteImageLoader.shared
+
+    private var image: UIImage? { loader.stored(url) }
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                placeholder()
+            }
+        }
+        .onAppear { loader.request(url) }
+        .onChange(of: loader.completed) { _, _ in
+            loader.request(url)
+        }
+    }
+}

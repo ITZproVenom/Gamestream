@@ -308,6 +308,7 @@ final class SessionStore: ObservableObject {
         URLCache.shared.removeAllCachedResponses()
         CloudCatalogService.clearDiskCache()
         ArtworkStore.shared.clear()
+        RemoteImageLoader.shared.clear()
         BetterXCloudInjector.shared.invalidateCache()
         UserDefaults.standard.removeObject(forKey: "BetterXCloud.Script.v2")
         UserDefaults.standard.removeObject(forKey: "BetterXCloud.Script.Date.v2")
@@ -332,6 +333,7 @@ final class SessionStore: ObservableObject {
         URLCache.shared.removeAllCachedResponses()
         CloudCatalogService.clearDiskCache()
         ArtworkStore.shared.clear()
+        RemoteImageLoader.shared.clear()
         BetterXCloudInjector.shared.invalidateCache()
         let store = WKWebsiteDataStore.default()
         store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) { [weak self] in

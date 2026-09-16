@@ -222,20 +222,18 @@ final class ArtworkStore: ObservableObject {
         do {
             let (data, _) = try await URLSession.shared.data(from: endpoint)
             let parsed = Self.parseAllPosters(from: data)
-            for (id, url) in parsed {
-                urls[id] = url
+            var updated = urls
+            for (id, url) in parsed { updated[id] = url }
+            for id in ids where updated[id] == nil {
+                if let single = await fetchOne(id) { updated[id] = single }
             }
-            for id in ids where urls[id] == nil {
-                if let single = await fetchOne(id) {
-                    urls[id] = single
-                }
-            }
+            urls = updated
         } catch {
-            for id in ids where urls[id] == nil {
-                if let single = await fetchOne(id) {
-                    urls[id] = single
-                }
+            var updated = urls
+            for id in ids where updated[id] == nil {
+                if let single = await fetchOne(id) { updated[id] = single }
             }
+            urls = updated
         }
     }
 
