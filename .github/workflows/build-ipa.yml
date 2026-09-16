@@ -2,6 +2,12 @@ name: Build Unsigned IPA
 
 on:
   workflow_dispatch:
+    inputs:
+      bundle_injection:
+        description: "Inject bundled resources/icons into the .app (diagnostic control: 'off' == last-working 2a31e1f packaging)"
+        type: choice
+        options: ["full", "none"]
+        default: "full"
   push:
     branches: [main]
     tags: ["v*"]
@@ -75,6 +81,7 @@ jobs:
           PY
 
       - name: Bundle Better xCloud + sound pack
+        if: ${{ github.event.inputs.bundle_injection != 'none' }}
         run: |
           set -euo pipefail
           mkdir -p GameStream/Resources/Sounds
@@ -120,6 +127,7 @@ jobs:
           PY
 
       - name: Verify Resources on disk
+        if: ${{ github.event.inputs.bundle_injection != 'none' }}
         run: |
           set -euo pipefail
           echo "Resources tree:"
@@ -151,6 +159,7 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO
 
       - name: Inject Resources into app bundle
+        if: ${{ github.event.inputs.bundle_injection != 'none' }}
         run: |
           set -euo pipefail
           APP="build/GameStream.xcarchive/Products/Applications/GameStream.app"
@@ -201,6 +210,8 @@ jobs:
           fi
 
       - name: Package IPA
+        env:
+          BUNDLE_INJECTION: ${{ github.event.inputs.bundle_injection || 'full' }}
         run: |
           set -euo pipefail
           APP="build/GameStream.xcarchive/Products/Applications/GameStream.app"
@@ -228,12 +239,13 @@ jobs:
           echo "App payload:"
           unzip -l GameStream-unsigned.ipa
           IPA_SIZE=$(stat -f%z GameStream-unsigned.ipa)
-          if [ "$IPA_SIZE" -lt 400000 ]; then
+          if [ "$IPA_SIZE" -lt 400000 ] && [ "${BUNDLE_INJECTION:-full}" != "none" ]; then
             echo "IPA is only ${IPA_SIZE} bytes - expected ~1MB+ with BX bundled" >&2
             exit 1
           fi
           python3 - <<'PY'
-          import zipfile, sys
+          import os, zipfile, sys
+          inject = os.environ.get("BUNDLE_INJECTION", "full") != "none"
           z = zipfile.ZipFile("GameStream-unsigned.ipa")
           names = z.namelist()
           cars = [n for n in names if n.endswith("Assets.car")]
@@ -246,12 +258,13 @@ jobs:
               sys.exit("Assets.car too small - likely missing app icon")
           bx = [n for n in names if "better-xcloud" in n.lower() or n.endswith(".user.js")]
           print("BX entries:", bx)
-          if not bx:
+          if not bx and inject:
               sys.exit("IPA missing better-xcloud.user.js - Resources not packaged")
-          bx_data = z.read(bx[0])
-          print(f"BX size={len(bx_data)}")
-          if len(bx_data) < 50000:
-              sys.exit("BX script too small in IPA")
+          if bx:
+              bx_data = z.read(bx[0])
+              print(f"BX size={len(bx_data)}")
+              if len(bx_data) < 50000 and inject:
+                  sys.exit("BX script too small in IPA")
           icons = [n for n in names if "AppIcon" in n or n.endswith("Icon.png")]
           print("Icon entries:", icons)
           if not any("AppIcon60x60" in n for n in names):
