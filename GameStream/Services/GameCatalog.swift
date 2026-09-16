@@ -143,8 +143,18 @@ enum GameCatalog {
 
     private static var live: [CatalogGame] = seed
     private static var _cachedGenreNames: [String]?
+    private static var _cachedBrowse: [CatalogGame]?
 
     static var games: [CatalogGame] { live }
+
+    static var sortedBrowse: [CatalogGame] {
+        if let cached = _cachedBrowse { return cached }
+        let result = live.sorted {
+            $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+        }
+        _cachedBrowse = result
+        return result
+    }
 
     static var genreNames: [String] {
         if let cached = _cachedGenreNames { return cached }
@@ -174,6 +184,7 @@ enum GameCatalog {
             return copy
         }
         _cachedGenreNames = nil
+        _cachedBrowse = nil
         ArtworkStore.shared.ingest(live)
         CatalogLiveStore.shared.bump()
         NotificationCenter.default.post(name: .catalogDidChange, object: nil)

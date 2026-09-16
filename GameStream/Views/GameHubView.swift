@@ -61,9 +61,7 @@ struct GameHubView: View {
         case .all:
             return GameCatalog.games
         case .browse:
-            return GameCatalog.games.sorted {
-                $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
-            }
+            return GameCatalog.sortedBrowse
         case .mine:
             return personalGames
         case .forYou:
