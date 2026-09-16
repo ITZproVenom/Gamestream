@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import ImageIO
+import SwiftUI
 
 /// Memory-cached, downsample-on-load image fetcher used instead of AsyncImage.
 /// Microsoft store posters are multi-megapixel; AsyncImage re-downloads and
@@ -84,11 +85,9 @@ struct RemoteImage<Placeholder: View>: View {
     @ViewBuilder var placeholder: () -> Placeholder
     @ObservedObject private var loader = RemoteImageLoader.shared
 
-    private var image: UIImage? { loader.stored(url) }
-
     var body: some View {
         Group {
-            if let image {
+            if let image = loader.stored(url) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
