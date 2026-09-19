@@ -21,6 +21,15 @@ struct SettingsView: View {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.0"
     }
 
+    private var rumbleIntensityLabel: String {
+        let v = appearance.controllerRumbleIntensity
+        if v < 0.85 { return "Light" }
+        if v < 1.35 { return "Normal" }
+        if v < 2.0 { return "Strong" }
+        if v < 2.6 { return "Heavy" }
+        return "Max"
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -30,7 +39,6 @@ struct SettingsView: View {
                     .minimumScaleFactor(0.8)
                     .padding(.top, 8)
 
-                // MARK: Account
                 category("Account") {
                     Text(session.accountLabel ?? "Not signed in")
                         .font(.subheadline)
@@ -38,7 +46,6 @@ struct SettingsView: View {
                         .lineLimit(2)
                 }
 
-                // MARK: Appearance
                 category("Appearance") {
                     labeledChips("Theme", AppAppearanceMode.allCases.map(\.title), appearance.mode.title) { title in
                         if let m = AppAppearanceMode.allCases.first(where: { $0.title == title }) {
@@ -52,7 +59,6 @@ struct SettingsView: View {
                     }
                 }
 
-                // MARK: Background
                 category("Background") {
                     labeledChips("Style", BackgroundStyle.allCases.map(\.title), appearance.backgroundStyle.title) { title in
                         if let s = BackgroundStyle.allCases.first(where: { $0.title == title }) {
@@ -66,7 +72,6 @@ struct SettingsView: View {
                                 appearance.customBgColor = c
                             }
                         }
-                        // Color swatches
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 10) {
                                 ForEach(CustomBgColor.allCases) { c in
@@ -137,7 +142,6 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                // MARK: Library
                 category("Library") {
                     labeledChips("Home layout", HubHomeLayout.allCases.map(\.title), appearance.hubLayout.title) { title in
                         if let l = HubHomeLayout.allCases.first(where: { $0.title == title }) {
@@ -158,7 +162,6 @@ struct SettingsView: View {
                     Toggle("Genre filter row", isOn: $appearance.showGenreFilters)
                 }
 
-                // MARK: Motion & effects
                 category("Motion & effects") {
                     labeledChips("Motion", AnimationIntensity.allCases.map(\.title), appearance.animationIntensity.title) { title in
                         if let i = AnimationIntensity.allCases.first(where: { $0.title == title }) {
@@ -178,13 +181,48 @@ struct SettingsView: View {
                     }
                 }
 
-                // MARK: Sound & haptics
                 category("Sound & haptics") {
                     Toggle("UI sounds", isOn: $appearance.uiSoundsEnabled)
                     Toggle("Controller haptics", isOn: $appearance.controllerHapticsEnabled)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Rumble intensity")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\(rumbleIntensityLabel) · \(String(format: "%.1f", appearance.controllerRumbleIntensity))×")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.primary)
+                        }
+                        Slider(value: $appearance.controllerRumbleIntensity, in: 0.5...3.0, step: 0.1)
+                            .disabled(!appearance.controllerHapticsEnabled)
+                            .opacity(appearance.controllerHapticsEnabled ? 1 : 0.45)
+                        Text("Higher values push motors harder — useful for weak wired controllers. Max still limited by the pad hardware.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Button {
+                        ControllerManager.shared.start()
+                        ControllerRumble.shared.playTest()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "waveform.path")
+                            Text(controller.isConnected ? "Test rumble" : "Test rumble (connect a controller)")
+                                .font(.subheadline.weight(.semibold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .disabled(!controller.isConnected)
+                    .opacity(controller.isConnected ? 1 : 0.5)
                 }
 
-                // MARK: Playback
                 category("Playback") {
                     if let last = session.continueGame {
                         Text(last.title)
@@ -214,7 +252,6 @@ struct SettingsView: View {
                     }
                 }
 
-                // MARK: Activity
                 category("This week") {
                     Text("\(PlayActivityStore.format(activity.weekTotal)) streamed on this device")
                         .font(.subheadline)
@@ -227,7 +264,6 @@ struct SettingsView: View {
                     }
                 }
 
-                // MARK: Stream
                 category("Stream") {
                     Text("Applied to Better xCloud and reloads the page.")
                         .font(.caption)
@@ -242,7 +278,6 @@ struct SettingsView: View {
                     }
                 }
 
-                // MARK: Actions
                 category("Actions") {
                     Button {
                         HapticManager.tap()
@@ -286,7 +321,6 @@ struct SettingsView: View {
                     }
                 }
 
-                // MARK: About
                 category("About") {
                     Text("GameStream iOS \(appVersion) — native GameHub and Xbox Cloud client with Better xCloud.")
                         .font(.caption)
@@ -313,6 +347,7 @@ struct SettingsView: View {
             resumeOnOpen = session.resumeLastOnOpen
             resolution = SessionStore.storedResolution
             region = SessionStore.storedRegion
+            ControllerManager.shared.start()
         }
         .onChange(of: isActive) { _, active in
             guard active else { return }
@@ -320,6 +355,7 @@ struct SettingsView: View {
             resumeOnOpen = session.resumeLastOnOpen
             resolution = SessionStore.storedResolution
             region = SessionStore.storedRegion
+            ControllerManager.shared.start()
         }
     }
 
