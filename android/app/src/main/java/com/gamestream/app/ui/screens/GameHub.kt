@@ -20,7 +20,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.AlertDialog
@@ -34,9 +33,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,16 +53,19 @@ import coil.compose.AsyncImage
 import com.gamestream.app.AppearancePrefs
 import com.gamestream.app.ArtworkStore
 import com.gamestream.app.CatalogGame
+import com.gamestream.app.DiscoveryMode
 import com.gamestream.app.ForYouCatalog
 import com.gamestream.app.GameCatalog
 import com.gamestream.app.GameDiscovery
 import com.gamestream.app.SessionStore
 
+private fun accentColor(accent: Long): Color = Color(accent.toInt())
+
 @Composable
 fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val appearance = remember { AppearancePrefs(context) }
-    // Re-read when revision bumps from Settings
+    @Suppress("UNUSED_VARIABLE")
     val rev = appearance.revision
 
     var query by remember { mutableStateOf("") }
@@ -78,8 +80,10 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
 
     val primaryChips = listOf("Home", "Library", "Browse", "For You", "Favorites", "Recents")
     val genreChips = if (appearance.showGenreFilters) {
-        GameDiscovery.run { com.gamestream.app.DiscoveryMode.entries.map { it.title } } + ForYouCatalog.genreNames
-    } else emptyList()
+        DiscoveryMode.entries.map { it.title } + ForYouCatalog.genreNames
+    } else {
+        emptyList()
+    }
 
     val filteredGames = when (filter) {
         "For You" -> forYou
@@ -106,12 +110,13 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
 
     val sectionGap = appearance.sectionSpacingDp().dp
     val posterFrac = appearance.posterWidthFraction()
+    val bg = Color(appearance.backgroundColorArgb())
 
     BoxWithConstraints(
         modifier
             .fillMaxSize()
             .clipToBounds()
-            .background(Color(0xFF0A0A12))
+            .background(bg)
     ) {
         val featuredWidth = (maxWidth * 0.88f).coerceIn(260.dp, 340.dp)
         val posterWidth = (maxWidth * posterFrac).coerceIn(100.dp, 150.dp)
@@ -127,7 +132,6 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 18.dp, vertical = 14.dp)
         ) {
-            // Header
             Row(Modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier = Modifier.weight(1f)) {
                     Text(
@@ -138,14 +142,8 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
                     )
                     Text("Xbox Cloud Gaming", style = MaterialTheme.typography.bodySmall, color = Color(0xFFB0B0B8))
                 }
-                IconButton(
-                    onClick = { session.openXboxCloud() },
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF1C1C28))
-                ) {
-                    Icon(Icons.Filled.Cloud, contentDescription = "Cloud", tint = Color.White)
+                OutlinedButton(onClick = { session.openXboxCloud() }) {
+                    Text("Cloud", maxLines = 1)
                 }
             }
 
@@ -175,7 +173,6 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
                     Text("Search Xbox Cloud for \"${query.trim()}\"")
                 }
             } else {
-                // Segments
                 Spacer(Modifier.height(14.dp))
                 Row(
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -241,7 +238,7 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
                                 Spacer(Modifier.height(10.dp))
                                 PosterRow(GameCatalog.games.take(40), session, posterWidth) { detail = it }
                             }
-                            else -> { // rails
+                            else -> {
                                 ContinueCard(recents.firstOrNull(), session) { detail = it }
                                 Spacer(Modifier.height(sectionGap))
                                 Text("Featured", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = Color.White)
@@ -344,7 +341,7 @@ private fun ContinueCard(last: CatalogGame?, session: SessionStore, onOpen: (Cat
             Modifier
                 .size(64.dp, 84.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color(last.accent))
+                .background(accentColor(last.accent))
                 .clickable { onOpen(last) }
         ) { Artwork(last, Modifier.fillMaxSize()) }
         Spacer(Modifier.width(14.dp))
@@ -410,7 +407,7 @@ private fun FeaturedCard(
             .width(width)
             .height(height)
             .clip(RoundedCornerShape(24.dp))
-            .background(Color(game.accent))
+            .background(accentColor(game.accent))
             .clickable(onClick = onOpen)
     ) {
         Artwork(game, Modifier.fillMaxSize())
@@ -448,7 +445,7 @@ private fun PosterCard(
             Modifier
                 .size(width, width * 1.33f)
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color(game.accent))
+                .background(accentColor(game.accent))
                 .clickable(onClick = onOpen)
         ) {
             Artwork(game, Modifier.fillMaxSize())
@@ -474,7 +471,7 @@ private fun Artwork(game: CatalogGame, modifier: Modifier = Modifier) {
     if (url != null) {
         AsyncImage(model = url, contentDescription = game.title, modifier = modifier, contentScale = ContentScale.Crop)
     } else {
-        Box(modifier.background(Color(game.accent)), contentAlignment = Alignment.Center) {
+        Box(modifier.background(accentColor(game.accent)), contentAlignment = Alignment.Center) {
             Text(game.title.take(1), color = Color.White, style = MaterialTheme.typography.headlineLarge)
         }
     }
