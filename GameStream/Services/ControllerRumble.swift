@@ -40,12 +40,11 @@ final class ControllerRumble {
     }
 
     /// Continuous dual-motor pulse. Intensities are 0...1 from the game/stream.
-    func play(weak: Float, strong: Float, durationMs: Double) {
-        guard isEnabled else { return }
+    func play(weak: Float, strong: Float, durationMs: Double, force: Bool = false) {
+        guard force || isEnabled else { return }
 
         var w = amplify(weak)
         var s = amplify(strong)
-        // Drive both motors so budget dual-motor pads still shake.
         if w > 0.05 && s < 0.05 { s = w * 0.9 }
         if s > 0.05 && w < 0.05 { w = s * 0.85 }
 
@@ -62,7 +61,6 @@ final class ControllerRumble {
             var events: [CHHapticEvent] = []
             let peak = min(max(w, s), 1)
 
-            // Hard attack — helps weak wired motors kick.
             events.append(
                 CHHapticEvent(
                     eventType: .hapticTransient,
@@ -102,7 +100,6 @@ final class ControllerRumble {
                 )
             }
 
-            // Extra punches for sustained fire feel.
             if duration >= 0.12 {
                 events.append(
                     CHHapticEvent(
@@ -144,16 +141,12 @@ final class ControllerRumble {
         }
     }
 
-    /// Settings test button — strong dual pulse at current intensity.
+    /// Settings test — always attempts a strong dual pulse at current intensity.
     func playTest() {
-        // Temporarily force-enable path even if toggle was off for testing feedback.
-        let wasChecking = isEnabled
-        // Always try to play test so user can feel the pad; still fail-silent.
-        _ = wasChecking
-        play(weak: 1.0, strong: 1.0, durationMs: 420)
+        play(weak: 1.0, strong: 1.0, durationMs: 420, force: true)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
             Task { @MainActor in
-                self?.play(weak: 0.85, strong: 1.0, durationMs: 280)
+                self?.play(weak: 0.9, strong: 1.0, durationMs: 300, force: true)
             }
         }
     }
@@ -171,12 +164,9 @@ final class ControllerRumble {
         engineControllerID = nil
     }
 
-    // MARK: - Private
-
     private func amplify(_ v: Float) -> Float {
         let raw = min(max(v, 0), 1)
         guard raw > 0.008 else { return 0 }
-        // baseGain * userIntensity can exceed 1 — clamp at motor max.
         let boosted = min(raw * baseGain * userIntensity, 1)
         return max(boosted, min(floor * userIntensity, 1))
     }
