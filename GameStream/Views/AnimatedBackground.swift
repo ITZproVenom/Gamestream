@@ -3,13 +3,12 @@ import SwiftUI
 struct AnimatedBackground: View {
     @ObservedObject private var appearance = AppearanceStore.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// When true, never tick TimelineView (used under streaming).
     var forceStatic: Bool = false
 
     private var shouldAnimate: Bool {
         !forceStatic
             && !reduceMotion
-            && appearance.backgroundStyle == .aurora
+            && (appearance.backgroundStyle == .aurora || appearance.backgroundStyle == .mesh)
             && appearance.animationIntensity == .full
             && appearance.effectsMode != .performance
     }
@@ -17,7 +16,6 @@ struct AnimatedBackground: View {
     var body: some View {
         Group {
             if shouldAnimate {
-                // Auroras drift on 45–78s cycles; ~12fps cuts compositing vs the 20fps default.
                 TimelineView(.animation(minimumInterval: 1.0 / 12.0, paused: false)) { timeline in
                     layers(t: timeline.date.timeIntervalSinceReferenceDate)
                 }
@@ -33,12 +31,37 @@ struct AnimatedBackground: View {
         let accent = appearance.accent
         let light = appearance.mode == .light
         let glowScale: Double = appearance.effectsMode == .performance ? 0.35 : appearance.glassIntensity
-        let solidOnly = appearance.backgroundStyle == .solid
+        let style = appearance.backgroundStyle
 
         ZStack {
-            (light ? Color(red: 0.93, green: 0.94, blue: 0.98) : Color.black)
+            // Base fill
+            switch style {
+            case .customColor:
+                appearance.customBgColor.color
+            case .customPhoto:
+                Color.black
+            case .midnight:
+                Color(red: 0.02, green: 0.02, blue: 0.08)
+            case .dusk:
+                Color(red: 0.08, green: 0.04, blue: 0.12)
+            case .solid:
+                light ? Color(red: 0.93, green: 0.94, blue: 0.98) : Color.black
+            default:
+                light ? Color(red: 0.93, green: 0.94, blue: 0.98) : Color.black
+            }
 
-            if !solidOnly {
+            // Custom photo layer
+            if style == .customPhoto, let image = appearance.customBackgroundImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .ignoresSafeArea()
+                Color.black.opacity(appearance.backgroundDim)
+                    .ignoresSafeArea()
+            }
+
+            // Gradient / glow layers for non-photo, non-solid-custom styles
+            if style != .solid && style != .customColor && style != .customPhoto {
                 RadialGradient(
                     colors: [
                         accent.primaryGlow.opacity((light ? 0.28 : 0.55) * glowScale),
@@ -67,7 +90,31 @@ struct AnimatedBackground: View {
                     endRadius: 480
                 )
 
-                if appearance.effectsMode != .performance {
+                if style == .mesh || style == .dusk {
+                    RadialGradient(
+                        colors: [
+                            Color(red: 0.85, green: 0.35, blue: 0.25).opacity(light ? 0.12 : 0.28),
+                            .clear
+                        ],
+                        center: UnitPoint(x: 0.15, y: 0.85),
+                        startRadius: 5,
+                        endRadius: 320
+                    )
+                }
+
+                if style == .midnight {
+                    RadialGradient(
+                        colors: [
+                            Color(red: 0.15, green: 0.20, blue: 0.55).opacity(0.40),
+                            .clear
+                        ],
+                        center: UnitPoint(x: 0.7, y: 0.2),
+                        startRadius: 5,
+                        endRadius: 380
+                    )
+                }
+
+                if appearance.effectsMode != .performance && style != .still {
                     RadialGradient(
                         colors: [
                             accent.tint.opacity(light ? 0.16 : 0.22),
@@ -83,16 +130,19 @@ struct AnimatedBackground: View {
                 }
             }
 
-            LinearGradient(
-                colors: [
-                    (light ? Color.white : Color.black).opacity(light ? 0.18 : 0.10),
-                    .clear,
-                    .clear,
-                    (light ? Color.white : Color.black).opacity(light ? 0.22 : 0.12)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            // Soft vignette
+            if style != .customPhoto {
+                LinearGradient(
+                    colors: [
+                        (light ? Color.white : Color.black).opacity(light ? 0.18 : 0.10),
+                        .clear,
+                        .clear,
+                        (light ? Color.white : Color.black).opacity(light ? 0.22 : 0.12)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
         }
     }
 }
