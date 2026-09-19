@@ -20,7 +20,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -111,20 +110,8 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
         }
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
-            if (session.isSignedIn) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .alpha(if (tab == Tab.Library) 1f else 0f)
-                ) {
-                    LibraryScreen(session)
-                }
-            }
-
             when (tab) {
-                Tab.Library -> {
-                    if (!session.isSignedIn) LibraryScreen(session)
-                }
+                Tab.Library -> LibraryScreen(session)
                 Tab.Search -> SearchScreen(session)
                 Tab.Settings -> SettingsScreen(session)
             }

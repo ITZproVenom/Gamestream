@@ -118,8 +118,9 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
             .clipToBounds()
             .background(bg)
     ) {
-        val featuredWidth = (maxWidth * 0.88f).coerceIn(260.dp, 340.dp)
-        val posterWidth = (maxWidth * posterFrac).coerceIn(100.dp, 150.dp)
+        val constraintsMaxWidth = maxWidth
+        val featuredWidth = (constraintsMaxWidth * 0.88f).coerceIn(260.dp, 340.dp)
+        val posterWidth = (constraintsMaxWidth * posterFrac).coerceIn(100.dp, 150.dp)
         val heroHeight = when (appearance.density) {
             "compact" -> 180.dp
             "spacious" -> 240.dp
@@ -132,8 +133,8 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 18.dp, vertical = 14.dp)
         ) {
-            Row(Modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier = Modifier.weight(1f)) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         "GameStream",
                         style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
@@ -214,7 +215,7 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
                                         onPlay = { session.playGame(hero) },
                                         onFav = { session.toggleFavorite(hero) },
                                         onOpen = { detail = hero },
-                                        width = maxWidth - 36.dp,
+                                        width = constraintsMaxWidth - 36.dp,
                                         height = heroHeight
                                     )
                                 }
