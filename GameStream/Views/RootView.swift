@@ -8,9 +8,8 @@ struct RootView: View {
     @State private var selectedTab: Tab = RootView.restoredTab()
     @State private var tabDragOffset: CGFloat = 0
     @State private var tabBarWidth: CGFloat = 0
-    @Namespace private var navNamespace
 
-    enum Tab: String, CaseIterable {
+    enum Tab: String, CaseIterable, Hashable {
         case library = "Library"
         case search = "Search"
         case settings = "Settings"
@@ -36,11 +35,6 @@ struct RootView: View {
 
     private var tabCount: CGFloat { CGFloat(Tab.allCases.count) }
 
-    private var slotWidth: CGFloat {
-        guard tabBarWidth > 0 else { return 0 }
-        return tabBarWidth / tabCount
-    }
-
     var body: some View {
         signedInRoot
     }
@@ -60,11 +54,12 @@ struct RootView: View {
                 if session.isStreaming && selectedTab == .library {
                     StreamPlayerView()
                 } else if !session.isStreaming {
-                    switch selectedTab {
-                    case .library:
+                    // Page-style swipe between Library / Search / Settings
+                    TabView(selection: $selectedTab) {
                         GameHubView()
-                    case .search:
-                        SearchHubView(isActive: true)
+                            .tag(Tab.library)
+
+                        SearchHubView(isActive: selectedTab == .search)
                             .safeAreaInset(edge: .top, spacing: 0) {
                                 if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                                    let game = session.continueGame {
@@ -74,9 +69,13 @@ struct RootView: View {
                                         .padding(.bottom, 4)
                                 }
                             }
-                    case .settings:
-                        SettingsView(isActive: true)
+                            .tag(Tab.search)
+
+                        SettingsView(isActive: selectedTab == .settings)
+                            .tag(Tab.settings)
                     }
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+                    .animation(.spring(response: 0.32, dampingFraction: 0.82), value: selectedTab)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -208,26 +207,23 @@ struct RootView: View {
         return .library
     }
 
-    // MARK: - Liquid Glass tab switcher (tap + slide)
+    // MARK: - Liquid Glass tab switcher (tap + slide on bar)
 
     private var glassNavigation: some View {
         GeometryReader { geo in
             let width = geo.size.width
             let slot = width / tabCount
             let baseX = CGFloat(selectedTab.index) * slot
-            // Clamp drag so the pill stays inside the bar
             let maxDragLeft = -baseX
             let maxDragRight = width - slot - baseX
             let clampedDrag = min(max(tabDragOffset, maxDragLeft), maxDragRight)
             let pillX = baseX + clampedDrag
 
             ZStack(alignment: .leading) {
-                // Track
                 Capsule()
                     .fill(.ultraThinMaterial)
                     .glassEffect(.regular, in: Capsule())
 
-                // Sliding selection pill
                 Capsule()
                     .fill(.ultraThinMaterial)
                     .glassEffect(.regular.interactive(), in: Capsule())
@@ -240,9 +236,13 @@ struct RootView: View {
                     }
                     .frame(width: max(slot - 4, 0), height: 52)
                     .offset(x: pillX + 2)
-                    .animation(tabDragOffset == 0 ? .spring(response: 0.32, dampingFraction: 0.82) : .interactiveSpring, value: selectedTab)
+                    .animation(
+                        tabDragOffset == 0
+                            ? .spring(response: 0.32, dampingFraction: 0.82)
+                            : .interactiveSpring,
+                        value: selectedTab
+                    )
 
-                // Labels / icons — full-bar drag + per-item tap
                 HStack(spacing: 0) {
                     ForEach(Tab.allCases, id: \.self) { tab in
                         tabLabel(tab)
@@ -280,7 +280,6 @@ struct RootView: View {
     private func tabDragGesture(slotWidth: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 6, coordinateSpace: .local)
             .onChanged { value in
-                // Prefer horizontal swipes
                 guard abs(value.translation.width) > abs(value.translation.height) * 0.6 else { return }
                 tabDragOffset = value.translation.width
             }
