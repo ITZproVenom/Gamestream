@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var resolution: String = SessionStore.storedResolution
     @State private var region: String = SessionStore.storedRegion
     @State private var photoItem: PhotosPickerItem?
+    @State private var testPulseNote: String = ""
 
     var isActive: Bool = true
 
@@ -44,6 +45,59 @@ struct SettingsView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
+                }
+
+                // MARK: Controller test — always visible, never locked behind detection
+                category("Controller test") {
+                    HStack(spacing: 8) {
+                        Image(systemName: controller.isConnected ? "gamecontroller.fill" : "gamecontroller")
+                            .foregroundStyle(controller.isConnected ? .green : .secondary)
+                        Text(controller.isConnected ? "Controller detected" : "No controller detected yet")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Toggle("Controller haptics", isOn: $appearance.controllerHapticsEnabled)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Rumble intensity")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\(rumbleIntensityLabel) · \(String(format: "%.1f", appearance.controllerRumbleIntensity))×")
+                                .font(.caption.weight(.semibold))
+                        }
+                        Slider(value: $appearance.controllerRumbleIntensity, in: 0.5...3.0, step: 0.1)
+                        Text("Turn intensity up for weak wired pads. Hardware still sets the ceiling.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Button {
+                        ControllerManager.shared.start()
+                        ControllerRumble.shared.playTest()
+                        testPulseNote = controller.isConnected
+                            ? "Pulse sent — you should feel two bursts."
+                            : "Pulse sent. If you feel nothing, plug in / wake the pad and try again."
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "waveform.path")
+                            Text("Test rumble")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                    }
+                    .buttonStyle(.glassProminent)
+
+                    if !testPulseNote.isEmpty {
+                        Text(testPulseNote)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
 
                 category("Appearance") {
@@ -181,46 +235,8 @@ struct SettingsView: View {
                     }
                 }
 
-                category("Sound & haptics") {
+                category("Sound") {
                     Toggle("UI sounds", isOn: $appearance.uiSoundsEnabled)
-                    Toggle("Controller haptics", isOn: $appearance.controllerHapticsEnabled)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Rumble intensity")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text("\(rumbleIntensityLabel) · \(String(format: "%.1f", appearance.controllerRumbleIntensity))×")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.primary)
-                        }
-                        Slider(value: $appearance.controllerRumbleIntensity, in: 0.5...3.0, step: 0.1)
-                            .disabled(!appearance.controllerHapticsEnabled)
-                            .opacity(appearance.controllerHapticsEnabled ? 1 : 0.45)
-                        Text("Higher values push motors harder — useful for weak wired controllers. Max still limited by the pad hardware.")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Button {
-                        ControllerManager.shared.start()
-                        ControllerRumble.shared.playTest()
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "waveform.path")
-                            Text(controller.isConnected ? "Test rumble" : "Test rumble (connect a controller)")
-                                .font(.subheadline.weight(.semibold))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.85)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .disabled(!controller.isConnected)
-                    .opacity(controller.isConnected ? 1 : 0.5)
                 }
 
                 category("Playback") {
