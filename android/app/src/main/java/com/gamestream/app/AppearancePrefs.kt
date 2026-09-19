@@ -56,6 +56,15 @@ class AppearancePrefs(context: Context) {
         get() = prefs.getBoolean("sounds", true)
         set(value) { prefs.edit().putBoolean("sounds", value).apply(); bump() }
 
+    var controllerHaptics: Boolean
+        get() = prefs.getBoolean("controllerHaptics", true)
+        set(value) { prefs.edit().putBoolean("controllerHaptics", value).apply(); bump() }
+
+    /** 0.5f … 3.0f — default 1.6f for weak wired pads. */
+    var rumbleIntensity: Float
+        get() = prefs.getFloat("rumbleIntensity", 1.6f).coerceIn(0.5f, 3f)
+        set(value) { prefs.edit().putFloat("rumbleIntensity", value.coerceIn(0.5f, 3f)).apply(); bump() }
+
     var showActivityOnHome: Boolean
         get() = prefs.getBoolean("showActivity", true)
         set(value) { prefs.edit().putBoolean("showActivity", value).apply(); bump() }
@@ -81,7 +90,6 @@ class AppearancePrefs(context: Context) {
         else -> 0.32f
     }
 
-    /** ARGB Int for androidx.compose.ui.graphics.Color(int). */
     fun backgroundColorArgb(): Int = when (background) {
         "solid", "customColor" -> when (customBgColor) {
             "charcoal" -> 0xFF1E1E24.toInt()
