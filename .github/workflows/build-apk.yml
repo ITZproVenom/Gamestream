@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 30
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -113,28 +113,93 @@ jobs:
         id: meta
         working-directory: .
         run: |
+          set -euo pipefail
           SHORT_SHA="$(echo '${{ github.sha }}' | cut -c1-7)"
           DATE_UTC="$(date -u +'%Y-%m-%d %H:%M UTC')"
           STAMP="$(date -u +'%Y%m%d-%H%M')"
           RUN="${{ github.run_number }}"
           echo "tag=android-build-${STAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           echo "name=Android build #${RUN} (${SHORT_SHA})" >> "$GITHUB_OUTPUT"
-          {
-            echo "## Changelog"
-            echo ""
-            echo "**Platform:** Android · **Build:** \`${SHORT_SHA}\` · **${DATE_UTC}**"
-            echo ""
-            echo "### What's changed"
-            echo ""
-            git log --max-count=15 --pretty=format:'- %s (%h)' --no-merges -- android/ scripts/ || true
-            echo ""
-            echo ""
-            echo "---"
-            echo ""
-            echo "### Install"
-            echo "Download **GameStream-release.apk** (allow unknown sources)."
-            echo "Signed with the persistent GameStream release keystore. Updates install over previous official APKs without uninstalling."
-          } > android_release_notes.md
+
+          python3 - "$SHORT_SHA" "$DATE_UTC" <<'PY'
+          import subprocess, sys
+          from pathlib import Path
+
+          short, date = sys.argv[1], sys.argv[2]
+
+          # Previous dedicated Android release tag (do not mix with ios-build-*)
+          prev = subprocess.check_output(
+              ["git", "tag", "-l", "android-build-*", "--sort=-creatordate"],
+              text=True,
+          ).strip().splitlines()
+          prev = prev[0] if prev else None
+
+          range_arg = f"{prev}..HEAD" if prev else "HEAD"
+          cmd = ["git", "log", range_arg, "--max-count=40", "--name-only",
+                 "--pretty=format:COMMIT\t%h\t%s", "--no-merges"]
+          raw = subprocess.check_output(cmd, text=True)
+
+          def is_android_only(paths):
+              """Include if any Android path changed; exclude pure-iOS commits."""
+              ios = android = False
+              for p in paths:
+                  if p.startswith("android/") or p == ".github/workflows/build-apk.yml":
+                      android = True
+                  elif (
+                      p.startswith("GameStream/")
+                      or p == "project.yml"
+                      or p == ".github/workflows/build-ipa.yml"
+                  ):
+                      ios = True
+                  elif p.startswith("scripts/"):
+                      # shared icon script can appear on both; count as android if
+                      # this commit also touched android, else skip pure-script noise
+                      pass
+              if android:
+                  return True
+              if ios:
+                  return False
+              return False
+
+          items = []
+          sha = subject = None
+          files = []
+          for line in raw.splitlines():
+              if line.startswith("COMMIT\t"):
+                  if sha is not None and is_android_only(files):
+                      items.append(f"- {subject} ({sha})")
+                  _, sha, subject = line.split("\t", 2)
+                  files = []
+              elif line.strip():
+                  files.append(line.strip())
+          if sha is not None and is_android_only(files):
+              items.append(f"- {subject} ({sha})")
+
+          items = items[:20]
+          if not items:
+              items = ["- No new Android-only changes since the previous Android release."]
+
+          since = f" since `{prev}`" if prev else ""
+          body = "\n".join([
+              "## Changelog",
+              "",
+              f"**Platform:** Android only · **Build:** `{short}` · **{date}**",
+              f"**Scope:** Dedicated Android release — iOS changes are published under `ios-build-*` tags only.{since}",
+              "",
+              "### What's changed (Android)",
+              "",
+              *items,
+              "",
+              "---",
+              "",
+              "### Install",
+              "Download **GameStream-release.apk** (allow unknown sources).",
+              "Signed with the persistent GameStream release keystore. Updates install over previous official APKs without uninstalling.",
+              "",
+          ])
+          Path("android_release_notes.md").write_text(body)
+          print(body)
+          PY
 
       - name: Publish new Android build release
         if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
