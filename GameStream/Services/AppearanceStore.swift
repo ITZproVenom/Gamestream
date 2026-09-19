@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import UIKit
 
 enum AppAppearanceMode: String, CaseIterable, Identifiable {
     case system, dark, light
@@ -74,13 +75,47 @@ enum AccentTheme: String, CaseIterable, Identifiable {
 }
 
 enum BackgroundStyle: String, CaseIterable, Identifiable {
-    case aurora, still, solid
+    case aurora, still, solid, mesh, dusk, midnight, customColor, customPhoto
     var id: String { rawValue }
     var title: String {
         switch self {
         case .aurora: return "Aurora"
         case .still: return "Still"
         case .solid: return "Solid"
+        case .mesh: return "Mesh"
+        case .dusk: return "Dusk"
+        case .midnight: return "Midnight"
+        case .customColor: return "Custom color"
+        case .customPhoto: return "Custom photo"
+        }
+    }
+}
+
+enum CustomBgColor: String, CaseIterable, Identifiable {
+    case deepBlack, charcoal, navy, forest, plum, wine, slate, pureWhite
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .deepBlack: return "Deep black"
+        case .charcoal: return "Charcoal"
+        case .navy: return "Navy"
+        case .forest: return "Forest"
+        case .plum: return "Plum"
+        case .wine: return "Wine"
+        case .slate: return "Slate"
+        case .pureWhite: return "White"
+        }
+    }
+    var color: Color {
+        switch self {
+        case .deepBlack: return Color(red: 0.04, green: 0.04, blue: 0.06)
+        case .charcoal: return Color(red: 0.12, green: 0.12, blue: 0.14)
+        case .navy: return Color(red: 0.06, green: 0.10, blue: 0.22)
+        case .forest: return Color(red: 0.05, green: 0.14, blue: 0.10)
+        case .plum: return Color(red: 0.14, green: 0.06, blue: 0.18)
+        case .wine: return Color(red: 0.18, green: 0.05, blue: 0.10)
+        case .slate: return Color(red: 0.10, green: 0.12, blue: 0.16)
+        case .pureWhite: return Color(red: 0.96, green: 0.96, blue: 0.98)
         }
     }
 }
@@ -166,6 +201,11 @@ final class AppearanceStore: ObservableObject {
     @Published var mode: AppAppearanceMode { didSet { UserDefaults.standard.set(mode.rawValue, forKey: Keys.mode) } }
     @Published var accent: AccentTheme { didSet { UserDefaults.standard.set(accent.rawValue, forKey: Keys.accent) } }
     @Published var backgroundStyle: BackgroundStyle { didSet { UserDefaults.standard.set(backgroundStyle.rawValue, forKey: Keys.background) } }
+    @Published var customBgColor: CustomBgColor { didSet { UserDefaults.standard.set(customBgColor.rawValue, forKey: Keys.customBgColor) } }
+    @Published var backgroundDim: Double { didSet { UserDefaults.standard.set(backgroundDim, forKey: Keys.bgDim) } }
+    @Published var customBackgroundImage: UIImage? {
+        didSet { persistCustomPhoto(customBackgroundImage) }
+    }
     @Published var cardStyle: GameCardStyle { didSet { UserDefaults.standard.set(cardStyle.rawValue, forKey: Keys.card) } }
     @Published var density: LibraryDensity { didSet { UserDefaults.standard.set(density.rawValue, forKey: Keys.density) } }
     @Published var hubLayout: HubHomeLayout { didSet { UserDefaults.standard.set(hubLayout.rawValue, forKey: Keys.hubLayout) } }
@@ -181,6 +221,8 @@ final class AppearanceStore: ObservableObject {
         static let mode = "GameStream.appearanceMode"
         static let accent = "GameStream.accentTheme"
         static let background = "GameStream.backgroundStyle"
+        static let customBgColor = "GameStream.customBgColor"
+        static let bgDim = "GameStream.backgroundDim"
         static let card = "GameStream.cardStyle"
         static let density = "GameStream.libraryDensity"
         static let hubLayout = "GameStream.hubHomeLayout"
@@ -193,10 +235,18 @@ final class AppearanceStore: ObservableObject {
         static let showGenres = "GameStream.showGenreFilters"
     }
 
+    private var photoURL: URL {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("custom-background.jpg")
+    }
+
     private init() {
         mode = AppAppearanceMode(rawValue: UserDefaults.standard.string(forKey: Keys.mode) ?? "") ?? .dark
         accent = AccentTheme(rawValue: UserDefaults.standard.string(forKey: Keys.accent) ?? "") ?? .violet
         backgroundStyle = BackgroundStyle(rawValue: UserDefaults.standard.string(forKey: Keys.background) ?? "") ?? .aurora
+        customBgColor = CustomBgColor(rawValue: UserDefaults.standard.string(forKey: Keys.customBgColor) ?? "") ?? .deepBlack
+        backgroundDim = (UserDefaults.standard.object(forKey: Keys.bgDim) as? Double) ?? 0.45
         cardStyle = GameCardStyle(rawValue: UserDefaults.standard.string(forKey: Keys.card) ?? "") ?? .poster
         density = LibraryDensity(rawValue: UserDefaults.standard.string(forKey: Keys.density) ?? "") ?? .comfortable
         hubLayout = HubHomeLayout(rawValue: UserDefaults.standard.string(forKey: Keys.hubLayout) ?? "") ?? .editorial
@@ -211,5 +261,36 @@ final class AppearanceStore: ObservableObject {
             ? true : UserDefaults.standard.bool(forKey: Keys.showActivity)
         showGenreFilters = UserDefaults.standard.object(forKey: Keys.showGenres) == nil
             ? true : UserDefaults.standard.bool(forKey: Keys.showGenres)
+        if let data = try? Data(contentsOf: photoURL),
+           let image = UIImage(data: data) {
+            customBackgroundImage = image
+        } else {
+            customBackgroundImage = nil
+        }
+    }
+
+    func setCustomPhoto(_ image: UIImage?) {
+        customBackgroundImage = image
+        if image != nil {
+            backgroundStyle = .customPhoto
+        }
+    }
+
+    func clearCustomPhoto() {
+        customBackgroundImage = nil
+        try? FileManager.default.removeItem(at: photoURL)
+        if backgroundStyle == .customPhoto {
+            backgroundStyle = .aurora
+        }
+    }
+
+    private func persistCustomPhoto(_ image: UIImage?) {
+        guard let image else {
+            try? FileManager.default.removeItem(at: photoURL)
+            return
+        }
+        if let data = image.jpegData(compressionQuality: 0.85) {
+            try? data.write(to: photoURL, options: .atomic)
+        }
     }
 }
