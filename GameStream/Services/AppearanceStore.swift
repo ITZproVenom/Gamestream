@@ -214,6 +214,17 @@ final class AppearanceStore: ObservableObject {
     @Published var glassIntensity: Double { didSet { UserDefaults.standard.set(glassIntensity, forKey: Keys.glass) } }
     @Published var uiSoundsEnabled: Bool { didSet { UserDefaults.standard.set(uiSoundsEnabled, forKey: Keys.sounds) } }
     @Published var controllerHapticsEnabled: Bool { didSet { UserDefaults.standard.set(controllerHapticsEnabled, forKey: Keys.controllerHaptics) } }
+    /// Multiplier for in-game / test rumble (0.5 weak … 3.0 max). Default 1.6 for wired pads.
+    @Published var controllerRumbleIntensity: Double {
+        didSet {
+            let clamped = min(max(controllerRumbleIntensity, 0.5), 3.0)
+            if clamped != controllerRumbleIntensity {
+                controllerRumbleIntensity = clamped
+                return
+            }
+            UserDefaults.standard.set(clamped, forKey: Keys.rumbleIntensity)
+        }
+    }
     @Published var showActivityOnHome: Bool { didSet { UserDefaults.standard.set(showActivityOnHome, forKey: Keys.showActivity) } }
     @Published var showGenreFilters: Bool { didSet { UserDefaults.standard.set(showGenreFilters, forKey: Keys.showGenres) } }
 
@@ -231,6 +242,7 @@ final class AppearanceStore: ObservableObject {
         static let glass = "GameStream.glassIntensity"
         static let sounds = "GameStream.uiSoundsEnabled"
         static let controllerHaptics = "GameStream.controllerHapticsEnabled"
+        static let rumbleIntensity = "GameStream.controllerRumbleIntensity"
         static let showActivity = "GameStream.showActivityOnHome"
         static let showGenres = "GameStream.showGenreFilters"
     }
@@ -257,6 +269,8 @@ final class AppearanceStore: ObservableObject {
             ? true : UserDefaults.standard.bool(forKey: Keys.sounds)
         controllerHapticsEnabled = UserDefaults.standard.object(forKey: Keys.controllerHaptics) == nil
             ? true : UserDefaults.standard.bool(forKey: Keys.controllerHaptics)
+        let storedIntensity = UserDefaults.standard.object(forKey: Keys.rumbleIntensity) as? Double
+        controllerRumbleIntensity = min(max(storedIntensity ?? 1.6, 0.5), 3.0)
         showActivityOnHome = UserDefaults.standard.object(forKey: Keys.showActivity) == nil
             ? true : UserDefaults.standard.bool(forKey: Keys.showActivity)
         showGenreFilters = UserDefaults.standard.object(forKey: Keys.showGenres) == nil
