@@ -34,7 +34,7 @@ final class ControllerRumble {
             guard let engine else { return }
 
             let intensity = max(w, s)
-            let sharpness = s >= w ? 0.85 : 0.25
+            let sharpness: Float = s >= w ? 0.85 : 0.25
             let duration = min(max(durationMs / 1000.0, 0.02), 2.5)
 
             let intensityParam = CHHapticEventParameter(parameterID: .hapticIntensity, value: intensity)
@@ -104,7 +104,7 @@ final class ControllerRumble {
         engineControllerID = nil
 
         guard let haptics = controller.haptics else { return }
-        let created = haptics.createEngine(withLocality: .default)
+        guard let created = haptics.createEngine(withLocality: .default) else { return }
         created.playsHapticsOnly = true
         created.isAutoShutdownEnabled = true
         try created.start()
