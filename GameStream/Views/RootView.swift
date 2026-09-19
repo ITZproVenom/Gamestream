@@ -33,7 +33,20 @@ struct RootView: View {
     }
 
     private var signedInRoot: some View {
-        VStack(spacing: 0) {
+        // Full-bleed ZStack: aurora + content fill every edge (status bar,
+        // home indicator). Tab bar floats on top — no black borders.
+        ZStack(alignment: .bottom) {
+            // Background layer — always full screen
+            Group {
+                if session.isStreaming {
+                    Color.black
+                } else {
+                    AnimatedBackground()
+                }
+            }
+            .ignoresSafeArea()
+
+            // Content layer
             ZStack {
                 if session.isStreaming && selectedTab == .library {
                     StreamPlayerView()
@@ -41,17 +54,13 @@ struct RootView: View {
                 }
 
                 if !session.isStreaming {
-                    // All tabs extend under the glass nav so the aurora fills the
-                    // bottom safe area — avoids black borders behind the tab bar.
                     GameHubView()
-                        .ignoresSafeArea(edges: .bottom)
                         .opacity(selectedTab == .library ? 1 : 0)
                         .allowsHitTesting(selectedTab == .library)
                         .accessibilityHidden(selectedTab != .library)
                         .zIndex(selectedTab == .library ? 2 : 0)
 
                     SearchHubView(isActive: selectedTab == .search)
-                        .ignoresSafeArea(edges: .bottom)
                         .safeAreaInset(edge: .top, spacing: 0) {
                             if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                                let game = session.continueGame {
@@ -67,7 +76,6 @@ struct RootView: View {
                         .zIndex(selectedTab == .search ? 2 : 0)
 
                     SettingsView(isActive: selectedTab == .settings)
-                        .ignoresSafeArea(edges: .bottom)
                         .opacity(selectedTab == .settings ? 1 : 0)
                         .allowsHitTesting(selectedTab == .settings)
                         .accessibilityHidden(selectedTab != .settings)
@@ -75,7 +83,10 @@ struct RootView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Content extends under the floating tab bar so aurora shows through
+            .ignoresSafeArea(edges: .bottom)
 
+            // Floating Liquid Glass tab switcher
             if !hideTabBar {
                 glassNavigation
                     .padding(.horizontal, 24)
@@ -84,13 +95,7 @@ struct RootView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background {
-            if session.isStreaming {
-                Color.black.ignoresSafeArea()
-            } else {
-                AnimatedBackground()
-            }
-        }
+        .ignoresSafeArea()
         .onChange(of: selectedTab) { _, tab in
             UserDefaults.standard.set(tab.rawValue, forKey: Self.tabStorageKey)
             if tab == .library && !session.isStreaming {
@@ -198,6 +203,8 @@ struct RootView: View {
         }
         return .library
     }
+
+    // MARK: - Liquid Glass tab switcher
 
     private var glassNavigation: some View {
         GlassEffectContainer(spacing: 8) {
