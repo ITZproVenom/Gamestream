@@ -22,10 +22,12 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -37,7 +39,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.gamestream.app.AppearancePrefs
+import com.gamestream.app.ControllerRumble
 import com.gamestream.app.SessionStore
+import java.util.Locale
 
 @Composable
 fun SettingsScreen(session: SessionStore) {
@@ -48,6 +52,7 @@ fun SettingsScreen(session: SessionStore) {
     val last = session.recentGames().firstOrNull()
     val context = LocalContext.current
     val appearance = remember { AppearancePrefs(context) }
+    val rumble = remember { ControllerRumble.get(context) }
 
     var mode by remember { mutableStateOf(appearance.mode) }
     var accent by remember { mutableStateOf(appearance.accent) }
@@ -59,8 +64,18 @@ fun SettingsScreen(session: SessionStore) {
     var animation by remember { mutableStateOf(appearance.animation) }
     var effects by remember { mutableStateOf(appearance.effects) }
     var uiSounds by remember { mutableStateOf(appearance.uiSounds) }
+    var controllerHaptics by remember { mutableStateOf(appearance.controllerHaptics) }
+    var rumbleIntensity by remember { mutableFloatStateOf(appearance.rumbleIntensity) }
     var showActivity by remember { mutableStateOf(appearance.showActivityOnHome) }
     var showGenres by remember { mutableStateOf(appearance.showGenreFilters) }
+
+    val intensityLabel = when {
+        rumbleIntensity < 0.85f -> "Light"
+        rumbleIntensity < 1.35f -> "Normal"
+        rumbleIntensity < 2.0f -> "Strong"
+        rumbleIntensity < 2.6f -> "Heavy"
+        else -> "Max"
+    }
 
     val bgColors = listOf(
         "deepBlack" to Color(0xFF0A0A12),
@@ -163,9 +178,45 @@ fun SettingsScreen(session: SessionStore) {
             }
         }
 
-        Category("Sound") {
+        Category("Sound & haptics") {
             ToggleRow("UI sounds", uiSounds) {
                 uiSounds = it; appearance.uiSounds = it
+            }
+            ToggleRow("Controller haptics", controllerHaptics) {
+                controllerHaptics = it; appearance.controllerHaptics = it
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Rumble intensity", style = MaterialTheme.typography.labelLarge, color = Color(0xFFB0B0B8))
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "$intensityLabel · ${String.format(Locale.US, "%.1f", rumbleIntensity)}×",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White
+                )
+            }
+            Slider(
+                value = rumbleIntensity,
+                onValueChange = {
+                    rumbleIntensity = it
+                    appearance.rumbleIntensity = it
+                },
+                valueRange = 0.5f..3f,
+                steps = 24,
+                enabled = controllerHaptics,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                "Higher values push motors harder — useful for weak wired controllers. Hardware still sets the ceiling.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF808088)
+            )
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = { rumble.playTest() },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Test rumble")
             }
         }
 
@@ -223,7 +274,7 @@ fun SettingsScreen(session: SessionStore) {
 
         Category("About") {
             Text(
-                "GameStream Android 1.5.0 — custom backgrounds & categorized settings.",
+                "GameStream Android — library layouts, backgrounds, and controller rumble parity with iOS.",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color(0xFF808088)
             )
