@@ -112,6 +112,8 @@ jobs:
       - name: Build changelog + release identity
         id: meta
         working-directory: .
+        env:
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           SHORT_SHA="$(echo '${{ github.sha }}' | cut -c1-7)"
@@ -121,13 +123,12 @@ jobs:
           echo "tag=android-build-${STAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           echo "name=Android build #${RUN} (${SHORT_SHA})" >> "$GITHUB_OUTPUT"
 
-          python3 - "$SHORT_SHA" "$DATE_UTC" <<'PY'
+          python3 - "$SHORT_SHA" "$DATE_UTC" "$EVENT_NAME" <<'PY'
           import subprocess, sys
           from pathlib import Path
 
-          short, date = sys.argv[1], sys.argv[2]
+          short, date, event = sys.argv[1], sys.argv[2], sys.argv[3]
 
-          # Previous dedicated Android release tag (do not mix with ios-build-*)
           prev = subprocess.check_output(
               ["git", "tag", "-l", "android-build-*", "--sort=-creatordate"],
               text=True,
@@ -139,26 +140,13 @@ jobs:
                  "--pretty=format:COMMIT\t%h\t%s", "--no-merges"]
           raw = subprocess.check_output(cmd, text=True)
 
-          def is_android_only(paths):
-              """Include if any Android path changed; exclude pure-iOS commits."""
-              ios = android = False
+          def is_android_app_change(paths):
+              """Real Android app code — not workflow-only or pure-iOS."""
               for p in paths:
-                  if p.startswith("android/") or p == ".github/workflows/build-apk.yml":
-                      android = True
-                  elif (
-                      p.startswith("GameStream/")
-                      or p == "project.yml"
-                      or p == ".github/workflows/build-ipa.yml"
-                  ):
-                      ios = True
-                  elif p.startswith("scripts/"):
-                      # shared icon script can appear on both; count as android if
-                      # this commit also touched android, else skip pure-script noise
-                      pass
-              if android:
-                  return True
-              if ios:
-                  return False
+                  if p.startswith("android/") and not p.endswith("build-apk.yml"):
+                      return True
+                  if p.startswith("android/app/"):
+                      return True
               return False
 
           items = []
@@ -166,25 +154,28 @@ jobs:
           files = []
           for line in raw.splitlines():
               if line.startswith("COMMIT\t"):
-                  if sha is not None and is_android_only(files):
+                  if sha is not None and is_android_app_change(files):
                       items.append(f"- {subject} ({sha})")
                   _, sha, subject = line.split("\t", 2)
                   files = []
               elif line.strip():
                   files.append(line.strip())
-          if sha is not None and is_android_only(files):
+          if sha is not None and is_android_app_change(files):
               items.append(f"- {subject} ({sha})")
 
           items = items[:20]
+          should = event == "workflow_dispatch" or bool(items)
+          Path("should_release.txt").write_text("true" if should else "false")
+
           if not items:
-              items = ["- No new Android-only changes since the previous Android release."]
+              items = ["- No new Android app code since the previous Android release (release skipped on push)."]
 
           since = f" since `{prev}`" if prev else ""
           body = "\n".join([
               "## Changelog",
               "",
               f"**Platform:** Android only · **Build:** `{short}` · **{date}**",
-              f"**Scope:** Dedicated Android release — iOS changes are published under `ios-build-*` tags only.{since}",
+              f"**Scope:** Dedicated Android release — iOS under `ios-build-*` only.{since}",
               "",
               "### What's changed (Android)",
               "",
@@ -194,15 +185,20 @@ jobs:
               "",
               "### Install",
               "Download **GameStream-release.apk** (allow unknown sources).",
-              "Signed with the persistent GameStream release keystore. Updates install over previous official APKs without uninstalling.",
+              "Signed with the persistent GameStream release keystore.",
               "",
           ])
           Path("android_release_notes.md").write_text(body)
           print(body)
+          print("should_release=", "true" if should else "false")
           PY
 
+          echo "should_release=$(cat should_release.txt)" >> "$GITHUB_OUTPUT"
+
       - name: Publish new Android build release
-        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        if: >-
+          steps.meta.outputs.should_release == 'true' &&
+          (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
