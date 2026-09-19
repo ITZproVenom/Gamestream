@@ -81,20 +81,21 @@ class AppearancePrefs(context: Context) {
         else -> 0.32f
     }
 
-    fun backgroundColorArgb(): Long = when (background) {
+    /** ARGB Int for androidx.compose.ui.graphics.Color(int). */
+    fun backgroundColorArgb(): Int = when (background) {
         "solid", "customColor" -> when (customBgColor) {
-            "charcoal" -> 0xFF1E1E24
-            "navy" -> 0xFF0F1A38
-            "forest" -> 0xFF0D241A
-            "plum" -> 0xFF240F2E
-            "wine" -> 0xFF2E0D1A
-            "slate" -> 0xFF1A1E29
-            "white" -> 0xFFF5F5FA
-            else -> 0xFF0A0A12 // deepBlack
+            "charcoal" -> 0xFF1E1E24.toInt()
+            "navy" -> 0xFF0F1A38.toInt()
+            "forest" -> 0xFF0D241A.toInt()
+            "plum" -> 0xFF240F2E.toInt()
+            "wine" -> 0xFF2E0D1A.toInt()
+            "slate" -> 0xFF1A1E29.toInt()
+            "white" -> 0xFFF5F5FA.toInt()
+            else -> 0xFF0A0A12.toInt()
         }
-        "midnight" -> 0xFF050514
-        "dusk" -> 0xFF140A1F
-        "mesh" -> 0xFF0C0C18
-        else -> 0xFF0A0A12 // aurora / still
+        "midnight" -> 0xFF050514.toInt()
+        "dusk" -> 0xFF140A1F.toInt()
+        "mesh" -> 0xFF0C0C18.toInt()
+        else -> 0xFF0A0A12.toInt()
     }
 }
