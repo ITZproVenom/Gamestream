@@ -32,6 +32,10 @@ class AppearancePrefs(context: Context) {
         get() = prefs.getString("density", "comfortable") ?: "comfortable"
         set(value) { prefs.edit().putString("density", value).apply(); bump() }
 
+    var hubLayout: String
+        get() = prefs.getString("hubLayout", "editorial") ?: "editorial"
+        set(value) { prefs.edit().putString("hubLayout", value).apply(); bump() }
+
     var animation: String
         get() = prefs.getString("animation", "full") ?: "full"
         set(value) { prefs.edit().putString("animation", value).apply(); bump() }
@@ -44,7 +48,28 @@ class AppearancePrefs(context: Context) {
         get() = prefs.getBoolean("sounds", true)
         set(value) { prefs.edit().putBoolean("sounds", value).apply(); bump() }
 
+    var showActivityOnHome: Boolean
+        get() = prefs.getBoolean("showActivity", true)
+        set(value) { prefs.edit().putBoolean("showActivity", value).apply(); bump() }
+
+    var showGenreFilters: Boolean
+        get() = prefs.getBoolean("showGenres", true)
+        set(value) { prefs.edit().putBoolean("showGenres", value).apply(); bump() }
+
     var glassIntensity: Float
         get() = prefs.getFloat("glass", 1f)
         set(value) { prefs.edit().putFloat("glass", value).apply(); bump() }
+
+    fun sectionSpacingDp(): Int = when (density) {
+        "spacious" -> 28
+        "compact" -> 12
+        else -> 18
+    }
+
+    fun posterWidthFraction(): Float = when {
+        density == "compact" || cardStyle == "compact" -> 0.28f
+        cardStyle == "wide" -> 0.42f
+        density == "spacious" -> 0.36f
+        else -> 0.32f
+    }
 }
