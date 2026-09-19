@@ -45,9 +45,12 @@ fun SettingsScreen(session: SessionStore) {
     var background by remember { mutableStateOf(appearance.background) }
     var cardStyle by remember { mutableStateOf(appearance.cardStyle) }
     var density by remember { mutableStateOf(appearance.density) }
+    var hubLayout by remember { mutableStateOf(appearance.hubLayout) }
     var animation by remember { mutableStateOf(appearance.animation) }
     var effects by remember { mutableStateOf(appearance.effects) }
     var uiSounds by remember { mutableStateOf(appearance.uiSounds) }
+    var showActivity by remember { mutableStateOf(appearance.showActivityOnHome) }
+    var showGenres by remember { mutableStateOf(appearance.showGenreFilters) }
 
     Column(
         modifier = Modifier
@@ -97,117 +100,83 @@ fun SettingsScreen(session: SessionStore) {
             color = Color(0xFFB0B0B8)
         )
         if (top != null) {
-            Text(
-                "Most played: ${top.title}",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF808088)
-            )
+            Text("Most played: ${top.title}", style = MaterialTheme.typography.bodySmall, color = Color(0xFF808088))
         }
 
         Spacer(modifier = Modifier.height(20.dp))
         Text("Stream", style = MaterialTheme.typography.titleMedium, color = Color.White)
-        Text(
-            "Applied to Better xCloud and reloads the page.",
-            style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFF808088)
-        )
-
+        Text("Applied to Better xCloud and reloads the page.", style = MaterialTheme.typography.bodySmall, color = Color(0xFF808088))
         Spacer(modifier = Modifier.height(8.dp))
         Text("Target resolution", style = MaterialTheme.typography.labelLarge, color = Color(0xFFB0B0B8))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            resolutions.forEach { opt ->
-                FilterChip(
-                    selected = session.streamResolution == opt,
-                    onClick = { session.applyResolution(opt) },
-                    label = { Text(opt) }
-                )
-            }
-        }
-
+        SettingChipsRow(resolutions, session.streamResolution) { session.applyResolution(it) }
         Spacer(modifier = Modifier.height(12.dp))
         Text("Server region", style = MaterialTheme.typography.labelLarge, color = Color(0xFFB0B0B8))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            regions.forEach { opt ->
-                FilterChip(
-                    selected = session.serverRegion == opt,
-                    onClick = { session.applyRegion(opt) },
-                    label = { Text(opt) }
-                )
-            }
-        }
+        SettingChipsRow(regions, session.serverRegion) { session.applyRegion(it) }
 
         Spacer(modifier = Modifier.height(24.dp))
         Text("Look", style = MaterialTheme.typography.titleMedium, color = Color.White)
         SettingChips("Appearance", listOf("system", "light", "dark"), mode) {
-            mode = it
-            appearance.mode = it
+            mode = it; appearance.mode = it
         }
-        SettingChips("Accent", listOf("violet", "green", "blue", "orange"), accent) {
-            accent = it
-            appearance.accent = it
+        SettingChips("Accent", listOf("violet", "azure", "emerald", "crimson", "gold", "rose", "cyan", "mono"), accent) {
+            accent = it; appearance.accent = it
         }
         SettingChips("Background", listOf("aurora", "solid", "dim"), background) {
-            background = it
-            appearance.background = it
+            background = it; appearance.background = it
+        }
+        SettingChips("Home layout", listOf("editorial", "rails", "grid"), hubLayout) {
+            hubLayout = it; appearance.hubLayout = it
         }
         SettingChips("Game cards", listOf("poster", "wide", "compact"), cardStyle) {
-            cardStyle = it
-            appearance.cardStyle = it
+            cardStyle = it; appearance.cardStyle = it
         }
-        SettingChips("Library density", listOf("comfortable", "compact"), density) {
-            density = it
-            appearance.density = it
+        SettingChips("Library density", listOf("spacious", "comfortable", "compact"), density) {
+            density = it; appearance.density = it
         }
         SettingChips("Motion", listOf("full", "reduced", "off"), animation) {
-            animation = it
-            appearance.animation = it
+            animation = it; appearance.animation = it
         }
         SettingChips("Effects", listOf("quality", "balanced", "performance"), effects) {
-            effects = it
-            appearance.effects = it
+            effects = it; appearance.effects = it
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("UI sounds", color = Color.White, modifier = Modifier.weight(1f), maxLines = 1)
+            Text("Activity on home", color = Color.White, modifier = Modifier.weight(1f))
+            Switch(checked = showActivity, onCheckedChange = {
+                showActivity = it; appearance.showActivityOnHome = it
+            })
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Genre filter row", color = Color.White, modifier = Modifier.weight(1f))
+            Switch(checked = showGenres, onCheckedChange = {
+                showGenres = it; appearance.showGenreFilters = it
+            })
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("UI sounds", color = Color.White, modifier = Modifier.weight(1f))
             Switch(checked = uiSounds, onCheckedChange = {
-                uiSounds = it
-                appearance.uiSounds = it
+                uiSounds = it; appearance.uiSounds = it
             })
         }
 
         Spacer(modifier = Modifier.height(24.dp))
         Text("Actions", style = MaterialTheme.typography.titleMedium, color = Color.White)
         Spacer(modifier = Modifier.height(8.dp))
-        Button(
-            onClick = { session.openHome() },
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("Open Library") }
+        Button(onClick = { session.openHome() }, modifier = Modifier.fillMaxWidth()) { Text("Open Library") }
         Spacer(modifier = Modifier.height(8.dp))
-        OutlinedButton(
-            onClick = { session.refreshBetterXCloud() },
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("Refresh Better xCloud script") }
+        OutlinedButton(onClick = { session.refreshBetterXCloud() }, modifier = Modifier.fillMaxWidth()) {
+            Text("Refresh Better xCloud script")
+        }
         if (session.isSignedIn) {
             Spacer(modifier = Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = { session.signOut() },
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("Sign Out") }
+            OutlinedButton(onClick = { session.signOut() }, modifier = Modifier.fillMaxWidth()) {
+                Text("Sign Out")
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
         Text("About", style = MaterialTheme.typography.titleMedium, color = Color.White)
         Text(
-            "GameStream Android 1.3.9 — native GameHub for Xbox Cloud Gaming with Better xCloud.",
+            "GameStream Android 1.5.0 — redesigned GameHub with Better xCloud.",
             style = MaterialTheme.typography.bodySmall,
             color = Color(0xFF808088)
         )
@@ -225,6 +194,11 @@ fun SettingsScreen(session: SessionStore) {
 private fun SettingChips(label: String, options: List<String>, selected: String, onSelect: (String) -> Unit) {
     Spacer(modifier = Modifier.height(8.dp))
     Text(label, style = MaterialTheme.typography.labelLarge, color = Color(0xFFB0B0B8))
+    SettingChipsRow(options, selected, onSelect)
+}
+
+@Composable
+private fun SettingChipsRow(options: List<String>, selected: String, onSelect: (String) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
