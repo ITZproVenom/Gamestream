@@ -261,6 +261,8 @@ jobs:
 
       - name: Build changelog + release identity
         id: meta
+        env:
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           SHORT_SHA="$(echo '${{ github.sha }}' | cut -c1-7)"
@@ -270,13 +272,12 @@ jobs:
           echo "tag=ios-build-${STAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           echo "name=iOS build #${RUN} (${SHORT_SHA})" >> "$GITHUB_OUTPUT"
 
-          python3 - "$SHORT_SHA" "$DATE_UTC" <<'PY'
-          import subprocess, sys
+          python3 - "$SHORT_SHA" "$DATE_UTC" "$EVENT_NAME" <<'PY'
+          import os, subprocess, sys
           from pathlib import Path
 
-          short, date = sys.argv[1], sys.argv[2]
+          short, date, event = sys.argv[1], sys.argv[2], sys.argv[3]
 
-          # Previous dedicated iOS release tag (do not mix with android-build-*)
           prev = subprocess.check_output(
               ["git", "tag", "-l", "ios-build-*", "--sort=-creatordate"],
               text=True,
@@ -288,49 +289,43 @@ jobs:
                  "--pretty=format:COMMIT\t%h\t%s", "--no-merges"]
           raw = subprocess.check_output(cmd, text=True)
 
-          def is_ios_only(paths):
-              """Include if any iOS path changed; exclude pure-Android commits."""
-              ios = android = False
+          def is_ios_app_change(paths):
+              """Real app code only — not workflow-only or Android-only."""
               for p in paths:
-                  if p.startswith("android/") or p == ".github/workflows/build-apk.yml":
-                      android = True
-                  elif (
-                      p.startswith("GameStream/")
-                      or p == "project.yml"
-                      or p == ".github/workflows/build-ipa.yml"
-                      or (p.startswith("scripts/") and "android" not in p.lower())
-                  ):
-                      ios = True
-              if ios:
-                  return True
-              if android:
-                  return False
-              return False  # shared/docs-only: omit from iOS changelog
+                  if p.startswith("GameStream/") or p == "project.yml":
+                      return True
+                  if p.startswith("scripts/") and "android" not in p.lower():
+                      return True
+              return False
 
           items = []
           sha = subject = None
           files = []
           for line in raw.splitlines():
               if line.startswith("COMMIT\t"):
-                  if sha is not None and is_ios_only(files):
+                  if sha is not None and is_ios_app_change(files):
                       items.append(f"- {subject} ({sha})")
                   _, sha, subject = line.split("\t", 2)
                   files = []
               elif line.strip():
                   files.append(line.strip())
-          if sha is not None and is_ios_only(files):
+          if sha is not None and is_ios_app_change(files):
               items.append(f"- {subject} ({sha})")
 
           items = items[:20]
+          # Manual dispatch always allowed; push only when there is real app code.
+          should = event == "workflow_dispatch" or bool(items)
+          Path("should_release.txt").write_text("true" if should else "false")
+
           if not items:
-              items = ["- No new iOS-only changes since the previous iOS release."]
+              items = ["- No new iOS app code since the previous iOS release (release skipped on push)."]
 
           since = f" since `{prev}`" if prev else ""
           body = "\n".join([
               "## Changelog",
               "",
               f"**Platform:** iOS only · **Build:** `{short}` · **{date}**",
-              f"**Scope:** Dedicated iOS release — Android changes are published under `android-build-*` tags only.{since}",
+              f"**Scope:** Dedicated iOS release — Android under `android-build-*` only.{since}",
               "",
               "### What's changed (iOS)",
               "",
@@ -346,7 +341,10 @@ jobs:
           ])
           Path("release_notes.md").write_text(body)
           print(body)
+          print("should_release=", "true" if should else "false")
           PY
+
+          echo "should_release=$(cat should_release.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
@@ -366,7 +364,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish new iOS build release
-        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        if: >-
+          steps.meta.outputs.should_release == 'true' &&
+          (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
