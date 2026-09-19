@@ -1,7 +1,11 @@
 package com.gamestream.app.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,7 +13,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
@@ -24,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -40,9 +48,11 @@ fun SettingsScreen(session: SessionStore) {
     val last = session.recentGames().firstOrNull()
     val context = LocalContext.current
     val appearance = remember { AppearancePrefs(context) }
+
     var mode by remember { mutableStateOf(appearance.mode) }
     var accent by remember { mutableStateOf(appearance.accent) }
     var background by remember { mutableStateOf(appearance.background) }
+    var customBg by remember { mutableStateOf(appearance.customBgColor) }
     var cardStyle by remember { mutableStateOf(appearance.cardStyle) }
     var density by remember { mutableStateOf(appearance.density) }
     var hubLayout by remember { mutableStateOf(appearance.hubLayout) }
@@ -52,157 +62,215 @@ fun SettingsScreen(session: SessionStore) {
     var showActivity by remember { mutableStateOf(appearance.showActivityOnHome) }
     var showGenres by remember { mutableStateOf(appearance.showGenreFilters) }
 
+    val bgColors = listOf(
+        "deepBlack" to Color(0xFF0A0A12),
+        "charcoal" to Color(0xFF1E1E24),
+        "navy" to Color(0xFF0F1A38),
+        "forest" to Color(0xFF0D241A),
+        "plum" to Color(0xFF240F2E),
+        "wine" to Color(0xFF2E0D1A),
+        "slate" to Color(0xFF1A1E29),
+        "white" to Color(0xFFF5F5FA)
+    )
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(20.dp)
     ) {
-        Text(
-            "Settings",
-            style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
-            color = Color.White
-        )
+        Text("Settings", style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold), color = Color.White)
 
-        Spacer(modifier = Modifier.height(20.dp))
-        Text("Account", style = MaterialTheme.typography.titleMedium, color = Color.White)
-        Text(
-            session.accountLabel ?: "Not signed in",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFFB0B0B8)
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-        Text("Jump back in", style = MaterialTheme.typography.titleMedium, color = Color.White)
-        Text(
-            last?.title ?: "Play a game and Resume will appear here.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFFB0B0B8),
-            maxLines = 1
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Resume last game on launch", color = Color.White, modifier = Modifier.weight(1f), maxLines = 2)
-            Switch(checked = session.resumeLastOnOpen, onCheckedChange = { session.updateResumeLastOnOpen(it) })
+        Category("Account") {
+            Text(session.accountLabel ?: "Not signed in", color = Color(0xFFB0B0B8))
         }
-        if (last != null) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(onClick = { session.resumeLastStream() }, modifier = Modifier.fillMaxWidth()) {
-                Text("Resume ${last.title}", maxLines = 1)
+
+        Category("Appearance") {
+            SettingChips("Theme", listOf("system", "light", "dark"), mode) { mode = it; appearance.mode = it }
+            SettingChips("Accent", listOf("violet", "azure", "emerald", "crimson", "gold", "rose", "cyan", "mono"), accent) {
+                accent = it; appearance.accent = it
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
-        Text("This week", style = MaterialTheme.typography.titleMedium, color = Color.White)
-        Text(
-            "${activity.format(activity.weekTotal())} streamed on this device",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFFB0B0B8)
-        )
-        if (top != null) {
-            Text("Most played: ${top.title}", style = MaterialTheme.typography.bodySmall, color = Color(0xFF808088))
+        Category("Background") {
+            SettingChips(
+                "Style",
+                listOf("aurora", "still", "solid", "mesh", "dusk", "midnight", "customColor"),
+                background
+            ) {
+                background = it; appearance.background = it
+            }
+            if (background == "customColor" || background == "solid") {
+                Text("Color", style = MaterialTheme.typography.labelLarge, color = Color(0xFFB0B0B8))
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    bgColors.forEach { (key, color) ->
+                        Box(
+                            Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(color)
+                                .then(
+                                    if (customBg == key) Modifier.border(2.dp, Color.White, CircleShape)
+                                    else Modifier
+                                )
+                                .clickable {
+                                    customBg = key
+                                    appearance.customBgColor = key
+                                    if (background != "customColor" && background != "solid") {
+                                        background = "customColor"
+                                        appearance.background = "customColor"
+                                    }
+                                }
+                        )
+                    }
+                }
+            }
+            Text(
+                "Aurora · Still · Solid · Mesh · Dusk · Midnight, or a custom solid color.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF808088)
+            )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
-        Text("Stream", style = MaterialTheme.typography.titleMedium, color = Color.White)
-        Text("Applied to Better xCloud and reloads the page.", style = MaterialTheme.typography.bodySmall, color = Color(0xFF808088))
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("Target resolution", style = MaterialTheme.typography.labelLarge, color = Color(0xFFB0B0B8))
-        SettingChipsRow(resolutions, session.streamResolution) { session.applyResolution(it) }
-        Spacer(modifier = Modifier.height(12.dp))
-        Text("Server region", style = MaterialTheme.typography.labelLarge, color = Color(0xFFB0B0B8))
-        SettingChipsRow(regions, session.serverRegion) { session.applyRegion(it) }
-
-        Spacer(modifier = Modifier.height(24.dp))
-        Text("Look", style = MaterialTheme.typography.titleMedium, color = Color.White)
-        SettingChips("Appearance", listOf("system", "light", "dark"), mode) {
-            mode = it; appearance.mode = it
-        }
-        SettingChips("Accent", listOf("violet", "azure", "emerald", "crimson", "gold", "rose", "cyan", "mono"), accent) {
-            accent = it; appearance.accent = it
-        }
-        SettingChips("Background", listOf("aurora", "solid", "dim"), background) {
-            background = it; appearance.background = it
-        }
-        SettingChips("Home layout", listOf("editorial", "rails", "grid"), hubLayout) {
-            hubLayout = it; appearance.hubLayout = it
-        }
-        SettingChips("Game cards", listOf("poster", "wide", "compact"), cardStyle) {
-            cardStyle = it; appearance.cardStyle = it
-        }
-        SettingChips("Library density", listOf("spacious", "comfortable", "compact"), density) {
-            density = it; appearance.density = it
-        }
-        SettingChips("Motion", listOf("full", "reduced", "off"), animation) {
-            animation = it; appearance.animation = it
-        }
-        SettingChips("Effects", listOf("quality", "balanced", "performance"), effects) {
-            effects = it; appearance.effects = it
-        }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Activity on home", color = Color.White, modifier = Modifier.weight(1f))
-            Switch(checked = showActivity, onCheckedChange = {
+        Category("Library") {
+            SettingChips("Home layout", listOf("editorial", "rails", "grid"), hubLayout) {
+                hubLayout = it; appearance.hubLayout = it
+            }
+            SettingChips("Game cards", listOf("poster", "wide", "compact"), cardStyle) {
+                cardStyle = it; appearance.cardStyle = it
+            }
+            SettingChips("Density", listOf("spacious", "comfortable", "compact"), density) {
+                density = it; appearance.density = it
+            }
+            ToggleRow("Activity on home", showActivity) {
                 showActivity = it; appearance.showActivityOnHome = it
-            })
-        }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Genre filter row", color = Color.White, modifier = Modifier.weight(1f))
-            Switch(checked = showGenres, onCheckedChange = {
+            }
+            ToggleRow("Genre filter row", showGenres) {
                 showGenres = it; appearance.showGenreFilters = it
-            })
-        }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("UI sounds", color = Color.White, modifier = Modifier.weight(1f))
-            Switch(checked = uiSounds, onCheckedChange = {
-                uiSounds = it; appearance.uiSounds = it
-            })
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-        Text("Actions", style = MaterialTheme.typography.titleMedium, color = Color.White)
-        Spacer(modifier = Modifier.height(8.dp))
-        Button(onClick = { session.openHome() }, modifier = Modifier.fillMaxWidth()) { Text("Open Library") }
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedButton(onClick = { session.refreshBetterXCloud() }, modifier = Modifier.fillMaxWidth()) {
-            Text("Refresh Better xCloud script")
-        }
-        if (session.isSignedIn) {
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedButton(onClick = { session.signOut() }, modifier = Modifier.fillMaxWidth()) {
-                Text("Sign Out")
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
-        Text("About", style = MaterialTheme.typography.titleMedium, color = Color.White)
-        Text(
-            "GameStream Android 1.5.0 — redesigned GameHub with Better xCloud.",
-            style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFF808088)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            "Made with 🤍 by Bestin",
-            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = Color.White
-        )
-        Spacer(modifier = Modifier.height(24.dp))
+        Category("Motion & effects") {
+            SettingChips("Motion", listOf("full", "reduced", "off"), animation) {
+                animation = it; appearance.animation = it
+            }
+            SettingChips("Effects", listOf("quality", "balanced", "performance"), effects) {
+                effects = it; appearance.effects = it
+            }
+        }
+
+        Category("Sound") {
+            ToggleRow("UI sounds", uiSounds) {
+                uiSounds = it; appearance.uiSounds = it
+            }
+        }
+
+        Category("Playback") {
+            Text(
+                last?.title ?: "Play a game and Resume will appear here.",
+                color = Color(0xFFB0B0B8),
+                maxLines = 1
+            )
+            Spacer(Modifier.height(8.dp))
+            ToggleRow("Resume last game on launch", session.resumeLastOnOpen) {
+                session.updateResumeLastOnOpen(it)
+            }
+            if (last != null) {
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = { session.resumeLastStream() }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Resume ${last.title}", maxLines = 1)
+                }
+            }
+        }
+
+        Category("This week") {
+            Text(
+                "${activity.format(activity.weekTotal())} streamed on this device",
+                color = Color(0xFFB0B0B8)
+            )
+            if (top != null) {
+                Text("Most played: ${top.title}", style = MaterialTheme.typography.bodySmall, color = Color(0xFF808088))
+            }
+        }
+
+        Category("Stream") {
+            Text("Applied to Better xCloud and reloads the page.", style = MaterialTheme.typography.bodySmall, color = Color(0xFF808088))
+            Spacer(Modifier.height(8.dp))
+            Text("Resolution", style = MaterialTheme.typography.labelLarge, color = Color(0xFFB0B0B8))
+            SettingChipsRow(resolutions, session.streamResolution) { session.applyResolution(it) }
+            Spacer(Modifier.height(8.dp))
+            Text("Region", style = MaterialTheme.typography.labelLarge, color = Color(0xFFB0B0B8))
+            SettingChipsRow(regions, session.serverRegion) { session.applyRegion(it) }
+        }
+
+        Category("Actions") {
+            Button(onClick = { session.openHome() }, modifier = Modifier.fillMaxWidth()) { Text("Open Library") }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = { session.refreshBetterXCloud() }, modifier = Modifier.fillMaxWidth()) {
+                Text("Refresh Better xCloud script")
+            }
+            if (session.isSignedIn) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = { session.signOut() }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Sign Out")
+                }
+            }
+        }
+
+        Category("About") {
+            Text(
+                "GameStream Android 1.5.0 — custom backgrounds & categorized settings.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF808088)
+            )
+            Spacer(Modifier.height(8.dp))
+            Text("Made with 🤍 by Bestin", fontWeight = FontWeight.SemiBold, color = Color.White)
+        }
+
+        Spacer(Modifier.height(40.dp))
+    }
+}
+
+@Composable
+private fun Category(title: String, content: @Composable () -> Unit) {
+    Spacer(Modifier.height(20.dp))
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color(0xFF16161E))
+            .padding(16.dp)
+    ) {
+        Text(title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = Color.White)
+        Spacer(Modifier.height(10.dp))
+        content()
+    }
+}
+
+@Composable
+private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = Color.White, modifier = Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = onChange)
     }
 }
 
 @Composable
 private fun SettingChips(label: String, options: List<String>, selected: String, onSelect: (String) -> Unit) {
-    Spacer(modifier = Modifier.height(8.dp))
     Text(label, style = MaterialTheme.typography.labelLarge, color = Color(0xFFB0B0B8))
+    Spacer(Modifier.height(6.dp))
     SettingChipsRow(options, selected, onSelect)
+    Spacer(Modifier.height(10.dp))
 }
 
 @Composable
 private fun SettingChipsRow(options: List<String>, selected: String, onSelect: (String) -> Unit) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         options.forEach { opt ->
