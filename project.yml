@@ -23,6 +23,10 @@ targets:
         excludes:
           - "**/.gitkeep"
           - "**/*.md"
+          - "Sounds/**"
+          - "**/*.wav"
+          - "**/*.wav.b64"
+          - "**/embedded.json"
     info:
       path: GameStream/Info.plist
       properties:

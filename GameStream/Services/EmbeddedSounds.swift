@@ -1,7 +1,6 @@
 import Foundation
 
-/// Intentionally empty. Custom/offline WAV embedding is disabled until
-/// the launch-crash regression is proven fixed with system-sound SFX.
+/// Custom/offline WAV embedding stays disabled.
 enum EmbeddedSounds {
     static let wavData: [String: Data] = [:]
 }
