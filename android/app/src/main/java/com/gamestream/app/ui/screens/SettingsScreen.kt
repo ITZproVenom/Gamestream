@@ -68,6 +68,7 @@ fun SettingsScreen(session: SessionStore) {
     var rumbleIntensity by remember { mutableFloatStateOf(appearance.rumbleIntensity) }
     var showActivity by remember { mutableStateOf(appearance.showActivityOnHome) }
     var showGenres by remember { mutableStateOf(appearance.showGenreFilters) }
+    var testNote by remember { mutableStateOf("") }
 
     val intensityLabel = when {
         rumbleIntensity < 0.85f -> "Light"
@@ -98,6 +99,51 @@ fun SettingsScreen(session: SessionStore) {
 
         Category("Account") {
             Text(session.accountLabel ?: "Not signed in", color = Color(0xFFB0B0B8))
+        }
+
+        Category("Controller test") {
+            ToggleRow("Controller haptics", controllerHaptics) {
+                controllerHaptics = it; appearance.controllerHaptics = it
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Rumble intensity", style = MaterialTheme.typography.labelLarge, color = Color(0xFFB0B0B8))
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "$intensityLabel · ${String.format(Locale.US, "%.1f", rumbleIntensity)}×",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White
+                )
+            }
+            Slider(
+                value = rumbleIntensity,
+                onValueChange = {
+                    rumbleIntensity = it
+                    appearance.rumbleIntensity = it
+                },
+                valueRange = 0.5f..3f,
+                steps = 24,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                "Higher values push motors harder — useful for weak wired controllers.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF808088)
+            )
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = {
+                    rumble.playTest()
+                    testNote = "Pulse sent — you should feel two bursts (phone and/or pad)."
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Test rumble")
+            }
+            if (testNote.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                Text(testNote, style = MaterialTheme.typography.bodySmall, color = Color(0xFFB0B0B8))
+            }
         }
 
         Category("Appearance") {
@@ -178,45 +224,9 @@ fun SettingsScreen(session: SessionStore) {
             }
         }
 
-        Category("Sound & haptics") {
+        Category("Sound") {
             ToggleRow("UI sounds", uiSounds) {
                 uiSounds = it; appearance.uiSounds = it
-            }
-            ToggleRow("Controller haptics", controllerHaptics) {
-                controllerHaptics = it; appearance.controllerHaptics = it
-            }
-            Spacer(Modifier.height(8.dp))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Rumble intensity", style = MaterialTheme.typography.labelLarge, color = Color(0xFFB0B0B8))
-                Spacer(Modifier.weight(1f))
-                Text(
-                    "$intensityLabel · ${String.format(Locale.US, "%.1f", rumbleIntensity)}×",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color.White
-                )
-            }
-            Slider(
-                value = rumbleIntensity,
-                onValueChange = {
-                    rumbleIntensity = it
-                    appearance.rumbleIntensity = it
-                },
-                valueRange = 0.5f..3f,
-                steps = 24,
-                enabled = controllerHaptics,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Text(
-                "Higher values push motors harder — useful for weak wired controllers. Hardware still sets the ceiling.",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF808088)
-            )
-            Spacer(Modifier.height(10.dp))
-            Button(
-                onClick = { rumble.playTest() },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Test rumble")
             }
         }
 
