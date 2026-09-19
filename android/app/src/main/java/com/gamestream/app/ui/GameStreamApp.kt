@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.gamestream.app.AppearancePrefs
 import com.gamestream.app.BetterXCloudInjector
 import com.gamestream.app.CloudCatalogService
 import com.gamestream.app.OnboardingPrefs
@@ -45,6 +46,10 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
     var tab by remember { mutableStateOf(Tab.Library) }
     val context = LocalContext.current
     var introCompleted by remember { mutableStateOf(OnboardingPrefs.isIntroDone(context)) }
+    val appearance = remember { AppearancePrefs(context) }
+    // Trigger recomposition when settings change
+    val rev = appearance.revision
+    val bgColor = Color(appearance.backgroundColorArgb())
 
     LaunchedEffect(Unit) {
         CloudCatalogService.refreshIfNeeded(context.applicationContext)
@@ -79,7 +84,7 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
     }
 
     Scaffold(
-        containerColor = Color(0xFF0A0A12),
+        containerColor = bgColor,
         bottomBar = {
             AnimatedVisibility(visible = !session.isStreaming) {
                 NavigationBar(containerColor = Color(0xEE14141A)) {
