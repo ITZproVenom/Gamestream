@@ -8,48 +8,46 @@ struct GameHubQueueShelf: View {
 
     var body: some View {
         if !queue.games.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    Text("Up Next")
-                        .font(.title3.weight(.semibold))
-                        .lineLimit(1)
+                    HubSectionHeader(title: "Up Next")
                     Spacer(minLength: 8)
                     Button {
                         _ = session.playNextQueued()
                     } label: {
                         Text("Play next")
-                            .font(.caption.weight(.semibold))
+                            .font(.subheadline.weight(.semibold))
                             .lineLimit(1)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 9)
                     }
                     .buttonStyle(.glassProminent)
                     .accessibilityLabel("Play next queued game")
                 }
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(queue.games) { game in
-                            let catalog = GameCatalog.catalog(from: game)
-                            GamePosterCard(
-                                game: catalog,
-                                artworkURL: artwork.url(for: game.id),
-                                isFavorite: session.isFavorite(game.id),
-                                onPlay: { session.playGame(game) },
-                                onOpen: { detailGame = catalog },
-                                onFavorite: { session.toggleFavorite(game) }
-                            )
-                            .frame(width: 132)
-                            .contextMenu {
-                                Button { session.playGame(game) } label: {
-                                    Label("Play now", systemImage: "play.fill")
-                                }
-                                Button(role: .destructive) { session.dequeue(game) } label: {
-                                    Label("Remove from Up Next", systemImage: "text.badge.minus")
-                                }
+
+                HubCarousel(spacing: 14) {
+                    ForEach(queue.games) { game in
+                        let catalog = GameCatalog.catalog(from: game)
+                        GamePosterCard(
+                            game: catalog,
+                            artworkURL: artwork.url(for: game.id),
+                            isFavorite: session.isFavorite(game.id),
+                            onPlay: { session.playGame(game) },
+                            onOpen: { detailGame = catalog },
+                            onFavorite: { session.toggleFavorite(game) }
+                        )
+                        .containerRelativeFrame(.horizontal) { width, _ in
+                            HubMetrics.posterWidth(containerWidth: width)
+                        }
+                        .contextMenu {
+                            Button { session.playGame(game) } label: {
+                                Label("Play now", systemImage: "play.fill")
+                            }
+                            Button(role: .destructive) { session.dequeue(game) } label: {
+                                Label("Remove from Up Next", systemImage: "text.badge.minus")
                             }
                         }
                     }
-                    .padding(.vertical, 2)
                 }
             }
         }
