@@ -33,10 +33,8 @@ struct RootView: View {
     }
 
     private var signedInRoot: some View {
-        // Background is full-bleed. Content respects the TOP safe area
-        // (so the header is not under the status bar) and only extends under
-        // the floating tab bar at the bottom — aurora fills the home-indicator
-        // strip with no black borders.
+        // Single active tab only — opacity stacking let Library paint through
+        // Settings/Search glass when a custom photo background is active.
         ZStack(alignment: .bottom) {
             Group {
                 if session.isStreaming {
@@ -47,43 +45,30 @@ struct RootView: View {
             }
             .ignoresSafeArea()
 
-            ZStack {
+            Group {
                 if session.isStreaming && selectedTab == .library {
                     StreamPlayerView()
-                        .zIndex(4)
-                }
-
-                if !session.isStreaming {
-                    GameHubView()
-                        .opacity(selectedTab == .library ? 1 : 0)
-                        .allowsHitTesting(selectedTab == .library)
-                        .accessibilityHidden(selectedTab != .library)
-                        .zIndex(selectedTab == .library ? 2 : 0)
-
-                    SearchHubView(isActive: selectedTab == .search)
-                        .safeAreaInset(edge: .top, spacing: 0) {
-                            if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                               let game = session.continueGame {
-                                ContinuePlayingCard(game: game)
-                                    .padding(.horizontal, 20)
-                                    .padding(.top, 8)
-                                    .padding(.bottom, 4)
+                } else if !session.isStreaming {
+                    switch selectedTab {
+                    case .library:
+                        GameHubView()
+                    case .search:
+                        SearchHubView(isActive: true)
+                            .safeAreaInset(edge: .top, spacing: 0) {
+                                if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                                   let game = session.continueGame {
+                                    ContinuePlayingCard(game: game)
+                                        .padding(.horizontal, 20)
+                                        .padding(.top, 8)
+                                        .padding(.bottom, 4)
+                                }
                             }
-                        }
-                        .opacity(selectedTab == .search ? 1 : 0)
-                        .allowsHitTesting(selectedTab == .search)
-                        .accessibilityHidden(selectedTab != .search)
-                        .zIndex(selectedTab == .search ? 2 : 0)
-
-                    SettingsView(isActive: selectedTab == .settings)
-                        .opacity(selectedTab == .settings ? 1 : 0)
-                        .allowsHitTesting(selectedTab == .settings)
-                        .accessibilityHidden(selectedTab != .settings)
-                        .zIndex(selectedTab == .settings ? 2 : 0)
+                    case .settings:
+                        SettingsView(isActive: true)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            // Only bottom — top safe area stays so the title is not clipped
             .ignoresSafeArea(edges: .bottom)
 
             if !hideTabBar {
@@ -211,8 +196,6 @@ struct RootView: View {
             }
             .padding(5)
             .background {
-                // Base fill so content never bleeds through as sharp text
-                // when glass compositing is delayed or reduced.
                 Capsule()
                     .fill(.ultraThinMaterial)
             }
