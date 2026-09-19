@@ -5,7 +5,7 @@
 <h1 align="center">GameStream</h1>
 
 <p align="center">
-  <strong>Xbox Cloud Gaming client for iOS &amp; Android</strong><br>
+  <strong>Xbox Cloud Gaming client for iOS & Android</strong><br>
   Better xCloud · Native shells · Sideload builds
 </p>
 
@@ -15,6 +15,22 @@
   <img alt="Better xCloud" src="https://img.shields.io/badge/Better%20xCloud-Integrated-purple?style=flat-square" />
   <img alt="License" src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" />
 </p>
+
+---
+
+## Download
+
+Builds are **separate by platform**. Use the links below — do not mix iOS tags with Android tags.
+
+| Platform | Always-latest | Full history |
+|----------|---------------|--------------|
+| **iOS** (IPA) | [**latest-ios**](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios) | [all `ios-build-*`](https://github.com/ITZproVenom/Gamestream/releases?q=ios-build&expanded=true) |
+| **Android** (APK) | [**latest-android**](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-android) | [all `android-build-*`](https://github.com/ITZproVenom/Gamestream/releases?q=android-build&expanded=true) |
+
+- **iOS:** install `GameStream-unsigned.ipa` with AltStore / Sideloadly / TrollStore (unsigned).
+- **Android:** install `GameStream-release.apk` (signed release keystore; updates over previous official APKs).
+
+> Releases only publish when that platform’s **app code** changed (not empty CI-only bumps). Manual **Run workflow** still forces a build + release.
 
 ---
 
@@ -37,7 +53,7 @@ xcodegen generate
 open GameStream.xcodeproj
 ```
 
-CI builds an **unsigned IPA** (`.github/workflows/build-ipa.yml`) and publishes it to [Releases](../../releases) with a changelog.
+CI: `.github/workflows/build-ipa.yml` → IPA on [Releases](https://github.com/ITZproVenom/Gamestream/releases).
 
 ---
 
@@ -62,7 +78,8 @@ CI: `.github/workflows/build-apk.yml`.
 - Native GameHub / Search / Settings (no website catalog UI)
 - WebView only for Microsoft auth + active cloud stream
 - Better xCloud quality prefs (resolution, clarity, codec, bitrate)
-- Custom Play loading screen with UI sounds
+- Controller rumble (intensity + test) on iOS & Android
+- Custom backgrounds, library layouts, categorized settings
 - Favorites, recents, continue playing
 
 ---
