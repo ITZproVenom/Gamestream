@@ -81,12 +81,10 @@ struct XboxCloudWebView: UIViewRepresentable {
     @Binding var url: URL
     @EnvironmentObject var session: SessionStore
 
-    /// Forwards Web Gamepad / Better xCloud vibration calls to native GCDeviceHaptics.
+    /// xCloud only calls playEffect when vibrationActuator exists.
+    /// WKWebView often has no actuator — polyfill one that posts to native GCDeviceHaptics.
     static let rumbleBridgeJS = """
     (function() {
-        if (window.__gsRumbleBridge) return;
-        window.__gsRumbleBridge = true;
-
         function postRumble(weak, strong, duration) {
             try {
                 var w = Number(weak) || 0;
@@ -104,93 +102,144 @@ struct XboxCloudWebView: UIViewRepresentable {
                 });
             } catch (e) {}
         }
+        window.__gsNativeRumble = postRumble;
 
-        function wrapActuator(actuator) {
-            if (!actuator || actuator.__gsWrapped) return actuator;
-            try {
-                var original = actuator.playEffect && actuator.playEffect.bind(actuator);
-                if (!original) return actuator;
-                actuator.playEffect = function(type, params) {
+        function makePolyActuator() {
+            return {
+                __gsPoly: true,
+                __gsWrapped: true,
+                playEffect: function(type, params) {
                     try {
                         params = params || {};
                         var weak = params.weakMagnitude != null ? params.weakMagnitude : (params.magnitude || 0);
                         var strong = params.strongMagnitude != null ? params.strongMagnitude : (params.magnitude || 0);
                         var start = params.startDelay || 0;
                         var duration = params.duration || 100;
-                        setTimeout(function() {
-                            postRumble(weak, strong, duration);
-                        }, start);
+                        setTimeout(function() { postRumble(weak, strong, duration); }, start);
                     } catch (e) {}
-                    try { return original(type, params); } catch (e2) {
-                        return Promise.resolve({ playEffect: 'complete' });
-                    }
-                };
+                    return Promise.resolve({ playEffect: 'complete' });
+                },
+                pulse: function(value, duration) {
+                    try { postRumble(value, value, duration || 100); } catch (e) {}
+                    return Promise.resolve(true);
+                },
+                reset: function() { return Promise.resolve(); }
+            };
+        }
+
+        function wrapActuator(actuator) {
+            if (!actuator || actuator.__gsWrapped) return actuator;
+            try {
+                if (typeof actuator.playEffect === 'function') {
+                    var original = actuator.playEffect.bind(actuator);
+                    actuator.playEffect = function(type, params) {
+                        try {
+                            params = params || {};
+                            var weak = params.weakMagnitude != null ? params.weakMagnitude : (params.magnitude || 0);
+                            var strong = params.strongMagnitude != null ? params.strongMagnitude : (params.magnitude || 0);
+                            var start = params.startDelay || 0;
+                            var duration = params.duration || 100;
+                            setTimeout(function() { postRumble(weak, strong, duration); }, start);
+                        } catch (e) {}
+                        try { return original(type, params); } catch (e2) {
+                            return Promise.resolve({ playEffect: 'complete' });
+                        }
+                    };
+                }
+                if (typeof actuator.pulse === 'function') {
+                    var origPulse = actuator.pulse.bind(actuator);
+                    actuator.pulse = function(value, duration) {
+                        try { postRumble(value, value, duration || 100); } catch (e) {}
+                        try { return origPulse(value, duration); } catch (e2) { return Promise.resolve(true); }
+                    };
+                }
                 actuator.__gsWrapped = true;
             } catch (e) {}
             return actuator;
         }
 
-        function scanGamepads() {
+        function ensurePad(p) {
+            if (!p) return;
             try {
-                var pads = navigator.getGamepads ? navigator.getGamepads() : [];
-                for (var i = 0; i < pads.length; i++) {
-                    var p = pads[i];
-                    if (!p) continue;
-                    if (p.vibrationActuator) wrapActuator(p.vibrationActuator);
-                    if (p.hapticActuators && p.hapticActuators.length) {
-                        for (var j = 0; j < p.hapticActuators.length; j++) {
-                            wrapActuator(p.hapticActuators[j]);
-                        }
+                if (p.vibrationActuator) {
+                    wrapActuator(p.vibrationActuator);
+                } else {
+                    var poly = makePolyActuator();
+                    try {
+                        Object.defineProperty(p, 'vibrationActuator', { value: poly, configurable: true, writable: true });
+                    } catch (e1) {
+                        try { p.vibrationActuator = poly; } catch (e2) {}
+                    }
+                }
+                if (p.hapticActuators && p.hapticActuators.length) {
+                    for (var j = 0; j < p.hapticActuators.length; j++) {
+                        wrapActuator(p.hapticActuators[j]);
+                    }
+                } else {
+                    var list = [p.vibrationActuator || makePolyActuator()];
+                    try {
+                        Object.defineProperty(p, 'hapticActuators', { value: list, configurable: true, writable: true });
+                    } catch (e3) {
+                        try { p.hapticActuators = list; } catch (e4) {}
                     }
                 }
             } catch (e) {}
         }
 
-        // Patch getGamepads so newly enumerated pads are wrapped.
-        try {
-            var originalGet = navigator.getGamepads && navigator.getGamepads.bind(navigator);
-            if (originalGet) {
-                navigator.getGamepads = function() {
-                    var pads = originalGet();
-                    try {
-                        for (var i = 0; i < pads.length; i++) {
-                            var p = pads[i];
-                            if (!p) continue;
-                            if (p.vibrationActuator) wrapActuator(p.vibrationActuator);
-                            if (p.hapticActuators) {
-                                for (var j = 0; j < p.hapticActuators.length; j++) {
-                                    wrapActuator(p.hapticActuators[j]);
-                                }
-                            }
-                        }
-                    } catch (e) {}
-                    return pads;
-                };
-            }
-        } catch (e) {}
+        function scanGamepads() {
+            try {
+                var pads = navigator.getGamepads ? navigator.getGamepads() : [];
+                for (var i = 0; i < pads.length; i++) ensurePad(pads[i]);
+            } catch (e) {}
+        }
 
-        window.addEventListener('gamepadconnected', function() { setTimeout(scanGamepads, 50); });
+        if (!window.__gsRumbleBridge) {
+            window.__gsRumbleBridge = true;
+            try {
+                var originalGet = navigator.getGamepads && navigator.getGamepads.bind(navigator);
+                if (originalGet) {
+                    navigator.getGamepads = function() {
+                        var pads = originalGet();
+                        try {
+                            for (var i = 0; i < pads.length; i++) ensurePad(pads[i]);
+                        } catch (e) {}
+                        return pads;
+                    };
+                }
+            } catch (e) {}
+
+            window.addEventListener('gamepadconnected', function() { setTimeout(scanGamepads, 50); });
+
+            try {
+                var _pulse = window.navigator && window.navigator.vibrate;
+                if (typeof _pulse === 'function') {
+                    window.navigator.vibrate = function(pattern) {
+                        try {
+                            var ms = 80, mag = 0.6;
+                            if (typeof pattern === 'number') { ms = pattern; }
+                            else if (pattern && pattern.length) { ms = pattern[0] || 80; }
+                            postRumble(mag * 0.7, mag, ms);
+                        } catch (e) {}
+                        try { return _pulse.apply(this, arguments); } catch (e2) { return false; }
+                    };
+                } else {
+                    try {
+                        window.navigator.vibrate = function(pattern) {
+                            try {
+                                var ms = 80, mag = 0.6;
+                                if (typeof pattern === 'number') { ms = pattern; }
+                                else if (pattern && pattern.length) { ms = pattern[0] || 80; }
+                                postRumble(mag * 0.7, mag, ms);
+                            } catch (e) {}
+                            return true;
+                        };
+                    } catch (e) {}
+                }
+            } catch (e) {}
+
+            setInterval(scanGamepads, 1000);
+        }
         scanGamepads();
-        setInterval(scanGamepads, 2000);
-
-        // Better xCloud / xCloud sometimes expose vibration helpers on window.
-        try {
-            var _pulse = window.navigator && window.navigator.vibrate;
-            if (typeof _pulse === 'function') {
-                window.navigator.vibrate = function(pattern) {
-                    try {
-                        var ms = 80, mag = 0.6;
-                        if (typeof pattern === 'number') { ms = pattern; }
-                        else if (pattern && pattern.length) { ms = pattern[0] || 80; }
-                        postRumble(mag * 0.7, mag, ms);
-                    } catch (e) {}
-                    try { return _pulse.apply(this, arguments); } catch (e2) { return false; }
-                };
-            }
-        } catch (e) {}
-
-        // Public hook for BX / injected scripts.
-        window.__gsNativeRumble = postRumble;
     })();
     """
 
@@ -279,6 +328,11 @@ struct XboxCloudWebView: UIViewRepresentable {
             source: bridgeJS,
             injectionTime: .atDocumentEnd,
             forMainFrameOnly: true
+        ))
+        contentController.addUserScript(WKUserScript(
+            source: Self.rumbleBridgeJS,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: false
         ))
         contentController.addUserScript(WKUserScript(
             source: Self.rumbleBridgeJS,
