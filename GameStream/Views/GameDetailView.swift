@@ -29,8 +29,7 @@ struct GameDetailView: View {
                 .padding(20)
                 .padding(.bottom, 24)
             }
-            // Static fill — a second aurora Timeline under the sheet doubles main-thread
-            // compositing and is a common source of hub lag while the sheet is open.
+            // Static fill — a second aurora under the sheet doubles compositing cost.
             .background {
                 Color.black.opacity(0.92).ignoresSafeArea()
             }
@@ -140,49 +139,78 @@ struct GameDetailView: View {
             }
 
             Button {
-                session.toggleQueued(game.tracked)
+                session.toggleQueue(game.tracked)
             } label: {
                 Text(session.isQueued(game.id) ? "Remove from Up Next" : "Add to Up Next")
                     .font(.subheadline.weight(.medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 11)
+                    .padding(.vertical, 12)
             }
             .buttonStyle(.glass)
+            .accessibilityLabel(session.isQueued(game.id) ? "Remove \(game.title) from Up Next" : "Add \(game.title) to Up Next")
 
-            Button {
-                showingLists = true
-            } label: {
-                Text("Add to list")
-                    .font(.subheadline.weight(.medium))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 11)
-            }
-            .buttonStyle(.glass)
+            HStack(spacing: 8) {
+                Button {
+                    if lists.collections.isEmpty {
+                        showingNewList = true
+                    } else {
+                        showingLists = true
+                    }
+                } label: {
+                    Text(lists.collections.isEmpty ? "New list" : "Lists")
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                }
+                .buttonStyle(.glass)
+                .accessibilityLabel("Open lists")
 
-            Button {
-                showingNewList = true
-            } label: {
-                Text("New list with this game")
-                    .font(.subheadline.weight(.medium))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 11)
+                if !lists.collections.isEmpty {
+                    Menu {
+                        ForEach(lists.collections) { list in
+                            Button {
+                                lists.toggle(game: game.tracked, inCollection: list.id)
+                            } label: {
+                                Label(
+                                    lists.contains(game.id, inCollection: list.id) ? "Remove from \(list.name)" : "Add to \(list.name)",
+                                    systemImage: lists.contains(game.id, inCollection: list.id) ? "checkmark" : "plus"
+                                )
+                            }
+                        }
+                        Button {
+                            showingNewList = true
+                        } label: {
+                            Label("New list", systemImage: "plus")
+                        }
+                    } label: {
+                        Text("Add to list")
+                            .font(.subheadline.weight(.medium))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                    }
+                    .buttonStyle(.glass)
+                }
             }
-            .buttonStyle(.glass)
         }
     }
 
     private var meta: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if !game.genres.isEmpty {
-                Text(game.genres.joined(separator: " · "))
-                    .font(.caption.weight(.semibold))
+        VStack(alignment: .leading, spacing: 8) {
+            Label(game.genre, systemImage: "tag")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            if let minutes = activity.totalMinutes(for: game.id), minutes > 0 {
+                Label("\(minutes) min played on this device", systemImage: "clock")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-            if let minutes = activity.minutes(for: game.id), minutes > 0 {
-                Text("Played about \(minutes) min on this device")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
         }
     }
@@ -190,7 +218,8 @@ struct GameDetailView: View {
     private var relatedShelf: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("More like this")
-                .font(.headline)
+                .font(.title3.weight(.semibold))
+                .lineLimit(1)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(related) { item in
