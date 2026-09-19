@@ -37,6 +37,8 @@ struct SignInWebViewRepresentable: UIViewRepresentable {
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
+        // Critical: default WKWebView UA is often blocked by Akamai on xbox.com.
+        webView.customUserAgent = MicrosoftAuth.safariUserAgent
         webView.load(URLRequest(url: url))
         return webView
     }
@@ -47,6 +49,7 @@ struct SignInWebViewRepresentable: UIViewRepresentable {
         private weak var session: SessionStore?
         private var sawMicrosoftLoginHost = false
         private var completing = false
+        private var recoveredFromAkamai = false
 
         init(session: SessionStore) {
             self.session = session
@@ -62,11 +65,24 @@ struct SignInWebViewRepresentable: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             note(url: webView.url)
+            recoverIfAkamaiDenied(webView: webView)
             considerComplete(webView: webView)
         }
 
-        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        func webView(
+            _ webView: WKWebView,
+            decidePolicyFor navigationAction: WKNavigationAction,
+            decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+        ) {
             note(url: navigationAction.request.url ?? webView.url)
+
+            if let requestURL = navigationAction.request.url,
+               let https = MicrosoftAuth.httpsXboxURL(from: requestURL) {
+                decisionHandler(.cancel)
+                webView.load(URLRequest(url: https))
+                return
+            }
+
             decisionHandler(.allow)
         }
 
@@ -74,6 +90,24 @@ struct SignInWebViewRepresentable: UIViewRepresentable {
             guard let raw = url?.absoluteString else { return }
             if MicrosoftAuth.isLoginHost(raw) {
                 sawMicrosoftLoginHost = true
+            }
+        }
+
+        /// If Akamai served Access Denied for the post-login landing, try once more
+        /// against the known-good HTTPS en-US play URL with the Safari UA already set.
+        private func recoverIfAkamaiDenied(webView: WKWebView) {
+            guard !recoveredFromAkamai else { return }
+            guard let href = webView.url?.absoluteString else { return }
+            let deniedByURL = MicrosoftAuth.isAkamaiDenied(href)
+
+            webView.evaluateJavaScript("document.body ? document.body.innerText : ''") { result, _ in
+                let body = (result as? String)?.lowercased() ?? ""
+                let deniedByBody = body.contains("access denied") || body.contains("edgesuite")
+                guard deniedByURL || deniedByBody else { return }
+                self.recoveredFromAkamai = true
+                DispatchQueue.main.async {
+                    webView.load(URLRequest(url: MicrosoftAuth.playURL))
+                }
             }
         }
 
