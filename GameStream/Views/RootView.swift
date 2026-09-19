@@ -6,6 +6,8 @@ struct RootView: View {
     @ObservedObject private var hub = HubState.shared
     @ObservedObject private var controller = ControllerManager.shared
     @State private var selectedTab: Tab = RootView.restoredTab()
+    @State private var tabDragOffset: CGFloat = 0
+    @State private var tabBarWidth: CGFloat = 0
     @Namespace private var navNamespace
 
     enum Tab: String, CaseIterable {
@@ -20,6 +22,10 @@ struct RootView: View {
             case .settings: return "gearshape.fill"
             }
         }
+
+        var index: Int {
+            Tab.allCases.firstIndex(of: self) ?? 0
+        }
     }
 
     private static let tabStorageKey = "GameStream.selectedTab"
@@ -28,13 +34,18 @@ struct RootView: View {
         session.isStreaming && selectedTab == .library
     }
 
+    private var tabCount: CGFloat { CGFloat(Tab.allCases.count) }
+
+    private var slotWidth: CGFloat {
+        guard tabBarWidth > 0 else { return 0 }
+        return tabBarWidth / tabCount
+    }
+
     var body: some View {
         signedInRoot
     }
 
     private var signedInRoot: some View {
-        // Single active tab only — opacity stacking let Library paint through
-        // Settings/Search glass when a custom photo background is active.
         ZStack(alignment: .bottom) {
             Group {
                 if session.isStreaming {
@@ -173,6 +184,18 @@ struct RootView: View {
         }
     }
 
+    private func selectTab(_ tab: Tab) {
+        guard tab != selectedTab else { return }
+        HapticManager.tap()
+        SoundManager.playTap()
+        if tab == .library && !session.isStreaming {
+            session.returnToHub()
+        }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+            selectedTab = tab
+        }
+    }
+
     private func syncIdleTimer() {
         UIApplication.shared.isIdleTimerDisabled = session.isStreaming || session.keepScreenAwake
     }
@@ -185,58 +208,29 @@ struct RootView: View {
         return .library
     }
 
-    // MARK: - Liquid Glass tab switcher
+    // MARK: - Liquid Glass tab switcher (tap + slide)
 
     private var glassNavigation: some View {
-        GlassEffectContainer(spacing: 8) {
-            HStack(spacing: 0) {
-                ForEach(Tab.allCases, id: \.self) { tab in
-                    navItem(tab)
-                }
-            }
-            .padding(5)
-            .background {
+        GeometryReader { geo in
+            let width = geo.size.width
+            let slot = width / tabCount
+            let baseX = CGFloat(selectedTab.index) * slot
+            // Clamp drag so the pill stays inside the bar
+            let maxDragLeft = -baseX
+            let maxDragRight = width - slot - baseX
+            let clampedDrag = min(max(tabDragOffset, maxDragLeft), maxDragRight)
+            let pillX = baseX + clampedDrag
+
+            ZStack(alignment: .leading) {
+                // Track
                 Capsule()
                     .fill(.ultraThinMaterial)
-            }
-            .glassEffect(.regular, in: Capsule())
-        }
-    }
+                    .glassEffect(.regular, in: Capsule())
 
-    private func navItem(_ tab: Tab) -> some View {
-        Button {
-            HapticManager.tap()
-            SoundManager.playTap()
-            if tab == .library && !session.isStreaming {
-                session.returnToHub()
-            }
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
-                selectedTab = tab
-            }
-        } label: {
-            VStack(spacing: 3) {
-                Image(systemName: tab.icon)
-                    .font(.system(size: 18, weight: .semibold))
-                    .symbolRenderingMode(.hierarchical)
-                Text(tab.rawValue)
-                    .font(.system(size: 10, weight: .medium))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .foregroundStyle(selectedTab == tab ? .primary : .secondary)
-            .frame(maxWidth: .infinity)
-            .frame(height: 52)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(tab.rawValue)
-        .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
-        .background {
-            if selectedTab == tab {
+                // Sliding selection pill
                 Capsule()
                     .fill(.ultraThinMaterial)
                     .glassEffect(.regular.interactive(), in: Capsule())
-                    .matchedGeometryEffect(id: "selectedTab", in: navNamespace)
                     .overlay {
                         if controller.isConnected {
                             Capsule()
@@ -244,7 +238,62 @@ struct RootView: View {
                                 .padding(1.5)
                         }
                     }
+                    .frame(width: max(slot - 4, 0), height: 52)
+                    .offset(x: pillX + 2)
+                    .animation(tabDragOffset == 0 ? .spring(response: 0.32, dampingFraction: 0.82) : .interactiveSpring, value: selectedTab)
+
+                // Labels / icons — full-bar drag + per-item tap
+                HStack(spacing: 0) {
+                    ForEach(Tab.allCases, id: \.self) { tab in
+                        tabLabel(tab)
+                            .frame(width: slot, height: 52)
+                            .contentShape(Rectangle())
+                            .onTapGesture { selectTab(tab) }
+                            .accessibilityLabel(tab.rawValue)
+                            .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
+                    }
+                }
             }
+            .padding(5)
+            .contentShape(Capsule())
+            .gesture(tabDragGesture(slotWidth: slot))
+            .onAppear { tabBarWidth = width }
+            .onChange(of: width) { _, w in tabBarWidth = w }
         }
+        .frame(height: 62)
+    }
+
+    private func tabLabel(_ tab: Tab) -> some View {
+        VStack(spacing: 3) {
+            Image(systemName: tab.icon)
+                .font(.system(size: 18, weight: .semibold))
+                .symbolRenderingMode(.hierarchical)
+            Text(tab.rawValue)
+                .font(.system(size: 10, weight: .medium))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .foregroundStyle(selectedTab == tab ? .primary : .secondary)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func tabDragGesture(slotWidth: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 6, coordinateSpace: .local)
+            .onChanged { value in
+                // Prefer horizontal swipes
+                guard abs(value.translation.width) > abs(value.translation.height) * 0.6 else { return }
+                tabDragOffset = value.translation.width
+            }
+            .onEnded { value in
+                let predicted = value.predictedEndTranslation.width
+                let delta = Int((predicted / max(slotWidth, 1)).rounded())
+                let all = Tab.allCases
+                let current = selectedTab.index
+                let nextIndex = min(max(current + delta, 0), all.count - 1)
+                tabDragOffset = 0
+                if nextIndex != current {
+                    selectTab(all[nextIndex])
+                }
+            }
     }
 }
