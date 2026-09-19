@@ -41,15 +41,18 @@ struct GameHubView: View {
     @State private var scrollProxy: ScrollViewProxy?
 
     private let gridColumns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
+        GridItem(.flexible(), spacing: 16),
+        GridItem(.flexible(), spacing: 16)
     ]
 
-    private var chips: [HubBrowseFilter] {
-        var items: [HubBrowseFilter] = [.all, .mine, .browse, .forYou, .favorites, .recents, .lists, .activity]
-        items.append(contentsOf: DiscoveryMode.allCases.map { .mode($0) })
-        items.append(contentsOf: GameCatalog.genreNames.map { .genre($0) })
-        return items
+    /// Primary chips only — genres & modes live one scroll away, not crammed in.
+    private var primaryChips: [HubBrowseFilter] {
+        [.all, .mine, .browse, .forYou, .favorites, .recents, .lists, .activity]
+    }
+
+    private var secondaryChips: [HubBrowseFilter] {
+        DiscoveryMode.allCases.map { .mode($0) }
+            + GameCatalog.genreNames.map { .genre($0) }
     }
 
     private var catalogHits: [CatalogGame] {
@@ -133,12 +136,13 @@ struct GameHubView: View {
         HubPage {
             header
             searchField
+
             if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 searchResults
             } else {
                 JumpBackInDock()
                 playNextBanner
-                chipRow
+                filterChips
                 filterBody
             }
         }
@@ -179,11 +183,13 @@ struct GameHubView: View {
         }
     }
 
+    // MARK: - Header
+
     private var header: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text("GameStream")
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Text("Xbox Cloud Gaming")
@@ -195,57 +201,65 @@ struct GameHubView: View {
             Button {
                 session.openXboxCloud()
             } label: {
-                Text("Cloud")
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                Label("Cloud", systemImage: "cloud.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .labelStyle(.titleAndIcon)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
             }
             .buttonStyle(.glass)
             .accessibilityLabel("Open Xbox Cloud library")
         }
+        .padding(.bottom, 4)
     }
+
+    // MARK: - Search
 
     private var searchField: some View {
         HStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.secondary)
-            TextField("Search GameHub", text: $query)
+            TextField("Search games", text: $query)
                 .focused($searchFocused)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: 17, weight: .medium))
                 .submitLabel(.search)
             if !query.isEmpty {
                 Button {
                     query = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18))
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Clear GameHub search")
+                .accessibilityLabel("Clear search")
             }
         }
         .padding(.horizontal, 16)
-        .frame(height: 50)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .frame(height: 54)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     private var searchResults: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 16) {
             Text(catalogHits.isEmpty ? "No catalog matches" : "Matching games")
-                .font(.title3.weight(.semibold))
+                .font(.title2.weight(.bold))
                 .lineLimit(1)
+
             if catalogHits.isEmpty {
                 Text("No local catalog titles match this search.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(18)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             } else {
                 ScrollViewReader { proxy in
-                    LazyVGrid(columns: gridColumns, spacing: 16) {
+                    LazyVGrid(columns: gridColumns, spacing: 20) {
                         ForEach(Array(catalogHits.enumerated()), id: \.element.id) { index, game in
                             poster(game, isFocused: gridFocus == index)
                                 .id(game.id)
@@ -254,90 +268,119 @@ struct GameHubView: View {
                     .onAppear { scrollProxy = proxy }
                 }
             }
+
             Button {
                 session.openSearch(query: query)
             } label: {
-                Text("Search Xbox Cloud for \"\(query.trimmingCharacters(in: .whitespacesAndNewlines))\"")
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.85)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 12)
-                    .padding(.horizontal, 4)
+                HStack {
+                    Image(systemName: "cloud.fill")
+                    Text("Search Xbox Cloud for \"\(query.trimmingCharacters(in: .whitespacesAndNewlines))\"")
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.85)
+                        .multilineTextAlignment(.leading)
+                    Spacer(minLength: 4)
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption.weight(.bold))
+                }
+                .padding(.vertical, 14)
+                .padding(.horizontal, 4)
             }
             .buttonStyle(.glass)
             .accessibilityLabel("Search Xbox Cloud")
         }
     }
 
+    // MARK: - Up next
+
     @ViewBuilder
     private var playNextBanner: some View {
         if session.offerPlayNext, let next = session.nextQueuedGame {
             let catalog = GameCatalog.catalog(from: next)
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
                 Text("Up next")
-                    .font(.title3.weight(.semibold))
+                    .font(.title2.weight(.bold))
                     .lineLimit(1)
-                HStack(spacing: 12) {
+
+                HStack(spacing: 14) {
                     GameArtView(url: artwork.url(for: next.id), accent: catalog.accent, title: next.title)
-                        .frame(width: 52, height: 68)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    VStack(alignment: .leading, spacing: 6) {
+                        .frame(width: 64, height: 84)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 8) {
                         Text(next.title)
                             .font(.headline)
                             .lineLimit(2)
                             .minimumScaleFactor(0.85)
-                        HStack(spacing: 8) {
+
+                        HStack(spacing: 10) {
                             Button {
                                 session.offerPlayNext = false
                                 _ = session.playNextQueued()
                             } label: {
                                 Text("Play next")
-                                    .font(.caption.weight(.semibold))
+                                    .font(.subheadline.weight(.semibold))
                                     .lineLimit(1)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 9)
                             }
                             .buttonStyle(.glassProminent)
+
                             Button {
                                 session.offerPlayNext = false
                             } label: {
                                 Text("Dismiss")
-                                    .font(.caption.weight(.medium))
+                                    .font(.subheadline.weight(.medium))
                                     .lineLimit(1)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 8)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 9)
                             }
                             .buttonStyle(.glass)
                         }
                     }
                     Spacer(minLength: 0)
                 }
-                .padding(14)
+                .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             }
         }
     }
 
-    private var chipRow: some View {
-        HubCarousel(spacing: 8) {
-            ForEach(chips, id: \.self) { chip in
-                Button {
-                    filter = chip
-                } label: {
-                    Text(chip.title)
-                        .font(.subheadline.weight(.medium))
-                        .lineLimit(1)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
+    // MARK: - Filters
+
+    private var filterChips: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HubCarousel(spacing: 10) {
+                ForEach(primaryChips, id: \.self) { chip in
+                    chipButton(chip)
                 }
-                .modifier(HubChipStyle(selected: filter == chip))
-                .accessibilityLabel(chip.title)
+            }
+
+            // Modes + genres on a second row so the primary row stays calm
+            HubCarousel(spacing: 10) {
+                ForEach(secondaryChips, id: \.self) { chip in
+                    chipButton(chip)
+                }
             }
         }
     }
+
+    private func chipButton(_ chip: HubBrowseFilter) -> some View {
+        Button {
+            filter = chip
+        } label: {
+            Text(chip.title)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+        }
+        .modifier(HubChipStyle(selected: filter == chip))
+        .accessibilityLabel(chip.title)
+    }
+
+    // MARK: - Body by filter
 
     @ViewBuilder
     private var filterBody: some View {
@@ -357,11 +400,9 @@ struct GameHubView: View {
     }
 
     private var featuredSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Featured")
-                .font(.title3.weight(.semibold))
-                .lineLimit(1)
-            HubCarousel(spacing: 14) {
+        VStack(alignment: .leading, spacing: 14) {
+            HubSectionHeader(title: "Featured")
+            HubCarousel(spacing: 16) {
                 ForEach(GameCatalog.featured) { game in
                     FeaturedGameCard(
                         game: game,
@@ -374,22 +415,19 @@ struct GameHubView: View {
                     .containerRelativeFrame(.horizontal) { width, _ in
                         HubMetrics.featuredCardWidth(containerWidth: width)
                     }
-                    .frame(height: 176)
+                    .frame(height: 220)
                 }
             }
         }
     }
 
     private var shelvesSection: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 28) {
             GameHubListShelves()
             ForEach(Array(GameCatalog.hubShelves(favorites: session.favorites, recents: session.recents).enumerated()), id: \.offset) { _, row in
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(row.0)
-                        .font(.title3.weight(.semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
-                    HubCarousel(spacing: 12) {
+                VStack(alignment: .leading, spacing: 14) {
+                    HubSectionHeader(title: row.0)
+                    HubCarousel(spacing: 14) {
                         ForEach(row.1) { game in
                             poster(game)
                                 .containerRelativeFrame(.horizontal) { width, _ in
@@ -403,21 +441,20 @@ struct GameHubView: View {
     }
 
     private var filteredGrid: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(filter.title)
-                .font(.title3.weight(.semibold))
-                .lineLimit(1)
+        VStack(alignment: .leading, spacing: 16) {
+            HubSectionHeader(title: filter.title)
+
             if filteredGames.isEmpty {
                 Text(emptyCopy)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(16)
+                    .padding(18)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             } else {
                 ScrollViewReader { proxy in
-                    LazyVGrid(columns: gridColumns, spacing: 16) {
+                    LazyVGrid(columns: gridColumns, spacing: 20) {
                         ForEach(Array(filteredGames.enumerated()), id: \.element.id) { index, game in
                             poster(game, isFocused: gridFocus == index)
                                 .id(game.id)
@@ -444,9 +481,10 @@ struct GameHubView: View {
         Button {
             filter = .browse
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: 14) {
                 Image(systemName: "square.grid.2x2.fill")
-                VStack(alignment: .leading, spacing: 2) {
+                    .font(.title3)
+                VStack(alignment: .leading, spacing: 4) {
                     Text("Browse all games")
                         .font(.headline)
                         .lineLimit(1)
@@ -458,9 +496,10 @@ struct GameHubView: View {
                 }
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.secondary)
             }
-            .padding(16)
+            .padding(18)
         }
         .buttonStyle(.glass)
         .accessibilityLabel("Browse all catalog games")
@@ -477,7 +516,7 @@ struct GameHubView: View {
         )
         .overlay {
             if isFocused {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .stroke(Color.accentColor, lineWidth: 3)
                     .padding(2)
                     .allowsHitTesting(false)
