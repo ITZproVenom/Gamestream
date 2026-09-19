@@ -12,9 +12,9 @@ struct GameHubListShelves: View {
             ForEach(lists.collections) { list in
                 let games = lists.games(inCollection: list.id, favorites: session.favorites, recents: session.recents)
                 if !games.isEmpty {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(list.name).font(.title3.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.85)
-                        HubCarousel(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        HubSectionHeader(title: list.name)
+                        HubCarousel(spacing: 14) {
                             ForEach(games) { game in
                                 GamePosterCard(
                                     game: game,
@@ -48,11 +48,12 @@ struct GameHubListsSection: View {
     @Binding var detailGame: CatalogGame?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 20) {
             GameHubQueueShelf(detailGame: $detailGame)
+
             HStack {
                 Text("Your lists")
-                    .font(.title3.weight(.semibold))
+                    .font(.title2.weight(.bold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
                 Spacer(minLength: 8)
@@ -62,15 +63,15 @@ struct GameHubListsSection: View {
                     Text("Manage")
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
                 }
                 .buttonStyle(.glass)
                 .accessibilityLabel("Manage lists")
             }
 
             if lists.collections.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text("No lists yet")
                         .font(.headline)
                         .lineLimit(1)
@@ -84,19 +85,19 @@ struct GameHubListsSection: View {
                         Text("Create a list")
                             .font(.subheadline.weight(.semibold))
                             .lineLimit(1)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
                     }
                     .buttonStyle(.glassProminent)
                     .accessibilityLabel("Create a list")
                 }
-                .padding(16)
+                .padding(18)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             } else {
                 ForEach(lists.collections) { list in
                     let games = lists.games(inCollection: list.id, favorites: session.favorites, recents: session.recents)
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 12) {
                         HStack {
                             Text(list.name)
                                 .font(.headline)
@@ -113,7 +114,7 @@ struct GameHubListsSection: View {
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         } else {
-                            HubCarousel(spacing: 12) {
+                            HubCarousel(spacing: 14) {
                                 ForEach(games) { game in
                                     GamePosterCard(
                                         game: game,
@@ -136,7 +137,10 @@ struct GameHubListsSection: View {
                                             Label("Remove from \(list.name)", systemImage: "minus.circle")
                                         }
                                         Button { session.toggleQueue(game.tracked) } label: {
-                                            Label(session.isQueued(game.id) ? "Remove from Up Next" : "Add to Up Next", systemImage: "text.badge.plus")
+                                            Label(
+                                                session.isQueued(game.id) ? "Remove from Up Next" : "Add to Up Next",
+                                                systemImage: "text.badge.plus"
+                                            )
                                         }
                                     }
                                 }
@@ -147,16 +151,25 @@ struct GameHubListsSection: View {
             }
 
             Button { session.openXboxCloud() } label: {
-                HStack(spacing: 12) {
+                HStack(spacing: 14) {
                     Image(systemName: "cloud.fill")
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Full Xbox Cloud library").font(.headline).lineLimit(1)
-                        Text("Browse every title in the official catalog").font(.caption).foregroundStyle(.secondary).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                        .font(.title3)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Full Xbox Cloud library")
+                            .font(.headline)
+                            .lineLimit(1)
+                        Text("Browse every title in the official catalog")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 4)
-                    Image(systemName: "arrow.up.right").font(.caption.weight(.bold))
+                    Image(systemName: "arrow.up.right")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.secondary)
                 }
-                .padding(16)
+                .padding(18)
             }
             .buttonStyle(.glass)
         }
