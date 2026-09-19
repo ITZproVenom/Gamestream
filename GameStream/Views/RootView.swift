@@ -41,14 +41,17 @@ struct RootView: View {
                 }
 
                 if !session.isStreaming {
+                    // All tabs extend under the glass nav so the aurora fills the
+                    // bottom safe area — avoids black borders behind the tab bar.
                     GameHubView()
-                        .ignoresSafeArea(edges: selectedTab == .library ? [.bottom] : [])
+                        .ignoresSafeArea(edges: .bottom)
                         .opacity(selectedTab == .library ? 1 : 0)
                         .allowsHitTesting(selectedTab == .library)
                         .accessibilityHidden(selectedTab != .library)
                         .zIndex(selectedTab == .library ? 2 : 0)
 
                     SearchHubView(isActive: selectedTab == .search)
+                        .ignoresSafeArea(edges: .bottom)
                         .safeAreaInset(edge: .top, spacing: 0) {
                             if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                                let game = session.continueGame {
@@ -64,6 +67,7 @@ struct RootView: View {
                         .zIndex(selectedTab == .search ? 2 : 0)
 
                     SettingsView(isActive: selectedTab == .settings)
+                        .ignoresSafeArea(edges: .bottom)
                         .opacity(selectedTab == .settings ? 1 : 0)
                         .allowsHitTesting(selectedTab == .settings)
                         .accessibilityHidden(selectedTab != .settings)
