@@ -29,13 +29,31 @@ struct GameDetailView: View {
                 .padding(20)
                 .padding(.bottom, 24)
             }
-            .background(AnimatedBackground().ignoresSafeArea())
-            .navigationTitle(game.title)
+            // Static fill — a second aurora Timeline under the sheet doubles main-thread
+            // compositing and is a common source of hub lag while the sheet is open.
+            .background {
+                Color.black.opacity(0.92).ignoresSafeArea()
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { onClose() }
-                        .buttonStyle(.glass)
+                    Button {
+                        onClose()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.primary)
+                            .frame(width: 30, height: 30)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close")
+                }
+                ToolbarItem(placement: .principal) {
+                    Text(game.title)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
             }
         }
@@ -122,146 +140,79 @@ struct GameDetailView: View {
             }
 
             Button {
-                session.toggleQueue(game.tracked)
+                session.toggleQueued(game.tracked)
             } label: {
                 Text(session.isQueued(game.id) ? "Remove from Up Next" : "Add to Up Next")
                     .font(.subheadline.weight(.medium))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 11)
             }
             .buttonStyle(.glass)
-            .accessibilityLabel(session.isQueued(game.id) ? "Remove \(game.title) from Up Next" : "Add \(game.title) to Up Next")
-
-            HStack(spacing: 8) {
-                Button {
-                    if lists.collections.isEmpty {
-                        showingNewList = true
-                    } else {
-                        showingLists = true
-                    }
-                } label: {
-                    Text(lists.collections.isEmpty ? "New list" : "Lists")
-                        .font(.subheadline.weight(.medium))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                }
-                .buttonStyle(.glass)
-                .accessibilityLabel("Open lists")
-
-                if !lists.collections.isEmpty {
-                    Menu {
-                        ForEach(lists.collections) { list in
-                            Button {
-                                lists.toggle(game: game.tracked, inCollection: list.id)
-                            } label: {
-                                Label(
-                                    lists.contains(game.id, inCollection: list.id) ? "Remove from \(list.name)" : "Add to \(list.name)",
-                                    systemImage: lists.contains(game.id, inCollection: list.id) ? "checkmark" : "plus"
-                                )
-                            }
-                        }
-                        Button {
-                            showingNewList = true
-                        } label: {
-                            Label("New list", systemImage: "plus")
-                        }
-                    } label: {
-                        Text("Add to list")
-                            .font(.subheadline.weight(.medium))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.85)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                    }
-                    .buttonStyle(.glass)
-                    .accessibilityLabel("Add \(game.title) to a list")
-                }
-            }
 
             Button {
-                session.openCatalogGame(game)
-                onClose()
+                showingLists = true
             } label: {
-                Text("Open on Xbox Cloud")
+                Text("Add to list")
                     .font(.subheadline.weight(.medium))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 11)
             }
             .buttonStyle(.glass)
-            .accessibilityLabel("Open \(game.title) on Xbox Cloud")
+
+            Button {
+                showingNewList = true
+            } label: {
+                Text("New list with this game")
+                    .font(.subheadline.weight(.medium))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 11)
+            }
+            .buttonStyle(.glass)
         }
     }
 
     private var meta: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("About")
-                .font(.title3.weight(.semibold))
-                .lineLimit(1)
-            Text(game.tagline)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            if let stat = activity.stat(for: game.id) {
-                Text("\(PlayActivityStore.format(stat.totalSeconds)) played · \(stat.sessionCount) sessions · \(PlayActivityStore.format(stat.weekSeconds)) this week")
-                    .font(.caption.weight(.medium))
+        VStack(alignment: .leading, spacing: 10) {
+            if !game.genres.isEmpty {
+                Text(game.genres.joined(separator: " · "))
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
-                    .minimumScaleFactor(0.85)
-                    .fixedSize(horizontal: false, vertical: true)
             }
-            HStack(spacing: 8) {
-                pill(game.genre)
-                pill(game.provider)
-                if session.isFavorite(game.id) { pill("Favorite") }
-                if session.recents.contains(where: { $0.id == game.id }) { pill("Played") }
+            if let minutes = activity.minutes(for: game.id), minutes > 0 {
+                Text("Played about \(minutes) min on this device")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     private var relatedShelf: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("More \(game.genre)")
-                .font(.title3.weight(.semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
+            Text("More like this")
+                .font(.headline)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(related) { item in
-                        GamePosterCard(
-                            game: item,
-                            artworkURL: artwork.url(for: item.id),
-                            isFavorite: session.isFavorite(item.id),
-                            onPlay: {
-                                session.playCatalogGame(item)
-                                onClose()
-                            },
-                            onOpen: {
-                                session.openCatalogGame(item)
-                                onClose()
-                            },
-                            onFavorite: { session.toggleFavorite(item.tracked) }
-                        )
+                        Button {
+                            session.playCatalogGame(item)
+                            onClose()
+                        } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                GameArtView(url: artwork.url(for: item.id), accent: item.accent, title: item.title)
+                                    .frame(width: 110, height: 148)
+                                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                Text(item.title)
+                                    .font(.caption2.weight(.semibold))
+                                    .lineLimit(2)
+                                    .frame(width: 110, alignment: .leading)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .onAppear { artwork.load(item.id) }
                     }
                 }
             }
         }
-    }
-
-    private func pill(_ text: String) -> some View {
-        Text(text)
-            .font(.caption.weight(.semibold))
-            .lineLimit(1)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(.ultraThinMaterial, in: Capsule())
     }
 }
