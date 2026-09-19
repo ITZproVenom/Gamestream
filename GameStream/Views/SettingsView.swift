@@ -10,15 +10,13 @@ struct SettingsView: View {
     @State private var resolution: String = SessionStore.storedResolution
     @State private var region: String = SessionStore.storedRegion
 
-    /// Set by RootView. The view stays mounted so tab switches never rebuild
-    /// this tree; on becoming visible it re-syncs transient @State from store.
     var isActive: Bool = true
 
     private let resolutions = ["Auto", "720p", "1080p", "1080p HQ"]
     private let regions = ["Auto", "North America", "Europe", "Asia", "Australia"]
 
     private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.3.9"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.0"
     }
 
     var body: some View {
@@ -40,58 +38,42 @@ struct SettingsView: View {
                     }
 
                     section("Look") {
-                        Text("Appearance")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        chipRow(options: AppAppearanceMode.allCases.map(\.title), selected: appearance.mode.title) { title in
+                        labeledChips("Appearance", AppAppearanceMode.allCases.map(\.title), appearance.mode.title) { title in
                             if let mode = AppAppearanceMode.allCases.first(where: { $0.title == title }) {
                                 appearance.mode = mode
                             }
                         }
-                        Text("Accent")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        chipRow(options: AccentTheme.allCases.map(\.title), selected: appearance.accent.title) { title in
+                        labeledChips("Accent", AccentTheme.allCases.map(\.title), appearance.accent.title) { title in
                             if let theme = AccentTheme.allCases.first(where: { $0.title == title }) {
                                 appearance.accent = theme
                             }
                         }
-                        Text("Background")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        chipRow(options: BackgroundStyle.allCases.map(\.title), selected: appearance.backgroundStyle.title) { title in
+                        labeledChips("Background", BackgroundStyle.allCases.map(\.title), appearance.backgroundStyle.title) { title in
                             if let style = BackgroundStyle.allCases.first(where: { $0.title == title }) {
                                 appearance.backgroundStyle = style
                             }
                         }
-                        Text("Game cards")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        chipRow(options: GameCardStyle.allCases.map(\.title), selected: appearance.cardStyle.title) { title in
+                        labeledChips("Home layout", HubHomeLayout.allCases.map(\.title), appearance.hubLayout.title) { title in
+                            if let layout = HubHomeLayout.allCases.first(where: { $0.title == title }) {
+                                appearance.hubLayout = layout
+                            }
+                        }
+                        labeledChips("Game cards", GameCardStyle.allCases.map(\.title), appearance.cardStyle.title) { title in
                             if let style = GameCardStyle.allCases.first(where: { $0.title == title }) {
                                 appearance.cardStyle = style
                             }
                         }
-                        Text("Library density")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        chipRow(options: LibraryDensity.allCases.map(\.title), selected: appearance.density.title) { title in
+                        labeledChips("Library density", LibraryDensity.allCases.map(\.title), appearance.density.title) { title in
                             if let density = LibraryDensity.allCases.first(where: { $0.title == title }) {
                                 appearance.density = density
                             }
                         }
-                        Text("Motion")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        chipRow(options: AnimationIntensity.allCases.map(\.title), selected: appearance.animationIntensity.title) { title in
+                        labeledChips("Motion", AnimationIntensity.allCases.map(\.title), appearance.animationIntensity.title) { title in
                             if let intensity = AnimationIntensity.allCases.first(where: { $0.title == title }) {
                                 appearance.animationIntensity = intensity
                             }
                         }
-                        Text("Effects")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        chipRow(options: EffectsMode.allCases.map(\.title), selected: appearance.effectsMode.title) { title in
+                        labeledChips("Effects", EffectsMode.allCases.map(\.title), appearance.effectsMode.title) { title in
                             if let mode = EffectsMode.allCases.first(where: { $0.title == title }) {
                                 appearance.effectsMode = mode
                             }
@@ -102,6 +84,8 @@ struct SettingsView: View {
                                 .foregroundStyle(.secondary)
                             Slider(value: $appearance.glassIntensity, in: 0.35...1.0)
                         }
+                        Toggle("Activity on home", isOn: $appearance.showActivityOnHome)
+                        Toggle("Genre filter row", isOn: $appearance.showGenreFilters)
                         Toggle("UI sounds", isOn: $appearance.uiSoundsEnabled)
                         Toggle("Controller haptics", isOn: $appearance.controllerHapticsEnabled)
                     }
@@ -162,17 +146,11 @@ struct SettingsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
-                        Text("Target resolution")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        chipRow(options: resolutions, selected: resolution) { opt in
+                        labeledChips("Target resolution", resolutions, resolution) { opt in
                             resolution = opt
                             session.applyStreamResolution(opt)
                         }
-                        Text("Server region")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        chipRow(options: regions, selected: region) { opt in
+                        labeledChips("Server region", regions, region) { opt in
                             region = opt
                             session.applyServerRegion(opt)
                         }
@@ -202,7 +180,6 @@ struct SettingsView: View {
                                 .padding(.vertical, 10)
                         }
                         .buttonStyle(.glass)
-                        .accessibilityHint("Clears stream, catalog, and script caches without signing out")
                         Button {
                             HapticManager.tap()
                             session.refreshBetterXCloudScript()
@@ -279,21 +256,26 @@ struct SettingsView: View {
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
-    private func chipRow(options: [String], selected: String, onSelect: @escaping (String) -> Void) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(options, id: \.self) { opt in
-                    Button {
-                        onSelect(opt)
-                    } label: {
-                        Text(opt)
-                            .font(.caption.weight(.semibold))
-                            .lineLimit(1)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
+    private func labeledChips(_ label: String, _ options: [String], _ selected: String, onSelect: @escaping (String) -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(options, id: \.self) { opt in
+                        Button {
+                            onSelect(opt)
+                        } label: {
+                            Text(opt)
+                                .font(.caption.weight(.semibold))
+                                .lineLimit(1)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                        }
+                        .modifier(HubChipStyle(selected: selected == opt))
+                        .accessibilityLabel(opt)
                     }
-                    .modifier(HubChipStyle(selected: selected == opt))
-                    .accessibilityLabel(opt)
                 }
             }
         }
