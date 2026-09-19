@@ -20,17 +20,26 @@
 
 ## Download
 
-Builds are **separate by platform**. Use the links below — do not mix iOS tags with Android tags.
+Builds are **separate by platform**. Pick iOS or Android — do not mix tags.
 
-| Platform | Always-latest | Full history |
-|----------|---------------|--------------|
-| **iOS** (IPA) | [**latest-ios**](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios) | [all `ios-build-*`](https://github.com/ITZproVenom/Gamestream/releases?q=ios-build&expanded=true) |
-| **Android** (APK) | [**latest-android**](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-android) | [all `android-build-*`](https://github.com/ITZproVenom/Gamestream/releases?q=android-build&expanded=true) |
+### Current builds
 
-- **iOS:** install `GameStream-unsigned.ipa` with AltStore / Sideloadly / TrollStore (unsigned).
-- **Android:** install `GameStream-release.apk` (signed release keystore; updates over previous official APKs).
+| Platform | Download this release | File |
+|----------|----------------------|------|
+| **iOS** | [📱 iOS build (rumble + intensity)](https://github.com/ITZproVenom/Gamestream/releases/tag/ios-build-20260919-1051-64a6bb3) | `GameStream-unsigned.ipa` |
+| **Android** | [🤖 Android build (rumble + settings)](https://github.com/ITZproVenom/Gamestream/releases/tag/android-build-20260919-1056-b2bf297) | `GameStream-release.apk` |
 
-> Releases only publish when that platform’s **app code** changed (not empty CI-only bumps). Manual **Run workflow** still forces a build + release.
+### All builds
+
+- **iOS only:** [filter `ios-build`](https://github.com/ITZproVenom/Gamestream/releases?q=ios-build&expanded=true)
+- **Android only:** [filter `android-build`](https://github.com/ITZproVenom/Gamestream/releases?q=android-build&expanded=true)
+- **All releases:** [Releases](https://github.com/ITZproVenom/Gamestream/releases)
+
+**Install**
+- **iOS:** AltStore / Sideloadly / TrollStore (unsigned IPA)
+- **Android:** allow unknown sources; APK is signed so it updates over previous official builds
+
+> New releases only publish when that platform’s **app code** changes. Titles start with **📱 iOS** or **🤖 Android** so they’re easy to spot.
 
 ---
 
@@ -53,7 +62,7 @@ xcodegen generate
 open GameStream.xcodeproj
 ```
 
-CI: `.github/workflows/build-ipa.yml` → IPA on [Releases](https://github.com/ITZproVenom/Gamestream/releases).
+CI: `.github/workflows/build-ipa.yml`
 
 ---
 
@@ -67,9 +76,7 @@ gradle wrapper --gradle-version 8.9   # if needed
 
 APK: `android/app/build/outputs/apk/release/app-release.apk`
 
-Or open `android/` in Android Studio.
-
-CI: `.github/workflows/build-apk.yml`.
+CI: `.github/workflows/build-apk.yml`
 
 ---
 
