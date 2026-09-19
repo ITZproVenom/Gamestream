@@ -80,11 +80,11 @@ jobs:
               sys.exit("invalid App Icon - refusing to continue")
           PY
 
-      - name: Bundle Better xCloud + sound pack
+      - name: Bundle Better xCloud (no sound pack)
         if: ${{ github.event.inputs.bundle_injection == 'full' }}
         run: |
           set -euo pipefail
-          mkdir -p GameStream/Resources/Sounds
+          mkdir -p GameStream/Resources
           curl -fsSL -o GameStream/Resources/better-xcloud.user.js \
             "https://github.com/redphx/better-xcloud/releases/latest/download/better-xcloud.user.js"
           test -s GameStream/Resources/better-xcloud.user.js
@@ -94,37 +94,7 @@ jobs:
             echo "Better xCloud script too small" >&2
             exit 1
           fi
-          python3 - <<'PY'
-          import base64, json, math, struct, wave
-          from pathlib import Path
-          out = Path("GameStream/Resources/Sounds")
-          out.mkdir(parents=True, exist_ok=True)
-
-          def tone(name, freqs, dur, vol=0.3, sr=22050):
-              n = int(sr * dur)
-              frames = []
-              for i in range(n):
-                  t = i / sr
-                  env = min(1.0, i / 200) * min(1.0, (n - i) / 400)
-                  s = sum(math.sin(2 * math.pi * f * t) for f in freqs) / len(freqs) * vol * env
-                  frames.append(struct.pack("<h", int(max(-1, min(1, s)) * 32767)))
-              path = out / f"{name}.wav"
-              with wave.open(str(path), "w") as w:
-                  w.setnchannels(1)
-                  w.setsampwidth(2)
-                  w.setframerate(sr)
-                  w.writeframes(b"".join(frames))
-              return base64.b64encode(path.read_bytes()).decode("ascii")
-
-          pack = {
-              "tap": tone("tap", [800], 0.05, 0.2),
-              "launch": tone("launch", [440, 660], 0.18, 0.3),
-              "ready": tone("ready", [520, 780, 1040], 0.22, 0.28),
-              "error": tone("error", [220, 180], 0.25, 0.32),
-          }
-          (out / "embedded.json").write_text(json.dumps(pack))
-          print("sound pack", {k: len(v) for k, v in pack.items()})
-          PY
+          echo "Sound pack generation disabled for crash isolation"
 
       - name: Verify Resources on disk
         if: ${{ github.event.inputs.bundle_injection == 'full' }}
@@ -133,7 +103,7 @@ jobs:
           echo "Resources tree:"
           find GameStream/Resources -type f -exec ls -la {} \;
           test -s GameStream/Resources/better-xcloud.user.js
-          test -s GameStream/Resources/Sounds/embedded.json || test -f GameStream/Resources/Sounds/launch.wav
+          echo "Sounds not required for crash-isolation builds"
           BYTES=$(wc -c < GameStream/Resources/better-xcloud.user.js | tr -d ' ')
           echo "Pre-xcodegen BX bytes=${BYTES}"
 
@@ -184,20 +154,16 @@ jobs:
           set -euo pipefail
           APP="build/GameStream.xcarchive/Products/Applications/GameStream.app"
           test -d "$APP"
-          mkdir -p "$APP/Resources/Sounds"
+          mkdir -p "$APP/Resources"
           if [ -f GameStream/Resources/better-xcloud.user.js ]; then
             cp -f GameStream/Resources/better-xcloud.user.js "$APP/better-xcloud.user.js"
             cp -f GameStream/Resources/better-xcloud.user.js "$APP/Resources/better-xcloud.user.js"
           fi
-          if [ -d GameStream/Resources/Sounds ]; then
-            cp -f GameStream/Resources/Sounds/* "$APP/Resources/Sounds/" 2>/dev/null || true
-            cp -f GameStream/Resources/Sounds/* "$APP/" 2>/dev/null || true
-          fi
+          echo "Skipping sound resource inject"
           if [ -f GameStream/Resources/offline-stream.html ]; then
             cp -f GameStream/Resources/offline-stream.html "$APP/offline-stream.html"
             cp -f GameStream/Resources/offline-stream.html "$APP/Resources/offline-stream.html"
           fi
-          # Replace actool CgBI icons with standard PNGs (repo mark) so TrollStore shows the icon
           ICONSET="GameStream/Assets.xcassets/AppIcon.appiconset"
           if [ -f "$ICONSET/icon-60@2x.png" ]; then
             cp -f "$ICONSET/icon-60@2x.png" "$APP/AppIcon60x60@2x.png"
