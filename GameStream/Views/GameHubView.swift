@@ -79,7 +79,6 @@ struct GameHubView: View {
         }
     }
 
-    /// Native "my library": pinned games first, then recents, deduped.
     private var personalGames: [CatalogGame] {
         var seen = Set<String>()
         var games: [CatalogGame] = []
@@ -92,8 +91,6 @@ struct GameHubView: View {
         return games
     }
 
-    /// The games currently shown in a native grid (search results or filtered
-    /// grid). Carousels/featured return empty — stick navigation targets grids.
     private var activeGridGames: [CatalogGame] {
         if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return catalogHits
@@ -147,7 +144,9 @@ struct GameHubView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
-            artwork.prefetch(GameCatalog.games.map(\.id))
+            let firstScreen = GameCatalog.featured.map(\.id)
+                + Array(GameCatalog.sortedBrowse.prefix(24)).map(\.id)
+            artwork.prefetch(Array(Set(firstScreen)))
         }
         .onChange(of: nav.token) { _, _ in
             if let action = nav.action {
