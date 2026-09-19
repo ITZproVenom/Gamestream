@@ -7,27 +7,66 @@ struct FeaturedGameCard: View {
     let favorite: () -> Void
     let isFavorite: () -> Bool
     var openDetail: () -> Void = {}
+
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             Button(action: openDetail) {
                 GameArtView(url: artworkURL, accent: game.accent, title: game.title)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
             }
             .buttonStyle(.plain)
-            LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.72)], startPoint: .top, endPoint: .bottom)
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .allowsHitTesting(false)
-            VStack(alignment: .leading, spacing: 8) {
-                Text(game.provider).font(.caption2.weight(.semibold)).padding(.horizontal, 8).padding(.vertical, 4).background(.ultraThinMaterial, in: Capsule()).lineLimit(1)
-                Text(game.title).font(.title2.weight(.bold)).foregroundStyle(.white).lineLimit(2).minimumScaleFactor(0.8)
-                Text(game.tagline).font(.caption).foregroundStyle(.white.opacity(0.85)).lineLimit(2)
-                HStack(spacing: 8) {
-                    Button(action: { SoundManager.playSuccess(); play() }) { Text("Play").font(.subheadline.weight(.semibold)).lineLimit(1).padding(.horizontal, 16).padding(.vertical, 8) }.buttonStyle(.glassProminent)
-                    Button(action: favorite) { Image(systemName: isFavorite() ? "star.fill" : "star").font(.system(size: 13, weight: .semibold)).frame(width: 36, height: 34) }.buttonStyle(.glass)
+
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.55), .black.opacity(0.82)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .allowsHitTesting(false)
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text(game.provider)
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .lineLimit(1)
+
+                Text(game.title)
+                    .font(.title.weight(.bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+
+                Text(game.tagline)
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.88))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 10) {
+                    Button {
+                        SoundManager.playSuccess()
+                        play()
+                    } label: {
+                        Text("Play")
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.glassProminent)
+
+                    Button(action: favorite) {
+                        Image(systemName: isFavorite() ? "star.fill" : "star")
+                            .font(.system(size: 14, weight: .semibold))
+                            .frame(width: 40, height: 40)
+                    }
+                    .buttonStyle(.glass)
                 }
             }
-            .padding(16)
+            .padding(18)
         }
     }
 }
@@ -39,24 +78,54 @@ struct GamePosterCard: View {
     let onPlay: () -> Void
     let onOpen: () -> Void
     let onFavorite: () -> Void
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             ZStack(alignment: .topTrailing) {
                 Button(action: onOpen) {
                     GameArtView(url: artworkURL, accent: game.accent, title: game.title)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 176)
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                }.buttonStyle(.plain)
+                        .aspectRatio(3 / 4, contentMode: .fill)
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
                 Button(action: onFavorite) {
-                    Image(systemName: isFavorite ? "star.fill" : "star").font(.system(size: 11, weight: .bold)).padding(6).background(.ultraThinMaterial, in: Circle())
-                }.buttonStyle(.plain).padding(8)
+                    Image(systemName: isFavorite ? "star.fill" : "star")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(isFavorite ? .yellow : .primary)
+                        .padding(8)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(10)
             }
-            Text(game.title).font(.caption.weight(.semibold)).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 6) {
-                Text(game.provider).font(.caption2).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
-                Spacer(minLength: 0)
-                Button(action: { SoundManager.playTap(); onPlay() }) { Text("Play").font(.caption2.weight(.semibold)).lineLimit(1).padding(.horizontal, 8).padding(.vertical, 5) }.buttonStyle(.glassProminent)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(game.title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 8) {
+                    Text(game.provider)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Button {
+                        SoundManager.playTap()
+                        onPlay()
+                    } label: {
+                        Text("Play")
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.glassProminent)
+                }
             }
         }
     }
@@ -66,14 +135,20 @@ struct GameArtView: View {
     let url: URL?
     let accent: UInt32
     let title: String
+
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color(hex: accent).gradient)
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(Color(hex: accent).gradient)
             RemoteImage(url: url) { artFallback }
-        }.clipped()
+        }
+        .clipped()
     }
+
     private var artFallback: some View {
-        Text(String(title.prefix(1))).font(.system(size: 44, weight: .bold, design: .rounded)).foregroundStyle(.white.opacity(0.9))
+        Text(String(title.prefix(1)))
+            .font(.system(size: 48, weight: .bold, design: .rounded))
+            .foregroundStyle(.white.opacity(0.9))
     }
 }
 
