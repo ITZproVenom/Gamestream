@@ -148,6 +148,7 @@ struct XboxCloudWebView: UIViewRepresentable {
                 setTimeout(notify, 50);
             };
             window.addEventListener('popstate', function() { setTimeout(notify, 50); });
+            window.addEventListener('hashchange', function() { setTimeout(notify, 50); });
         })();
         """
         contentController.addUserScript(WKUserScript(
@@ -163,6 +164,7 @@ struct XboxCloudWebView: UIViewRepresentable {
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
+        webView.customUserAgent = MicrosoftAuth.safariUserAgent
         webView.allowsBackForwardNavigationGestures = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.delaysContentTouches = false
@@ -226,24 +228,20 @@ struct XboxCloudWebView: UIViewRepresentable {
             self.session = session
         }
 
-        func runPendingJS(_ js: String, in webView: WKWebView) {
-            webView.evaluateJavaScript(js, completionHandler: nil)
-        }
-
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             guard message.name == "gamestreamBridge",
                   let body = message.body as? [String: Any] else { return }
-
-            if let href = body["href"] as? String,
-               let url = URL(string: href) {
-                let title = body["title"] as? String
-                Task { @MainActor in
-                    session?.updateFromWebURL(url, pageTitle: title)
-                    if Self.isPlayerStreamingPage(url) {
-                        NotificationCenter.default.post(name: .playerStreamPageReached, object: nil)
-                    }
+            if let type = body["type"] as? String, type == "url",
+               let href = body["href"] as? String {
+                NotificationCenter.default.post(name: .playerStreamPageReached, object: nil)
+                if let streaming = body["streaming"] as? Bool, streaming {
+                    NotificationCenter.default.post(name: .playerStreamPageReached, object: href)
                 }
             }
+        }
+
+        func runPendingJS(_ js: String, in webView: WKWebView) {
+            webView.evaluateJavaScript(js, completionHandler: nil)
         }
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
@@ -253,28 +251,6 @@ struct XboxCloudWebView: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             NotificationCenter.default.post(name: .webViewLoadingChanged, object: false)
             BetterXCloudInjector.shared.ensureInjected(into: webView)
-            webView.evaluateJavaScript(BetterXCloudInjector.modernUIOverridesJS, completionHandler: nil)
-            webView.evaluateJavaScript(BetterXCloudInjector.streamIsolationJS, completionHandler: nil)
-
-            if let url = webView.url {
-                Task { @MainActor in
-                    session?.updateFromWebURL(url, pageTitle: webView.title)
-                    if Self.isPlayerStreamingPage(url) {
-                        NotificationCenter.default.post(name: .playerStreamPageReached, object: nil)
-                    }
-                }
-            }
-
-            if let js = session?.pendingJavaScript, !js.isEmpty {
-                webView.evaluateJavaScript(js, completionHandler: nil)
-                Task { @MainActor in
-                    session?.pendingJavaScript = nil
-                }
-            }
-        }
-
-        static func isPlayerStreamingPage(_ url: URL) -> Bool {
-            SessionStore.isStreamingURL(url.absoluteString)
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -284,17 +260,22 @@ struct XboxCloudWebView: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
             NotificationCenter.default.post(name: .webViewLoadingChanged, object: false)
-            if (error as NSError).code != NSURLErrorCancelled {
-                NotificationCenter.default.post(name: .webViewDidFail, object: error.localizedDescription)
-            }
+            NotificationCenter.default.post(name: .webViewDidFail, object: error.localizedDescription)
         }
 
         // Real browser: nothing blocks the stream, sign-in, or store navigation.
+        // Still upgrade http://www.xbox.com to https so Akamai does not deny HTTP.
         func webView(
             _ webView: WKWebView,
             decidePolicyFor navigationAction: WKNavigationAction,
             decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
         ) {
+            if let requestURL = navigationAction.request.url,
+               let https = MicrosoftAuth.httpsXboxURL(from: requestURL) {
+                decisionHandler(.cancel)
+                webView.load(URLRequest(url: https))
+                return
+            }
             decisionHandler(.allow)
         }
     }
