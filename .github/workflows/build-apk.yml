@@ -121,7 +121,7 @@ jobs:
           STAMP="$(date -u +'%Y%m%d-%H%M')"
           RUN="${{ github.run_number }}"
           echo "tag=android-build-${STAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "name=Android build #${RUN} (${SHORT_SHA})" >> "$GITHUB_OUTPUT"
+          echo "name=🤖 Android · GameStream #${RUN} (${SHORT_SHA})" >> "$GITHUB_OUTPUT"
 
           python3 - "$SHORT_SHA" "$DATE_UTC" "$EVENT_NAME" <<'PY'
           import subprocess, sys
@@ -141,11 +141,10 @@ jobs:
           raw = subprocess.check_output(cmd, text=True)
 
           def is_android_app_change(paths):
-              """Real Android app code — not workflow-only or pure-iOS."""
               for p in paths:
-                  if p.startswith("android/") and not p.endswith("build-apk.yml"):
-                      return True
                   if p.startswith("android/app/"):
+                      return True
+                  if p.startswith("android/") and "build-apk.yml" not in p and ".github" not in p:
                       return True
               return False
 
@@ -172,10 +171,10 @@ jobs:
 
           since = f" since `{prev}`" if prev else ""
           body = "\n".join([
-              "## Changelog",
+              "## 🤖 Android build",
               "",
               f"**Platform:** Android only · **Build:** `{short}` · **{date}**",
-              f"**Scope:** Dedicated Android release — iOS under `ios-build-*` only.{since}",
+              f"**iOS builds:** use tag [`latest-ios`](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios) — not this release.{since}",
               "",
               "### What's changed (Android)",
               "",
@@ -187,10 +186,11 @@ jobs:
               "Download **GameStream-release.apk** (allow unknown sources).",
               "Signed with the persistent GameStream release keystore.",
               "",
+              "Always-current link: [`latest-android`](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-android)",
+              "",
           ])
           Path("android_release_notes.md").write_text(body)
           print(body)
-          print("should_release=", "true" if should else "false")
           PY
 
           echo "should_release=$(cat should_release.txt)" >> "$GITHUB_OUTPUT"
@@ -204,11 +204,28 @@ jobs:
           tag_name: ${{ steps.meta.outputs.tag }}
           name: ${{ steps.meta.outputs.name }}
           prerelease: true
+          make_latest: false
           body_path: android_release_notes.md
           files: GameStream-release.apk
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Refresh latest-android pointer
+        if: >-
+          steps.meta.outputs.should_release == 'true' &&
+          (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: .
+        run: |
+          set -euo pipefail
+          gh release delete latest-android --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest-android \
+            GameStream-release.apk \
+            --title "🤖 Android · Latest APK" \
+            --notes "$(cat android_release_notes.md)" \
+            --prerelease
 
       - name: Publish versioned release APK
         if: startsWith(github.ref, 'refs/tags/v')
