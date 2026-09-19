@@ -270,10 +270,10 @@ jobs:
           STAMP="$(date -u +'%Y%m%d-%H%M')"
           RUN="${{ github.run_number }}"
           echo "tag=ios-build-${STAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "name=iOS build #${RUN} (${SHORT_SHA})" >> "$GITHUB_OUTPUT"
+          echo "name=📱 iOS · GameStream #${RUN} (${SHORT_SHA})" >> "$GITHUB_OUTPUT"
 
           python3 - "$SHORT_SHA" "$DATE_UTC" "$EVENT_NAME" <<'PY'
-          import os, subprocess, sys
+          import subprocess, sys
           from pathlib import Path
 
           short, date, event = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -290,7 +290,6 @@ jobs:
           raw = subprocess.check_output(cmd, text=True)
 
           def is_ios_app_change(paths):
-              """Real app code only — not workflow-only or Android-only."""
               for p in paths:
                   if p.startswith("GameStream/") or p == "project.yml":
                       return True
@@ -313,7 +312,6 @@ jobs:
               items.append(f"- {subject} ({sha})")
 
           items = items[:20]
-          # Manual dispatch always allowed; push only when there is real app code.
           should = event == "workflow_dispatch" or bool(items)
           Path("should_release.txt").write_text("true" if should else "false")
 
@@ -322,10 +320,10 @@ jobs:
 
           since = f" since `{prev}`" if prev else ""
           body = "\n".join([
-              "## Changelog",
+              "## 📱 iOS build",
               "",
               f"**Platform:** iOS only · **Build:** `{short}` · **{date}**",
-              f"**Scope:** Dedicated iOS release — Android under `android-build-*` only.{since}",
+              f"**Android builds:** use tag [`latest-android`](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-android) — not this release.{since}",
               "",
               "### What's changed (iOS)",
               "",
@@ -336,12 +334,13 @@ jobs:
               "### Install",
               "Download **GameStream-unsigned.ipa** (AltStore / Sideloadly / TrollStore).",
               "",
+              "Always-current link: [`latest-ios`](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios)",
+              "",
               "_Unsigned - not App Store signed._",
               "",
           ])
           Path("release_notes.md").write_text(body)
           print(body)
-          print("should_release=", "true" if should else "false")
           PY
 
           echo "should_release=$(cat should_release.txt)" >> "$GITHUB_OUTPUT"
@@ -372,8 +371,24 @@ jobs:
           tag_name: ${{ steps.meta.outputs.tag }}
           name: ${{ steps.meta.outputs.name }}
           prerelease: true
+          make_latest: false
           body_path: release_notes.md
           files: build/GameStream-unsigned.ipa
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Refresh latest-ios pointer
+        if: >-
+          steps.meta.outputs.should_release == 'true' &&
+          (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release delete latest-ios --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest-ios \
+            build/GameStream-unsigned.ipa \
+            --title "📱 iOS · Latest IPA" \
+            --notes "$(cat release_notes.md)" \
+            --prerelease
