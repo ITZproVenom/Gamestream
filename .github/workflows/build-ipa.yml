@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 50
+          fetch-depth: 0
 
       - name: Cache Homebrew XcodeGen
         uses: actions/cache@v4
@@ -275,53 +275,64 @@ jobs:
           from pathlib import Path
 
           short, date = sys.argv[1], sys.argv[2]
-          raw = subprocess.check_output(
-              ["git", "log", "--max-count=50", "--name-only", "--pretty=format:COMMIT\t%h\t%s", "--no-merges"],
-              text=True,
-          )
 
-          def include(paths):
+          # Previous dedicated iOS release tag (do not mix with android-build-*)
+          prev = subprocess.check_output(
+              ["git", "tag", "-l", "ios-build-*", "--sort=-creatordate"],
+              text=True,
+          ).strip().splitlines()
+          prev = prev[0] if prev else None
+
+          range_arg = f"{prev}..HEAD" if prev else "HEAD"
+          cmd = ["git", "log", range_arg, "--max-count=40", "--name-only",
+                 "--pretty=format:COMMIT\t%h\t%s", "--no-merges"]
+          raw = subprocess.check_output(cmd, text=True)
+
+          def is_ios_only(paths):
+              """Include if any iOS path changed; exclude pure-Android commits."""
               ios = android = False
               for p in paths:
                   if p.startswith("android/") or p == ".github/workflows/build-apk.yml":
                       android = True
                   elif (
                       p.startswith("GameStream/")
-                      or p.startswith("scripts/")
                       or p == "project.yml"
                       or p == ".github/workflows/build-ipa.yml"
+                      or (p.startswith("scripts/") and "android" not in p.lower())
                   ):
                       ios = True
               if ios:
                   return True
               if android:
                   return False
-              return True
+              return False  # shared/docs-only: omit from iOS changelog
 
           items = []
           sha = subject = None
           files = []
           for line in raw.splitlines():
               if line.startswith("COMMIT\t"):
-                  if sha is not None and include(files):
+                  if sha is not None and is_ios_only(files):
                       items.append(f"- {subject} ({sha})")
                   _, sha, subject = line.split("\t", 2)
                   files = []
               elif line.strip():
                   files.append(line.strip())
-          if sha is not None and include(files):
+          if sha is not None and is_ios_only(files):
               items.append(f"- {subject} ({sha})")
 
-          items = items[:12]
+          items = items[:20]
           if not items:
-              items = ["- No iOS-relevant commits in recent history."]
+              items = ["- No new iOS-only changes since the previous iOS release."]
 
+          since = f" since `{prev}`" if prev else ""
           body = "\n".join([
               "## Changelog",
               "",
-              f"**Platform:** iOS · **Build:** `{short}` · **{date}**",
+              f"**Platform:** iOS only · **Build:** `{short}` · **{date}**",
+              f"**Scope:** Dedicated iOS release — Android changes are published under `android-build-*` tags only.{since}",
               "",
-              "### What's changed",
+              "### What's changed (iOS)",
               "",
               *items,
               "",
