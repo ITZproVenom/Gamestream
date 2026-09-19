@@ -33,10 +33,11 @@ struct RootView: View {
     }
 
     private var signedInRoot: some View {
-        // Full-bleed ZStack: aurora + content fill every edge (status bar,
-        // home indicator). Tab bar floats on top — no black borders.
+        // Background is full-bleed. Content respects the TOP safe area
+        // (so the header is not under the status bar) and only extends under
+        // the floating tab bar at the bottom — aurora fills the home-indicator
+        // strip with no black borders.
         ZStack(alignment: .bottom) {
-            // Background layer — always full screen
             Group {
                 if session.isStreaming {
                     Color.black
@@ -46,7 +47,6 @@ struct RootView: View {
             }
             .ignoresSafeArea()
 
-            // Content layer
             ZStack {
                 if session.isStreaming && selectedTab == .library {
                     StreamPlayerView()
@@ -83,10 +83,9 @@ struct RootView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            // Content extends under the floating tab bar so aurora shows through
+            // Only bottom — top safe area stays so the title is not clipped
             .ignoresSafeArea(edges: .bottom)
 
-            // Floating Liquid Glass tab switcher
             if !hideTabBar {
                 glassNavigation
                     .padding(.horizontal, 24)
@@ -95,7 +94,6 @@ struct RootView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .ignoresSafeArea()
         .onChange(of: selectedTab) { _, tab in
             UserDefaults.standard.set(tab.rawValue, forKey: Self.tabStorageKey)
             if tab == .library && !session.isStreaming {
@@ -140,7 +138,6 @@ struct RootView: View {
     // MARK: - Controller navigation
 
     private func handleControllerPress(_ press: ControllerManager.Press) {
-        // While streaming the game page owns the controller; never hijack it.
         guard controller.isConnected, !session.isStreaming else { return }
 
         switch press {
@@ -157,7 +154,6 @@ struct RootView: View {
             SoundManager.playTap()
             session.returnToHub()
         case .b:
-            // Back: a search/settings tab returns to the catalog.
             if selectedTab == .search || selectedTab == .settings {
                 HapticManager.tap()
                 SoundManager.playTap()
@@ -214,6 +210,12 @@ struct RootView: View {
                 }
             }
             .padding(5)
+            .background {
+                // Base fill so content never bleeds through as sharp text
+                // when glass compositing is delayed or reduced.
+                Capsule()
+                    .fill(.ultraThinMaterial)
+            }
             .glassEffect(.regular, in: Capsule())
         }
     }
@@ -249,7 +251,7 @@ struct RootView: View {
         .background {
             if selectedTab == tab {
                 Capsule()
-                    .fill(.clear)
+                    .fill(.ultraThinMaterial)
                     .glassEffect(.regular.interactive(), in: Capsule())
                     .matchedGeometryEffect(id: "selectedTab", in: navNamespace)
                     .overlay {
