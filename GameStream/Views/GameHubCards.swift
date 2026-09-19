@@ -13,19 +13,17 @@ struct FeaturedGameCard: View {
             Button(action: openDetail) {
                 GameArtView(url: artworkURL, accent: game.accent, title: game.title)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
             }
             .buttonStyle(.plain)
 
             LinearGradient(
-                colors: [.clear, .black.opacity(0.55), .black.opacity(0.82)],
-                startPoint: .top,
+                colors: [.clear, .black.opacity(0.45), .black.opacity(0.88)],
+                startPoint: .center,
                 endPoint: .bottom
             )
-            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
             .allowsHitTesting(false)
 
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(game.provider)
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 10)
@@ -34,16 +32,16 @@ struct FeaturedGameCard: View {
                     .lineLimit(1)
 
                 Text(game.title)
-                    .font(.title.weight(.bold))
+                    .font(.title2.weight(.bold))
                     .foregroundStyle(.white)
                     .lineLimit(2)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.75)
 
                 Text(game.tagline)
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.88))
                     .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .minimumScaleFactor(0.85)
 
                 HStack(spacing: 10) {
                     Button {
@@ -53,8 +51,8 @@ struct FeaturedGameCard: View {
                         Text("Play")
                             .font(.subheadline.weight(.semibold))
                             .lineLimit(1)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 10)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 9)
                     }
                     .buttonStyle(.glassProminent)
 
@@ -66,8 +64,10 @@ struct FeaturedGameCard: View {
                     .buttonStyle(.glass)
                 }
             }
-            .padding(18)
+            .padding(16)
         }
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 }
 
