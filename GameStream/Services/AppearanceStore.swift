@@ -2,12 +2,8 @@ import SwiftUI
 import Combine
 
 enum AppAppearanceMode: String, CaseIterable, Identifiable {
-    case system
-    case dark
-    case light
-
+    case system, dark, light
     var id: String { rawValue }
-
     var title: String {
         switch self {
         case .system: return "System"
@@ -15,7 +11,6 @@ enum AppAppearanceMode: String, CaseIterable, Identifiable {
         case .light: return "Light"
         }
     }
-
     var colorScheme: ColorScheme? {
         switch self {
         case .system: return nil
@@ -26,10 +21,8 @@ enum AppAppearanceMode: String, CaseIterable, Identifiable {
 }
 
 enum AccentTheme: String, CaseIterable, Identifiable {
-    case violet, azure, emerald, crimson, gold
-
+    case violet, azure, emerald, crimson, gold, rose, cyan, mono
     var id: String { rawValue }
-
     var title: String {
         switch self {
         case .violet: return "Violet"
@@ -37,9 +30,11 @@ enum AccentTheme: String, CaseIterable, Identifiable {
         case .emerald: return "Emerald"
         case .crimson: return "Crimson"
         case .gold: return "Gold"
+        case .rose: return "Rose"
+        case .cyan: return "Cyan"
+        case .mono: return "Mono"
         }
     }
-
     var tint: Color {
         switch self {
         case .violet: return Color(red: 0.62, green: 0.38, blue: 1.0)
@@ -47,9 +42,11 @@ enum AccentTheme: String, CaseIterable, Identifiable {
         case .emerald: return Color(red: 0.18, green: 0.78, blue: 0.58)
         case .crimson: return Color(red: 0.95, green: 0.28, blue: 0.42)
         case .gold: return Color(red: 0.96, green: 0.74, blue: 0.28)
+        case .rose: return Color(red: 0.95, green: 0.45, blue: 0.65)
+        case .cyan: return Color(red: 0.20, green: 0.85, blue: 0.90)
+        case .mono: return Color(red: 0.85, green: 0.85, blue: 0.90)
         }
     }
-
     var primaryGlow: Color {
         switch self {
         case .violet: return Color(red: 0.45, green: 0.15, blue: 0.85)
@@ -57,9 +54,11 @@ enum AccentTheme: String, CaseIterable, Identifiable {
         case .emerald: return Color(red: 0.08, green: 0.55, blue: 0.42)
         case .crimson: return Color(red: 0.72, green: 0.12, blue: 0.28)
         case .gold: return Color(red: 0.72, green: 0.48, blue: 0.08)
+        case .rose: return Color(red: 0.70, green: 0.20, blue: 0.40)
+        case .cyan: return Color(red: 0.08, green: 0.55, blue: 0.65)
+        case .mono: return Color(red: 0.35, green: 0.35, blue: 0.42)
         }
     }
-
     var secondaryGlow: Color {
         switch self {
         case .violet: return Color(red: 0.15, green: 0.35, blue: 0.95)
@@ -67,6 +66,9 @@ enum AccentTheme: String, CaseIterable, Identifiable {
         case .emerald: return Color(red: 0.12, green: 0.38, blue: 0.78)
         case .crimson: return Color(red: 0.45, green: 0.10, blue: 0.55)
         case .gold: return Color(red: 0.85, green: 0.35, blue: 0.12)
+        case .rose: return Color(red: 0.55, green: 0.15, blue: 0.55)
+        case .cyan: return Color(red: 0.15, green: 0.35, blue: 0.90)
+        case .mono: return Color(red: 0.55, green: 0.55, blue: 0.62)
         }
     }
 }
@@ -84,23 +86,51 @@ enum BackgroundStyle: String, CaseIterable, Identifiable {
 }
 
 enum GameCardStyle: String, CaseIterable, Identifiable {
-    case poster, compact
+    case poster, wide, compact
     var id: String { rawValue }
     var title: String {
         switch self {
         case .poster: return "Poster"
+        case .wide: return "Wide"
         case .compact: return "Compact"
         }
     }
 }
 
 enum LibraryDensity: String, CaseIterable, Identifiable {
-    case comfortable, compact
+    case spacious, comfortable, compact
     var id: String { rawValue }
     var title: String {
         switch self {
+        case .spacious: return "Spacious"
         case .comfortable: return "Comfortable"
         case .compact: return "Compact"
+        }
+    }
+    var sectionSpacing: CGFloat {
+        switch self {
+        case .spacious: return 32
+        case .comfortable: return 24
+        case .compact: return 16
+        }
+    }
+    var carouselSpacing: CGFloat {
+        switch self {
+        case .spacious: return 16
+        case .comfortable: return 12
+        case .compact: return 8
+        }
+    }
+}
+
+enum HubHomeLayout: String, CaseIterable, Identifiable {
+    case editorial, rails, grid
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .editorial: return "Editorial"
+        case .rails: return "Rails"
+        case .grid: return "Grid"
         }
     }
 }
@@ -138,11 +168,14 @@ final class AppearanceStore: ObservableObject {
     @Published var backgroundStyle: BackgroundStyle { didSet { UserDefaults.standard.set(backgroundStyle.rawValue, forKey: Keys.background) } }
     @Published var cardStyle: GameCardStyle { didSet { UserDefaults.standard.set(cardStyle.rawValue, forKey: Keys.card) } }
     @Published var density: LibraryDensity { didSet { UserDefaults.standard.set(density.rawValue, forKey: Keys.density) } }
+    @Published var hubLayout: HubHomeLayout { didSet { UserDefaults.standard.set(hubLayout.rawValue, forKey: Keys.hubLayout) } }
     @Published var animationIntensity: AnimationIntensity { didSet { UserDefaults.standard.set(animationIntensity.rawValue, forKey: Keys.animation) } }
     @Published var effectsMode: EffectsMode { didSet { UserDefaults.standard.set(effectsMode.rawValue, forKey: Keys.effects) } }
     @Published var glassIntensity: Double { didSet { UserDefaults.standard.set(glassIntensity, forKey: Keys.glass) } }
     @Published var uiSoundsEnabled: Bool { didSet { UserDefaults.standard.set(uiSoundsEnabled, forKey: Keys.sounds) } }
     @Published var controllerHapticsEnabled: Bool { didSet { UserDefaults.standard.set(controllerHapticsEnabled, forKey: Keys.controllerHaptics) } }
+    @Published var showActivityOnHome: Bool { didSet { UserDefaults.standard.set(showActivityOnHome, forKey: Keys.showActivity) } }
+    @Published var showGenreFilters: Bool { didSet { UserDefaults.standard.set(showGenreFilters, forKey: Keys.showGenres) } }
 
     private enum Keys {
         static let mode = "GameStream.appearanceMode"
@@ -150,11 +183,14 @@ final class AppearanceStore: ObservableObject {
         static let background = "GameStream.backgroundStyle"
         static let card = "GameStream.cardStyle"
         static let density = "GameStream.libraryDensity"
+        static let hubLayout = "GameStream.hubHomeLayout"
         static let animation = "GameStream.animationIntensity"
         static let effects = "GameStream.effectsMode"
         static let glass = "GameStream.glassIntensity"
         static let sounds = "GameStream.uiSoundsEnabled"
         static let controllerHaptics = "GameStream.controllerHapticsEnabled"
+        static let showActivity = "GameStream.showActivityOnHome"
+        static let showGenres = "GameStream.showGenreFilters"
     }
 
     private init() {
@@ -163,19 +199,17 @@ final class AppearanceStore: ObservableObject {
         backgroundStyle = BackgroundStyle(rawValue: UserDefaults.standard.string(forKey: Keys.background) ?? "") ?? .aurora
         cardStyle = GameCardStyle(rawValue: UserDefaults.standard.string(forKey: Keys.card) ?? "") ?? .poster
         density = LibraryDensity(rawValue: UserDefaults.standard.string(forKey: Keys.density) ?? "") ?? .comfortable
+        hubLayout = HubHomeLayout(rawValue: UserDefaults.standard.string(forKey: Keys.hubLayout) ?? "") ?? .editorial
         animationIntensity = AnimationIntensity(rawValue: UserDefaults.standard.string(forKey: Keys.animation) ?? "") ?? .full
         effectsMode = EffectsMode(rawValue: UserDefaults.standard.string(forKey: Keys.effects) ?? "") ?? .quality
-        let storedGlass = UserDefaults.standard.object(forKey: Keys.glass) as? Double
-        glassIntensity = storedGlass ?? 1.0
-        if UserDefaults.standard.object(forKey: Keys.sounds) == nil {
-            uiSoundsEnabled = true
-        } else {
-            uiSoundsEnabled = UserDefaults.standard.bool(forKey: Keys.sounds)
-        }
-        if UserDefaults.standard.object(forKey: Keys.controllerHaptics) == nil {
-            controllerHapticsEnabled = true
-        } else {
-            controllerHapticsEnabled = UserDefaults.standard.bool(forKey: Keys.controllerHaptics)
-        }
+        glassIntensity = (UserDefaults.standard.object(forKey: Keys.glass) as? Double) ?? 1.0
+        uiSoundsEnabled = UserDefaults.standard.object(forKey: Keys.sounds) == nil
+            ? true : UserDefaults.standard.bool(forKey: Keys.sounds)
+        controllerHapticsEnabled = UserDefaults.standard.object(forKey: Keys.controllerHaptics) == nil
+            ? true : UserDefaults.standard.bool(forKey: Keys.controllerHaptics)
+        showActivityOnHome = UserDefaults.standard.object(forKey: Keys.showActivity) == nil
+            ? true : UserDefaults.standard.bool(forKey: Keys.showActivity)
+        showGenreFilters = UserDefaults.standard.object(forKey: Keys.showGenres) == nil
+            ? true : UserDefaults.standard.bool(forKey: Keys.showGenres)
     }
 }
