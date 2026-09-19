@@ -71,12 +71,128 @@ struct StreamPlayerView: View {
             errorMessage = note.object as? String
             isLoading = false
         }
+        .onDisappear {
+            ControllerRumble.shared.teardown()
+        }
     }
 }
 
 struct XboxCloudWebView: UIViewRepresentable {
     @Binding var url: URL
     @EnvironmentObject var session: SessionStore
+
+    /// Forwards Web Gamepad / Better xCloud vibration calls to native GCDeviceHaptics.
+    static let rumbleBridgeJS = """
+    (function() {
+        if (window.__gsRumbleBridge) return;
+        window.__gsRumbleBridge = true;
+
+        function postRumble(weak, strong, duration) {
+            try {
+                var w = Number(weak) || 0;
+                var s = Number(strong) || 0;
+                var d = Number(duration) || 0;
+                if (w < 0) w = 0; if (w > 1) w = 1;
+                if (s < 0) s = 0; if (s > 1) s = 1;
+                if (d < 0) d = 0; if (d > 2500) d = 2500;
+                if (w < 0.01 && s < 0.01) return;
+                window.webkit.messageHandlers.gamestreamBridge.postMessage({
+                    type: 'rumble',
+                    weak: w,
+                    strong: s,
+                    duration: d || 80
+                });
+            } catch (e) {}
+        }
+
+        function wrapActuator(actuator) {
+            if (!actuator || actuator.__gsWrapped) return actuator;
+            try {
+                var original = actuator.playEffect && actuator.playEffect.bind(actuator);
+                if (!original) return actuator;
+                actuator.playEffect = function(type, params) {
+                    try {
+                        params = params || {};
+                        var weak = params.weakMagnitude != null ? params.weakMagnitude : (params.magnitude || 0);
+                        var strong = params.strongMagnitude != null ? params.strongMagnitude : (params.magnitude || 0);
+                        var start = params.startDelay || 0;
+                        var duration = params.duration || 100;
+                        setTimeout(function() {
+                            postRumble(weak, strong, duration);
+                        }, start);
+                    } catch (e) {}
+                    try { return original(type, params); } catch (e2) {
+                        return Promise.resolve({ playEffect: 'complete' });
+                    }
+                };
+                actuator.__gsWrapped = true;
+            } catch (e) {}
+            return actuator;
+        }
+
+        function scanGamepads() {
+            try {
+                var pads = navigator.getGamepads ? navigator.getGamepads() : [];
+                for (var i = 0; i < pads.length; i++) {
+                    var p = pads[i];
+                    if (!p) continue;
+                    if (p.vibrationActuator) wrapActuator(p.vibrationActuator);
+                    if (p.hapticActuators && p.hapticActuators.length) {
+                        for (var j = 0; j < p.hapticActuators.length; j++) {
+                            wrapActuator(p.hapticActuators[j]);
+                        }
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // Patch getGamepads so newly enumerated pads are wrapped.
+        try {
+            var originalGet = navigator.getGamepads && navigator.getGamepads.bind(navigator);
+            if (originalGet) {
+                navigator.getGamepads = function() {
+                    var pads = originalGet();
+                    try {
+                        for (var i = 0; i < pads.length; i++) {
+                            var p = pads[i];
+                            if (!p) continue;
+                            if (p.vibrationActuator) wrapActuator(p.vibrationActuator);
+                            if (p.hapticActuators) {
+                                for (var j = 0; j < p.hapticActuators.length; j++) {
+                                    wrapActuator(p.hapticActuators[j]);
+                                }
+                            }
+                        }
+                    } catch (e) {}
+                    return pads;
+                };
+            }
+        } catch (e) {}
+
+        window.addEventListener('gamepadconnected', function() { setTimeout(scanGamepads, 50); });
+        scanGamepads();
+        setInterval(scanGamepads, 2000);
+
+        // Better xCloud / xCloud sometimes expose vibration helpers on window.
+        try {
+            var _pulse = window.navigator && window.navigator.vibrate;
+            if (typeof _pulse === 'function') {
+                window.navigator.vibrate = function(pattern) {
+                    try {
+                        var ms = 80, mag = 0.6;
+                        if (typeof pattern === 'number') { ms = pattern; }
+                        else if (pattern && pattern.length) { ms = pattern[0] || 80; }
+                        postRumble(mag * 0.7, mag, ms);
+                    } catch (e) {}
+                    try { return _pulse.apply(this, arguments); } catch (e2) { return false; }
+                };
+            }
+        } catch (e) {}
+
+        // Public hook for BX / injected scripts.
+        window.__gsNativeRumble = postRumble;
+    })();
+    """
 
     func makeCoordinator() -> Coordinator {
         Coordinator(session: session)
@@ -103,7 +219,15 @@ struct XboxCloudWebView: UIViewRepresentable {
             forMainFrameOnly: true
         ))
 
-        let prefsJS = SessionStore.betterXCloudPrefsJS(SessionStore.storedBetterXCloudPrefs(), reloadIfXbox: false)
+        // Prefer vibration on in Better xCloud when present.
+        var bxPrefs = SessionStore.storedBetterXCloudPrefs()
+        if bxPrefs["controller.vibration"] == nil {
+            bxPrefs["controller.vibration"] = "true"
+        }
+        if bxPrefs["native-mfi-controller.vibration"] == nil {
+            bxPrefs["native-mfi-controller.vibration"] = "true"
+        }
+        let prefsJS = SessionStore.betterXCloudPrefsJS(bxPrefs, reloadIfXbox: false)
         contentController.addUserScript(WKUserScript(
             source: prefsJS,
             injectionTime: .atDocumentStart,
@@ -157,6 +281,11 @@ struct XboxCloudWebView: UIViewRepresentable {
             forMainFrameOnly: true
         ))
         contentController.addUserScript(WKUserScript(
+            source: Self.rumbleBridgeJS,
+            injectionTime: .atDocumentEnd,
+            forMainFrameOnly: true
+        ))
+        contentController.addUserScript(WKUserScript(
             source: BetterXCloudInjector.streamIsolationJS,
             injectionTime: .atDocumentEnd,
             forMainFrameOnly: true
@@ -191,6 +320,7 @@ struct XboxCloudWebView: UIViewRepresentable {
             context.coordinator.lastLoadedURL = url
             if url.absoluteString == "about:blank" {
                 uiView.stopLoading()
+                ControllerRumble.shared.teardown()
             } else {
                 uiView.load(URLRequest(url: url))
             }
@@ -230,14 +360,45 @@ struct XboxCloudWebView: UIViewRepresentable {
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             guard message.name == "gamestreamBridge",
-                  let body = message.body as? [String: Any] else { return }
-            if let type = body["type"] as? String, type == "url",
-               let href = body["href"] as? String {
-                NotificationCenter.default.post(name: .playerStreamPageReached, object: nil)
-                if let streaming = body["streaming"] as? Bool, streaming {
-                    NotificationCenter.default.post(name: .playerStreamPageReached, object: href)
+                  let body = message.body as? [String: Any],
+                  let type = body["type"] as? String else { return }
+
+            switch type {
+            case "url":
+                if let href = body["href"] as? String {
+                    NotificationCenter.default.post(name: .playerStreamPageReached, object: nil)
+                    if let streaming = body["streaming"] as? Bool, streaming {
+                        NotificationCenter.default.post(name: .playerStreamPageReached, object: href)
+                    }
                 }
+            case "rumble":
+                let weakMag = floatValue(body["weak"])
+                let strongMag = floatValue(body["strong"])
+                let duration = doubleValue(body["duration"], fallback: 80)
+                Task { @MainActor in
+                    ControllerRumble.shared.play(
+                        weak: weakMag,
+                        strong: strongMag,
+                        durationMs: duration
+                    )
+                }
+            default:
+                break
             }
+        }
+
+        private func floatValue(_ any: Any?) -> Float {
+            if let f = any as? Float { return f }
+            if let d = any as? Double { return Float(d) }
+            if let n = any as? NSNumber { return n.floatValue }
+            return 0
+        }
+
+        private func doubleValue(_ any: Any?, fallback: Double) -> Double {
+            if let d = any as? Double { return d }
+            if let f = any as? Float { return Double(f) }
+            if let n = any as? NSNumber { return n.doubleValue }
+            return fallback
         }
 
         func runPendingJS(_ js: String, in webView: WKWebView) {
@@ -251,6 +412,7 @@ struct XboxCloudWebView: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             NotificationCenter.default.post(name: .webViewLoadingChanged, object: false)
             BetterXCloudInjector.shared.ensureInjected(into: webView)
+            webView.evaluateJavaScript(XboxCloudWebView.rumbleBridgeJS, completionHandler: nil)
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -263,8 +425,6 @@ struct XboxCloudWebView: UIViewRepresentable {
             NotificationCenter.default.post(name: .webViewDidFail, object: error.localizedDescription)
         }
 
-        // Real browser: nothing blocks the stream, sign-in, or store navigation.
-        // Still upgrade http://www.xbox.com to https so Akamai does not deny HTTP.
         func webView(
             _ webView: WKWebView,
             decidePolicyFor navigationAction: WKNavigationAction,
