@@ -47,7 +47,7 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
     val context = LocalContext.current
     var introCompleted by remember { mutableStateOf(OnboardingPrefs.isIntroDone(context)) }
     val appearance = remember { AppearancePrefs(context) }
-    // Trigger recomposition when settings change
+    @Suppress("UNUSED_VARIABLE")
     val rev = appearance.revision
     val bgColor = Color(appearance.backgroundColorArgb())
 
