@@ -24,6 +24,14 @@ class AppearancePrefs(context: Context) {
         get() = prefs.getString("background", "aurora") ?: "aurora"
         set(value) { prefs.edit().putString("background", value).apply(); bump() }
 
+    var customBgColor: String
+        get() = prefs.getString("customBg", "deepBlack") ?: "deepBlack"
+        set(value) { prefs.edit().putString("customBg", value).apply(); bump() }
+
+    var backgroundDim: Float
+        get() = prefs.getFloat("bgDim", 0.45f)
+        set(value) { prefs.edit().putFloat("bgDim", value).apply(); bump() }
+
     var cardStyle: String
         get() = prefs.getString("card", "poster") ?: "poster"
         set(value) { prefs.edit().putString("card", value).apply(); bump() }
@@ -71,5 +79,22 @@ class AppearancePrefs(context: Context) {
         cardStyle == "wide" -> 0.42f
         density == "spacious" -> 0.36f
         else -> 0.32f
+    }
+
+    fun backgroundColorArgb(): Long = when (background) {
+        "solid", "customColor" -> when (customBgColor) {
+            "charcoal" -> 0xFF1E1E24
+            "navy" -> 0xFF0F1A38
+            "forest" -> 0xFF0D241A
+            "plum" -> 0xFF240F2E
+            "wine" -> 0xFF2E0D1A
+            "slate" -> 0xFF1A1E29
+            "white" -> 0xFFF5F5FA
+            else -> 0xFF0A0A12 // deepBlack
+        }
+        "midnight" -> 0xFF050514
+        "dusk" -> 0xFF140A1F
+        "mesh" -> 0xFF0C0C18
+        else -> 0xFF0A0A12 // aurora / still
     }
 }
