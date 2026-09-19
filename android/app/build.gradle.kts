@@ -20,8 +20,8 @@ android {
         applicationId = "com.gamestream.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 36
-        versionName = "1.4.2"
+        versionCode = 37
+        versionName = "1.5.0"
     }
 
     signingConfigs {
