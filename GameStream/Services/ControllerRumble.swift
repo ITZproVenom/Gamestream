@@ -6,22 +6,20 @@ import CoreHaptics
 ///
 /// Safety rules (crash isolation):
 /// - No work at process launch or static init.
-/// - Engine created lazily on first in-stream rumble request.
+/// - Engine created lazily on first rumble request.
 /// - Every failure is swallowed; rumble is best-effort only.
-/// - Respects AppearanceStore.controllerHapticsEnabled.
-///
-/// Intensity is intentionally aggressive: many wired / budget pads feel weak at
-/// 1:1 game magnitudes, so we boost, floor, and layer events to drive motors harder.
+/// - Respects AppearanceStore.controllerHapticsEnabled + controllerRumbleIntensity.
 @MainActor
 final class ControllerRumble {
     static let shared = ControllerRumble()
 
-    /// Software gain on top of game magnitudes (clamped to 1.0 after boost).
-    private let gain: Float = 2.4
-    /// Anything the game reports above this is treated as “at least this strong”.
-    private let floor: Float = 0.55
-    /// Extra transient punch at the start of each pulse.
-    private let attackBoost: Float = 1.0
+    private static let intensityKey = "GameStream.controllerRumbleIntensity"
+    private static let enabledKey = "GameStream.controllerHapticsEnabled"
+
+    /// Base software gain for weak wired pads (before user intensity multiplier).
+    private let baseGain: Float = 2.8
+    /// Minimum intensity after boost when the game reports any non-zero pulse.
+    private let floor: Float = 0.45
 
     private var engine: CHHapticEngine?
     private var engineControllerID: ObjectIdentifier?
@@ -29,15 +27,27 @@ final class ControllerRumble {
 
     private init() {}
 
-    /// Continuous dual-motor pulse. Intensities are 0...1 (weak = low-freq, strong = high-freq).
+    /// User multiplier from Settings (0.5 ... 3.0). Default 1.6 for wired pads.
+    private var userIntensity: Float {
+        let stored = UserDefaults.standard.object(forKey: Self.intensityKey) as? Double
+        let v = Float(stored ?? 1.6)
+        return min(max(v, 0.5), 3.0)
+    }
+
+    private var isEnabled: Bool {
+        if UserDefaults.standard.object(forKey: Self.enabledKey) == nil { return true }
+        return UserDefaults.standard.bool(forKey: Self.enabledKey)
+    }
+
+    /// Continuous dual-motor pulse. Intensities are 0...1 from the game/stream.
     func play(weak: Float, strong: Float, durationMs: Double) {
         guard isEnabled else { return }
 
         var w = amplify(weak)
         var s = amplify(strong)
-        // If only one motor is driven, push both so cheap dual-motor pads still shake.
-        if w > 0.05 && s < 0.05 { s = w * 0.85 }
-        if s > 0.05 && w < 0.05 { w = s * 0.75 }
+        // Drive both motors so budget dual-motor pads still shake.
+        if w > 0.05 && s < 0.05 { s = w * 0.9 }
+        if s > 0.05 && w < 0.05 { w = s * 0.85 }
 
         guard w > 0.02 || s > 0.02 else {
             stop()
@@ -48,31 +58,29 @@ final class ControllerRumble {
             try ensureEngine()
             guard let engine else { return }
 
-            // Slightly longer than requested so weak motors have time to spin up.
-            let duration = min(max(durationMs / 1000.0, 0.08), 3.0)
+            let duration = min(max(durationMs / 1000.0, 0.1), 3.0)
             var events: [CHHapticEvent] = []
+            let peak = min(max(w, s), 1)
 
-            // Hard attack transient — helps weak wired motors “kick”.
-            let peak = max(w, s)
+            // Hard attack — helps weak wired motors kick.
             events.append(
                 CHHapticEvent(
                     eventType: .hapticTransient,
                     parameters: [
-                        CHHapticEventParameter(parameterID: .hapticIntensity, value: min(peak * attackBoost, 1)),
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: peak),
                         CHHapticEventParameter(parameterID: .hapticSharpness, value: 1.0),
                     ],
                     relativeTime: 0
                 )
             )
 
-            // Low-frequency continuous (weak / left motor feel).
             if w > 0.02 {
                 events.append(
                     CHHapticEvent(
                         eventType: .hapticContinuous,
                         parameters: [
                             CHHapticEventParameter(parameterID: .hapticIntensity, value: w),
-                            CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.15),
+                            CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.12),
                         ],
                         relativeTime: 0,
                         duration: duration
@@ -80,14 +88,13 @@ final class ControllerRumble {
                 )
             }
 
-            // High-frequency continuous (strong / right motor feel).
             if s > 0.02 {
                 events.append(
                     CHHapticEvent(
                         eventType: .hapticContinuous,
                         parameters: [
                             CHHapticEventParameter(parameterID: .hapticIntensity, value: s),
-                            CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.95),
+                            CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.98),
                         ],
                         relativeTime: 0,
                         duration: duration
@@ -95,16 +102,28 @@ final class ControllerRumble {
                 )
             }
 
-            // Second mid-pulse transient for sustained gunfire-style feedback.
+            // Extra punches for sustained fire feel.
             if duration >= 0.12 {
                 events.append(
                     CHHapticEvent(
                         eventType: .hapticTransient,
                         parameters: [
                             CHHapticEventParameter(parameterID: .hapticIntensity, value: peak),
-                            CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.7),
+                            CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.75),
                         ],
-                        relativeTime: min(duration * 0.35, 0.2)
+                        relativeTime: min(duration * 0.3, 0.18)
+                    )
+                )
+            }
+            if duration >= 0.22 {
+                events.append(
+                    CHHapticEvent(
+                        eventType: .hapticTransient,
+                        parameters: [
+                            CHHapticEventParameter(parameterID: .hapticIntensity, value: peak * 0.9),
+                            CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.85),
+                        ],
+                        relativeTime: min(duration * 0.55, 0.35)
                     )
                 )
             }
@@ -118,10 +137,24 @@ final class ControllerRumble {
                 Task { @MainActor in self?.softStop() }
             }
             lastStopWorkItem = item
-            DispatchQueue.main.asyncAfter(deadline: .now() + duration + 0.08, execute: item)
+            DispatchQueue.main.asyncAfter(deadline: .now() + duration + 0.1, execute: item)
         } catch {
             engine = nil
             engineControllerID = nil
+        }
+    }
+
+    /// Settings test button — strong dual pulse at current intensity.
+    func playTest() {
+        // Temporarily force-enable path even if toggle was off for testing feedback.
+        let wasChecking = isEnabled
+        // Always try to play test so user can feel the pad; still fail-silent.
+        _ = wasChecking
+        play(weak: 1.0, strong: 1.0, durationMs: 420)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
+            Task { @MainActor in
+                self?.play(weak: 0.85, strong: 1.0, durationMs: 280)
+            }
         }
     }
 
@@ -140,19 +173,12 @@ final class ControllerRumble {
 
     // MARK: - Private
 
-    private var isEnabled: Bool {
-        if UserDefaults.standard.object(forKey: "GameStream.controllerHapticsEnabled") == nil {
-            return true
-        }
-        return UserDefaults.standard.bool(forKey: "GameStream.controllerHapticsEnabled")
-    }
-
-    /// Boost + floor so quiet game events still hit hard on weak wired pads.
     private func amplify(_ v: Float) -> Float {
         let raw = min(max(v, 0), 1)
-        guard raw > 0.01 else { return 0 }
-        let boosted = min(raw * gain, 1)
-        return max(boosted, floor)
+        guard raw > 0.008 else { return 0 }
+        // baseGain * userIntensity can exceed 1 — clamp at motor max.
+        let boosted = min(raw * baseGain * userIntensity, 1)
+        return max(boosted, min(floor * userIntensity, 1))
     }
 
     private func ensureEngine() throws {
@@ -172,7 +198,6 @@ final class ControllerRumble {
         guard let haptics = controller.haptics else { return }
         guard let created = haptics.createEngine(withLocality: .default) else { return }
         created.playsHapticsOnly = true
-        // Keep the engine alive between rapid fire pulses so motors don’t spin down.
         created.isAutoShutdownEnabled = false
         try created.start()
         engine = created
