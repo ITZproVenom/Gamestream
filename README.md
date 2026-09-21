@@ -24,10 +24,17 @@ Builds are **separate by platform**. Pick iOS or Android — do not mix tags.
 
 ### Current builds
 
+These `latest-*` tags always track the newest successful CI publish for that platform.
+
 | Platform | Download this release | File |
 |----------|----------------------|------|
-| **iOS** | [📱 iOS build (rumble + intensity)](https://github.com/ITZproVenom/Gamestream/releases/tag/ios-build-20260919-1051-64a6bb3) | `GameStream-unsigned.ipa` |
-| **Android** | [🤖 Android build (rumble + settings)](https://github.com/ITZproVenom/Gamestream/releases/tag/android-build-20260919-1056-b2bf297) | `GameStream-release.apk` |
+| **iOS** | [📱 Latest iOS IPA](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios) | `GameStream-unsigned.ipa` |
+| **Android** | [🤖 Latest Android APK](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-android) | `GameStream-release.apk` |
+
+Pinned snapshot of the current code (in-game rumble polyfill):
+
+- iOS snapshot: [`ios-build-20260919-2007-adddda7`](https://github.com/ITZproVenom/Gamestream/releases/tag/ios-build-20260919-2007-adddda7)
+- Android snapshot: see [`latest-android`](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-android) (last APK-producing commit is the rumble polyfill)
 
 ### All builds
 
@@ -39,7 +46,7 @@ Builds are **separate by platform**. Pick iOS or Android — do not mix tags.
 - **iOS:** AltStore / Sideloadly / TrollStore (unsigned IPA)
 - **Android:** allow unknown sources; APK is signed so it updates over previous official builds
 
-> New releases only publish when that platform’s **app code** changes. Titles start with **📱 iOS** or **🤖 Android** so they’re easy to spot.
+> New dated `ios-build-*` / `android-build-*` releases only publish when that platform’s **app code** changes. Titles start with **📱 iOS** or **🤖 Android** so they’re easy to spot.
 
 ---
 
