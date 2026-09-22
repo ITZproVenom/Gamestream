@@ -54,7 +54,6 @@ struct RootView: View {
                 if session.isStreaming && selectedTab == .library {
                     StreamPlayerView()
                 } else if !session.isStreaming {
-                    // Page-style swipe between Library / Search / Settings
                     TabView(selection: $selectedTab) {
                         GameHubView()
                             .tag(Tab.library)
@@ -93,6 +92,7 @@ struct RootView: View {
             UserDefaults.standard.set(tab.rawValue, forKey: Self.tabStorageKey)
             if tab == .library && !session.isStreaming {
                 session.returnToHub()
+                session.refreshXboxPlayHistory()
             }
         }
         .onChange(of: session.requestedTab) { _, tab in
@@ -114,6 +114,8 @@ struct RootView: View {
                 }
             } else {
                 hub.showNativeHub = true
+                // After leaving a stream, re-pull Xbox account recents.
+                session.refreshXboxPlayHistory(force: true)
             }
         }
         .onChange(of: session.keepScreenAwake) { _, _ in
@@ -127,10 +129,12 @@ struct RootView: View {
             BetterXCloudInjector.shared.preload()
             syncIdleTimer()
             session.consumeLaunchResumeIfNeeded()
+            // First hub paint: fill Recents from Xbox account play history.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                session.refreshXboxPlayHistory()
+            }
         }
     }
-
-    // MARK: - Controller navigation
 
     private func handleControllerPress(_ press: ControllerManager.Press) {
         guard controller.isConnected, !session.isStreaming else { return }
@@ -206,8 +210,6 @@ struct RootView: View {
         }
         return .library
     }
-
-    // MARK: - Liquid Glass tab switcher (tap + slide on bar)
 
     private var glassNavigation: some View {
         GeometryReader { geo in
