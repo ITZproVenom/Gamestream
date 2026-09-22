@@ -113,11 +113,13 @@ final class BetterXCloudInjector {
     })();
     """
 
+    /// Only hide site chrome on actual launch/stream pages. Search / library
+    /// pages need their native UI; aggressive isolation made search unusable.
     static let streamIsolationJS = """
     (function() {
         if (window.__gsStreamIsolation) return;
         window.__gsStreamIsolation = true;
-        const CSS_ID = 'gamestream-stream-isolation-v1';
+        const CSS_ID = 'gamestream-stream-isolation-v2';
         const css = `
         header, footer, nav,
         [class*="Navigation"], [class*="navigation"],
@@ -163,23 +165,55 @@ final class BetterXCloudInjector {
             background: #000 !important;
         }
         `;
+        function isStreamPage() {
+            try {
+                const href = (location.href || '').toLowerCase();
+                if (!location.host || location.host.indexOf('xbox.com') === -1) return false;
+                if (href.indexOf('/play/search') !== -1) return false;
+                if (href.indexOf('/play/games') !== -1) return false;
+                return href.indexOf('/play/launch') !== -1
+                    || href.indexOf('/launch/') !== -1
+                    || href.indexOf('/launch?') !== -1
+                    || href.indexOf('/stream/') !== -1
+                    || href.indexOf('/streaming') !== -1;
+            } catch (e) { return false; }
+        }
         function applyCss() {
-            if (location.host && location.host.indexOf('xbox.com') === -1) return;
-            let style = document.getElementById(CSS_ID);
-            if (!style) {
-                style = document.createElement('style');
-                style.id = CSS_ID;
-                (document.head || document.documentElement).appendChild(style);
+            const style = document.getElementById(CSS_ID);
+            if (!isStreamPage()) {
+                if (style) style.remove();
+                return;
             }
-            if (style.textContent !== css) style.textContent = css;
+            let el = style;
+            if (!el) {
+                el = document.createElement('style');
+                el.id = CSS_ID;
+                (document.head || document.documentElement).appendChild(el);
+            }
+            if (el.textContent !== css) el.textContent = css;
         }
         applyCss();
+        try {
+            const pushState = history.pushState;
+            history.pushState = function() {
+                pushState.apply(this, arguments);
+                setTimeout(applyCss, 40);
+            };
+            const replaceState = history.replaceState;
+            history.replaceState = function() {
+                replaceState.apply(this, arguments);
+                setTimeout(applyCss, 40);
+            };
+            window.addEventListener('popstate', function() { setTimeout(applyCss, 40); });
+            window.addEventListener('hashchange', function() { setTimeout(applyCss, 40); });
+        } catch (e) {}
         let autoStreamTimer = (function() {
             const timer = setInterval(tryAutoStart, 600);
             return timer;
         })();
         function tryAutoStart() {
             try {
+                if (!isStreamPage() && (location.href || '').toLowerCase().indexOf('/play/games') === -1) return;
                 const href = (location.href || '').toLowerCase();
                 const isGamePage = href.indexOf('/play/launch') !== -1 || href.indexOf('/launch/') !== -1 || href.indexOf('/play/games') !== -1;
                 if (!isGamePage) return;
