@@ -55,7 +55,6 @@ final class SessionStore: ObservableObject {
         self.keepScreenAwake = UserDefaults.standard.bool(forKey: Keys.keepScreenAwake)
         self.favorites = Self.loadGames(key: Keys.favorites)
         self.recents = Self.loadGames(key: Keys.recents)
-        // Always start non-streaming — a prior force-quit can leave UI state inconsistent.
         self.isStreaming = false
         self.offerPlayNext = false
         self.currentGame = nil
@@ -72,6 +71,10 @@ final class SessionStore: ObservableObject {
         UserDefaults.standard.set(MicrosoftAuth.proofVersion, forKey: MicrosoftAuth.proofKey)
         self.accountLabel = label
         self.isSignedIn = true
+        // Account session is fresh — pull Xbox recently played into native Recents.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            self?.refreshXboxPlayHistory(force: true)
+        }
     }
 
     func revalidatePersistedLogin() {
@@ -108,7 +111,6 @@ final class SessionStore: ObservableObject {
         }
     }
 
-    /// Opens Xbox Cloud search in the player. Local catalog hits still show on Search tab.
     func openSearch(query: String) {
         openCloudSearch(query: query)
     }
@@ -135,7 +137,6 @@ final class SessionStore: ObservableObject {
         let raw = url.absoluteString
         let streaming = Self.isStreamingURL(raw)
         let isSearch = Self.isCloudSearchURL(raw)
-        // Stay in player mode for cloud search pages; only drop streaming on real exit.
         if isStreaming && !streaming && !isSearch {
             return
         }
@@ -195,7 +196,7 @@ final class SessionStore: ObservableObject {
         guard markRecent else { return }
         recents.removeAll { $0.id == id }
         recents.insert(game, at: 0)
-        if recents.count > 12 { recents = Array(recents.prefix(12)) }
+        if recents.count > 24 { recents = Array(recents.prefix(24)) }
         persistRecents()
     }
 
@@ -309,7 +310,6 @@ final class SessionStore: ObservableObject {
         }
     }
 
-    /// Clears network, catalog, artwork, and Better xCloud script caches without signing out.
     func clearCache() {
         URLCache.shared.removeAllCachedResponses()
         CloudCatalogService.clearDiskCache()
