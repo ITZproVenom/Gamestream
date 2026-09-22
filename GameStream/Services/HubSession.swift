@@ -27,6 +27,28 @@ extension SessionStore {
         playGame(game.tracked)
     }
 
+    /// Opens the Xbox Cloud search page in the stream player so "Search Xbox Cloud"
+    /// is a real navigation, not a no-op tab switch.
+    func openCloudSearch(query: String) {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        updateSearchDraft(trimmed)
+        SessionStore.rememberSearch(trimmed)
+        let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? trimmed
+        guard let url = URL(string: "https://www.xbox.com/play/search/\(encoded)") else {
+            requestedTab = .search
+            return
+        }
+        pendingJavaScript = nil
+        HubState.shared.showNativeHub = false
+        offerPlayNext = false
+        // Keep currentGame if any; search is not a launch.
+        ensureDefaultStreamQualityPrefs()
+        isStreaming = true
+        webURL = url
+        requestedTab = .library
+    }
+
     func returnToHub() {
         PlayActivityStore.shared.end()
         pendingJavaScript = nil
