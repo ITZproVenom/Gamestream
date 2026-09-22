@@ -13,6 +13,8 @@ struct StreamPlayerView: View {
     @EnvironmentObject var session: SessionStore
     @State private var isLoading = true
     @State private var errorMessage: String?
+    @State private var showChrome = false
+    @State private var chromeHideTask: Task<Void, Never>?
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -25,31 +27,11 @@ struct StreamPlayerView: View {
                     .zIndex(2)
             }
 
-            HStack(spacing: 8) {
-                Button {
-                    session.exitStreamToHub()
-                } label: {
-                    Text("Exit")
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                }
-                .buttonStyle(.glass)
-
-                Button {
-                    session.returnToHub()
-                } label: {
-                    Text("Hub")
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                }
-                .buttonStyle(.glass)
-
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            // Tap top safe area to reveal Exit / Hub; auto-hides so it never
+            // stays stuck over the stream or Better xCloud controls.
+            streamChrome
+                .padding(.top, 8)
+                .zIndex(3)
         }
         .edgesIgnoringSafeArea(.all)
         .onReceive(NotificationCenter.default.publisher(for: .webViewLoadingChanged)) { note in
@@ -66,13 +48,111 @@ struct StreamPlayerView: View {
             withAnimation(.easeOut(duration: 0.25)) {
                 isLoading = false
             }
+            // Hide chrome once the stream page is live so it is never permanent.
+            scheduleChromeHide(after: 2.5)
         }
         .onReceive(NotificationCenter.default.publisher(for: .webViewDidFail)) { note in
             errorMessage = note.object as? String
             isLoading = false
         }
         .onDisappear {
+            chromeHideTask?.cancel()
             ControllerRumble.shared.teardown()
+        }
+    }
+
+    private var streamChrome: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if showChrome {
+                HStack(spacing: 8) {
+                    Button {
+                        chromeHideTask?.cancel()
+                        session.exitStreamToHub()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 12, weight: .bold))
+                            Text("Exit")
+                                .font(.caption.weight(.semibold))
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.glass)
+                    .accessibilityLabel("Exit stream")
+
+                    Button {
+                        chromeHideTask?.cancel()
+                        session.returnToHub()
+                    } label: {
+                        Text("Hub")
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.glass)
+                    .accessibilityLabel("Open GameHub")
+
+                    if session.nextQueuedGame != nil {
+                        Button {
+                            chromeHideTask?.cancel()
+                            session.playNextFromStream()
+                        } label: {
+                            Text("Play next")
+                                .font(.caption.weight(.semibold))
+                                .lineLimit(1)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.glassProminent)
+                        .accessibilityLabel("Play next queued game")
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                if let title = session.currentGame?.title, !title.isEmpty {
+                    Text(title)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .padding(.horizontal, 4)
+                }
+            } else if !isLoading {
+                Button {
+                    revealChrome()
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .bold))
+                        .frame(width: 28, height: 22)
+                }
+                .buttonStyle(.glass)
+                .opacity(0.55)
+                .accessibilityLabel("Show stream controls")
+            }
+        }
+        .padding(.horizontal, 16)
+        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: showChrome)
+    }
+
+    private func revealChrome() {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+            showChrome = true
+        }
+        scheduleChromeHide(after: 4.0)
+    }
+
+    private func scheduleChromeHide(after seconds: Double) {
+        chromeHideTask?.cancel()
+        chromeHideTask = Task { @MainActor in
+            let ns = UInt64(seconds * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: ns)
+            guard !Task.isCancelled else { return }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                showChrome = false
+            }
         }
     }
 }
@@ -424,6 +504,11 @@ struct XboxCloudWebView: UIViewRepresentable {
                     if let streaming = body["streaming"] as? Bool, streaming {
                         NotificationCenter.default.post(name: .playerStreamPageReached, object: href)
                     }
+                    if let url = URL(string: href) {
+                        Task { @MainActor in
+                            self.session?.updateFromWebURL(url, pageTitle: body["title"] as? String)
+                        }
+                    }
                 }
             case "rumble":
                 let weakMag = floatValue(body["weak"])
@@ -467,6 +552,11 @@ struct XboxCloudWebView: UIViewRepresentable {
             NotificationCenter.default.post(name: .webViewLoadingChanged, object: false)
             BetterXCloudInjector.shared.ensureInjected(into: webView)
             webView.evaluateJavaScript(XboxCloudWebView.rumbleBridgeJS, completionHandler: nil)
+            if let url = webView.url {
+                Task { @MainActor in
+                    self.session?.updateFromWebURL(url, pageTitle: webView.title)
+                }
+            }
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
