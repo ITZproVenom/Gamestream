@@ -86,6 +86,7 @@ struct GameHubView: View {
 
     var body: some View {
         HubPage {
+            let _ = catalogLive.revision
             header
             searchField
 
@@ -100,12 +101,12 @@ struct GameHubView: View {
                 filterBody
             }
         }
-        .id(catalogLive.revision)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
-            let firstScreen = GameCatalog.featured.map(\.id)
-                + Array(GameCatalog.sortedBrowse.prefix(24)).map(\.id)
-            artwork.prefetch(Array(Set(firstScreen)))
+            prefetchHubArtwork()
+        }
+        .onChange(of: catalogLive.revision) { _, _ in
+            prefetchHubArtwork()
         }
         .onChange(of: nav.token) { _, _ in
             if let action = nav.action { handleGridNav(action) }
@@ -456,6 +457,12 @@ struct GameHubView: View {
             .padding(16)
         }
         .buttonStyle(.glass)
+    }
+
+    private func prefetchHubArtwork() {
+        let firstScreen = GameCatalog.featured.map(\.id)
+            + Array(GameCatalog.sortedBrowse.prefix(48)).map(\.id)
+        artwork.prefetch(Array(Set(firstScreen)))
     }
 
     private func poster(_ game: CatalogGame, isFocused: Bool = false) -> some View {
