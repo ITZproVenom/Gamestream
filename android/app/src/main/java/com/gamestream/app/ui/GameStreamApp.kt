@@ -1,5 +1,6 @@
 package com.gamestream.app.ui
 
+import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -42,8 +43,17 @@ enum class Tab(val label: String) {
 
 @Composable
 fun GameStreamApp(session: SessionStore = viewModel()) {
-    var tab by remember { mutableStateOf(Tab.Library) }
     val context = LocalContext.current
+    val tabPrefs = remember { context.getSharedPreferences("gamestream.ui", Context.MODE_PRIVATE) }
+    var tab by remember {
+        mutableStateOf(
+            when (tabPrefs.getString("selectedTab", Tab.Library.name)) {
+                Tab.Search.name -> Tab.Search
+                Tab.Settings.name -> Tab.Settings
+                else -> Tab.Library
+            }
+        )
+    }
     var introCompleted by remember { mutableStateOf(OnboardingPrefs.isIntroDone(context)) }
     val appearance = remember { AppearancePrefs(context) }
     @Suppress("UNUSED_VARIABLE")
@@ -62,10 +72,15 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
     }
 
     LaunchedEffect(session.requestedTab) {
-        when (session.requestedTab) {
-            "library" -> tab = Tab.Library
-            "search" -> tab = Tab.Search
-            "settings" -> tab = Tab.Settings
+        val next = when (session.requestedTab) {
+            "library" -> Tab.Library
+            "search" -> Tab.Search
+            "settings" -> Tab.Settings
+            else -> null
+        }
+        if (next != null) {
+            tab = next
+            tabPrefs.edit().putString("selectedTab", next.name).apply()
         }
         session.requestedTab = null
     }
@@ -89,19 +104,28 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
                 NavigationBar(containerColor = Color(0xEE14141A)) {
                     NavigationBarItem(
                         selected = tab == Tab.Library,
-                        onClick = { tab = Tab.Library },
+                        onClick = {
+                            tab = Tab.Library
+                            tabPrefs.edit().putString("selectedTab", Tab.Library.name).apply()
+                        },
                         icon = { Icon(Icons.Default.GridView, contentDescription = null) },
                         label = { Text("Library") }
                     )
                     NavigationBarItem(
                         selected = tab == Tab.Search,
-                        onClick = { tab = Tab.Search },
+                        onClick = {
+                            tab = Tab.Search
+                            tabPrefs.edit().putString("selectedTab", Tab.Search.name).apply()
+                        },
                         icon = { Icon(Icons.Default.Search, contentDescription = null) },
                         label = { Text("Search") }
                     )
                     NavigationBarItem(
                         selected = tab == Tab.Settings,
-                        onClick = { tab = Tab.Settings },
+                        onClick = {
+                            tab = Tab.Settings
+                            tabPrefs.edit().putString("selectedTab", Tab.Settings.name).apply()
+                        },
                         icon = { Icon(Icons.Default.Settings, contentDescription = null) },
                         label = { Text("Settings") }
                     )
