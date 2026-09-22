@@ -108,11 +108,9 @@ final class SessionStore: ObservableObject {
         }
     }
 
+    /// Opens Xbox Cloud search in the player. Local catalog hits still show on Search tab.
     func openSearch(query: String) {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        updateSearchDraft(trimmed)
-        requestedTab = .search
+        openCloudSearch(query: query)
     }
 
     func openHome() {
@@ -134,19 +132,22 @@ final class SessionStore: ObservableObject {
     func reloadCurrent() { reloadNonce += 1 }
 
     func updateFromWebURL(_ url: URL, pageTitle: String? = nil) {
-        let streaming = Self.isStreamingURL(url.absoluteString)
-        if isStreaming && !streaming {
+        let raw = url.absoluteString
+        let streaming = Self.isStreamingURL(raw)
+        let isSearch = Self.isCloudSearchURL(raw)
+        // Stay in player mode for cloud search pages; only drop streaming on real exit.
+        if isStreaming && !streaming && !isSearch {
             return
         }
         if streaming {
             offerPlayNext = false
             if !isStreaming { isStreaming = true }
         }
-        if let parsed = GameURLParser.parse(url.absoluteString) {
+        if let parsed = GameURLParser.parse(raw) {
             let title = GameURLParser.displayTitle(fromPageTitle: pageTitle, slug: parsed.slug, productId: parsed.productId)
             noteGame(id: parsed.productId, slug: parsed.slug, title: title, markRecent: streaming)
         }
-        syncPlayActivity(streaming: isStreaming)
+        syncPlayActivity(streaming: isStreaming && streaming)
     }
 
     func toggleFavoriteCurrent() { guard let game = currentGame else { return }; toggleFavorite(game) }
@@ -216,7 +217,12 @@ final class SessionStore: ObservableObject {
     static func isStreamingURL(_ raw: String) -> Bool {
         let full = raw.lowercased()
         if full.contains("/play/games") { return false }
+        if full.contains("/play/search") { return false }
         return full.contains("/play/launch") || full.contains("/launch/") || full.contains("/launch?") || full.contains("/stream/") || full.contains("/streaming")
+    }
+
+    static func isCloudSearchURL(_ raw: String) -> Bool {
+        raw.lowercased().contains("/play/search")
     }
 
     static var recentSearches: [String] { UserDefaults.standard.stringArray(forKey: Keys.recentSearches) ?? [] }
