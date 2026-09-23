@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -28,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.gamestream.app.AppearancePrefs
 import com.gamestream.app.BetterXCloudInjector
@@ -152,7 +154,7 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
     ) { padding ->
         Box(
             Modifier
-                .padding(if (session.isStreaming) androidx.compose.foundation.layout.PaddingValues(0.dp) else padding)
+                .padding(if (session.isStreaming) PaddingValues(0.dp) else padding)
                 .fillMaxSize()
         ) {
             when (tab) {
