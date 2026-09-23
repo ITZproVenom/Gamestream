@@ -221,10 +221,13 @@ jobs:
         run: |
           set -euo pipefail
           gh release delete latest-android --yes --cleanup-tag 2>/dev/null || true
+          git tag -d latest-android 2>/dev/null || true
+          git push origin :refs/tags/latest-android 2>/dev/null || true
           gh release create latest-android \
             GameStream-release.apk \
             --title "🤖 Android · Latest APK" \
             --notes "$(cat android_release_notes.md)" \
+            --target "${{ github.sha }}" \
             --prerelease
 
       - name: Publish versioned release APK
