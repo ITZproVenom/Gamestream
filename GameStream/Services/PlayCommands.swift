@@ -2,10 +2,6 @@ import Foundation
 
 extension SessionStore {
     /// Single Play path: load the game's launch URL directly into the player.
-    /// The shared cookie store holds the xbox.com session established by
-    /// SignInWebView (verified via the strict xbox-session cookie check); the
-    /// streaming WebView picks it up, lands on the game page, and
-    /// streamIsolationJS auto-clicks Play to start the stream.
     func playGame(_ game: TrackedGame) {
         guard let url = game.launchURL else { return }
         SoundManager.playLaunch()
@@ -13,7 +9,7 @@ extension SessionStore {
         HubState.shared.showNativeHub = false
         offerPlayNext = false
         RemoteImageLoader.shared.clear()
-        requestedTab = .library
+        requestedTab = .home
         currentGame = TrackedGame(
             id: game.id,
             slug: game.slug,
@@ -21,7 +17,6 @@ extension SessionStore {
             lastSeen: Date(),
             isFavorite: isFavorite(game.id)
         )
-        // Seed Better xCloud quality prefs before the launch page loads.
         ensureDefaultStreamQualityPrefs()
         pendingJavaScript = Self.betterXCloudPrefsJS(Self.storedBetterXCloudPrefs(), reloadIfXbox: false)
         isStreaming = true
@@ -30,7 +25,6 @@ extension SessionStore {
         }
     }
 
-    /// Defaults tuned for readable mid-range detail (enemies, UI text) without a bitrate *cap*.
     func ensureDefaultStreamQualityPrefs() {
         var map = Self.storedBetterXCloudPrefs()
         var changed = false
@@ -40,13 +34,10 @@ extension SessionStore {
                 changed = true
             }
         }
-        // Unlimited max bitrate (0 = no artificial ceiling in BX)
         setDefault("stream.video.maxBitrate", "0")
-        // Client-side clarity boost (USM) — this is the upscaling/sharpen path
         setDefault("video.processing", "usm")
         setDefault("video.processing.sharpness", "5")
         setDefault("video.processing.mode", "quality")
-        // Prefer high H.264 profile when the device supports it
         setDefault("stream.video.codecProfile", "high")
         if changed {
             UserDefaults.standard.set(map, forKey: "BetterXCloud.prefs.v1")

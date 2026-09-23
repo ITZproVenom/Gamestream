@@ -11,7 +11,6 @@ extension SessionStore {
     static let idleWebURL = URL(string: "about:blank")!
     static let xboxHomeURL = URL(string: "https://www.xbox.com/play")!
 
-    /// Native GameHub is the catalog. Do not load xbox.com as a screen.
     func openXboxCloud() {
         returnToHub()
     }
@@ -19,7 +18,7 @@ extension SessionStore {
     func openCatalogGame(_ game: CatalogGame) {
         HubState.shared.showNativeHub = true
         offerPlayNext = false
-        requestedTab = .library
+        requestedTab = .home
         noteOpenedGame(game.tracked)
     }
 
@@ -27,8 +26,6 @@ extension SessionStore {
         playGame(game.tracked)
     }
 
-    /// Opens the Xbox Cloud search page in the stream player so "Search Xbox Cloud"
-    /// is a real navigation, not a no-op tab switch.
     func openCloudSearch(query: String) {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -42,11 +39,10 @@ extension SessionStore {
         pendingJavaScript = nil
         HubState.shared.showNativeHub = false
         offerPlayNext = false
-        // Keep currentGame if any; search is not a launch.
         ensureDefaultStreamQualityPrefs()
         isStreaming = true
         webURL = url
-        requestedTab = .library
+        requestedTab = .home
     }
 
     func returnToHub() {
@@ -55,7 +51,7 @@ extension SessionStore {
         isStreaming = false
         webURL = Self.idleWebURL
         HubState.shared.showNativeHub = true
-        requestedTab = .library
+        requestedTab = .home
     }
 
     func exitStreamToHub() {
@@ -66,7 +62,7 @@ extension SessionStore {
         isStreaming = false
         offerPlayNext = hasNext
         HubState.shared.showNativeHub = true
-        requestedTab = .library
+        requestedTab = .home
     }
 
     func playNextFromStream() {
