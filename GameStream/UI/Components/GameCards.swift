@@ -14,7 +14,9 @@ struct HeroCard: View {
                 RemoteImage(url: artworkURL) {
                     Color(hex: game.accent)
                 }
+                .scaledToFill()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
             }
             .buttonStyle(.plain)
 
@@ -36,7 +38,6 @@ struct HeroCard: View {
                     .foregroundStyle(.white)
                     .lineLimit(2)
                     .minimumScaleFactor(0.75)
-                    .fixedSize(horizontal: false, vertical: true)
                 Text(game.tagline)
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.85))
@@ -59,10 +60,12 @@ struct HeroCard: View {
             }
             .padding(16)
         }
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 }
 
+/// Poster + fixed title band + Play. Art is constrained so it never bleeds into the next grid column.
 struct PosterCard: View {
     let game: CatalogGame
     let artworkURL: URL?
@@ -72,15 +75,19 @@ struct PosterCard: View {
     let onFavorite: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: LayoutMetrics.cardStackSpacing) {
             ZStack(alignment: .topTrailing) {
                 Button(action: onOpen) {
-                    RemoteImage(url: artworkURL) {
-                        Color(hex: game.accent)
-                    }
-                    .aspectRatio(3 / 4, contentMode: .fill)
-                    .frame(maxWidth: .infinity)
-                    .clipped()
+                    // Fit box first, then fill+clip inside — prevents column overflow on narrow phones
+                    Color.clear
+                        .aspectRatio(3 / 4, contentMode: .fit)
+                        .overlay {
+                            RemoteImage(url: artworkURL) {
+                                Color(hex: game.accent)
+                            }
+                            .scaledToFill()
+                        }
+                        .clipped()
                 }
                 .buttonStyle(.plain)
 
@@ -96,21 +103,19 @@ struct PosterCard: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
-            // Full title — never mid-glyph clip; allow 2 lines with scale-down
             Text(game.title)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.primary)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
-                .minimumScaleFactor(0.85)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, minHeight: LayoutMetrics.titleBand, maxHeight: LayoutMetrics.titleBand, alignment: .topLeading)
 
             Button(action: onPlay) {
                 Text("Play")
                     .font(.caption.weight(.bold))
                     .frame(maxWidth: .infinity)
-                    .frame(height: 34)
+                    .frame(height: LayoutMetrics.playBand)
             }
             .buttonStyle(.glassProminent)
         }

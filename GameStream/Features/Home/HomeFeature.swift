@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Full native hub: filters, jump-back-in, activity, shelves, lists, browse.
+/// Full native hub — layout scales from container width (Dynamic Island phones ~390–430pt).
 struct HomeFeature: View {
     @EnvironmentObject var session: SessionStore
     @ObservedObject private var catalogLive = CatalogLiveStore.shared
@@ -50,15 +50,13 @@ struct HomeFeature: View {
         }
     }
 
-    private var gridColumns: [GridItem] {
-        [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
-    }
-
     var body: some View {
         GeometryReader { geo in
-            let width = max(geo.size.width - 40, 1)
-            // Slightly narrower posters so title + Play fit without clipping
-            let posterW = min(128, width * 0.34)
+            let pageW = max(geo.size.width, 1)
+            let railW = LayoutMetrics.railPosterWidth(containerWidth: pageW)
+            let gridW = LayoutMetrics.gridPosterWidth(containerWidth: pageW)
+            let rowH = LayoutMetrics.cardHeight(posterWidth: railW)
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     header
@@ -67,12 +65,12 @@ struct HomeFeature: View {
                     if !secondaryChips.isEmpty {
                         chipRow(secondaryChips, compact: true)
                     }
-                    filterBody(posterW: posterW, height: geo.size.height)
+                    filterBody(railW: railW, gridW: gridW, rowH: rowH, pageH: geo.size.height)
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, LayoutMetrics.pagePadding)
                 .padding(.top, 12)
-                // Clear the floating tab bar so last rail titles are not covered
-                .padding(.bottom, 88)
+                .padding(.bottom, LayoutMetrics.tabBarClearance)
+                .frame(maxWidth: pageW, alignment: .leading)
             }
             .scrollIndicators(.hidden)
             .refreshable { session.refreshXboxPlayHistory(force: true) }
@@ -80,6 +78,7 @@ struct HomeFeature: View {
         .onAppear {
             artwork.prefetch(GameCatalog.featured.map(\.id) + Array(GameCatalog.sortedBrowse.prefix(40)).map(\.id))
             artwork.prefetch(session.recents.map(\.id))
+            artwork.prefetch(session.favorites.map(\.id))
         }
         .sheet(isPresented: $showingLists) {
             NavigationStack {
@@ -141,20 +140,20 @@ struct HomeFeature: View {
     }
 
     @ViewBuilder
-    private func filterBody(posterW: CGFloat, height: CGFloat) -> some View {
+    private func filterBody(railW: CGFloat, gridW: CGFloat, rowH: CGFloat, pageH: CGFloat) -> some View {
         switch filter {
         case .home:
-            homeContent(posterW: posterW, height: height)
+            homeContent(railW: railW, rowH: rowH, pageH: pageH)
         case .lists:
             ListsFeature(onOpenGame: onOpenGame)
         case .activity:
             ActivityFeature(onOpenGame: onOpenGame)
         default:
-            filteredGrid
+            filteredGrid(cellW: gridW)
         }
     }
 
-    private func homeContent(posterW: CGFloat, height: CGFloat) -> some View {
+    private func homeContent(railW: CGFloat, rowH: CGFloat, pageH: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 24) {
             JumpBackInFeature(onOpen: onOpenGame)
 
@@ -173,12 +172,12 @@ struct HomeFeature: View {
                     onFavorite: { session.toggleFavorite(hero.tracked) },
                     isFavorite: session.isFavorite(hero.id)
                 )
-                .frame(height: min(appearance.density == .compact ? 200 : 236, height * 0.36))
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .frame(maxWidth: .infinity)
+                .frame(height: min(appearance.density == .compact ? 200 : 236, max(pageH * 0.34, 180)))
             }
 
             ForEach(Array(GameCatalog.hubShelves(favorites: session.favorites, recents: session.recents).enumerated()), id: \.offset) { _, row in
-                rail(title: row.0, games: row.1, posterW: posterW)
+                rail(title: row.0, games: row.1, posterW: railW, rowH: rowH)
             }
 
             Button {
@@ -199,14 +198,18 @@ struct HomeFeature: View {
         }
     }
 
-    private var filteredGrid: some View {
-        VStack(alignment: .leading, spacing: 14) {
+    private func filteredGrid(cellW: CGFloat) -> some View {
+        let columns = [
+            GridItem(.flexible(), spacing: LayoutMetrics.gridSpacing),
+            GridItem(.flexible(), spacing: LayoutMetrics.gridSpacing)
+        ]
+        return VStack(alignment: .leading, spacing: 14) {
             Text(filter.title)
                 .font(.title2.weight(.bold))
             if filteredGames.isEmpty {
                 FeatureEmptyCard(message: emptyCopy)
             } else {
-                LazyVGrid(columns: gridColumns, spacing: 16) {
+                LazyVGrid(columns: columns, alignment: .center, spacing: 16) {
                     ForEach(filteredGames) { game in
                         PosterCard(
                             game: game,
@@ -216,6 +219,7 @@ struct HomeFeature: View {
                             onOpen: { onOpenGame(game) },
                             onFavorite: { session.toggleFavorite(game.tracked) }
                         )
+                        .frame(maxWidth: .infinity, alignment: .top)
                     }
                 }
             }
@@ -233,15 +237,14 @@ struct HomeFeature: View {
         }
     }
 
-    private func rail(title: String, games: [CatalogGame], posterW: CGFloat) -> some View {
+    private func rail(title: String, games: [CatalogGame], posterW: CGFloat, rowH: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title)
                 .font(.title3.weight(.bold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.9)
-            // Size by content — never fixed-height + clipped (that cut titles mid-word)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: LayoutMetrics.railSpacing) {
                     ForEach(games) { game in
                         PosterCard(
                             game: game,
@@ -251,10 +254,12 @@ struct HomeFeature: View {
                             onOpen: { onOpenGame(game) },
                             onFavorite: { session.toggleFavorite(game.tracked) }
                         )
-                        .frame(width: posterW, alignment: .topLeading)
+                        .frame(width: posterW, height: rowH, alignment: .top)
                     }
                 }
             }
+            // Explicit row height so the next section never slides under titles
+            .frame(height: rowH, alignment: .top)
         }
     }
 }

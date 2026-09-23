@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Personal library: favorites, recents, queue, and quick filters.
+/// Personal library — 2-column grid sized to the device width.
 struct LibraryFeature: View {
     @EnvironmentObject var session: SessionStore
     @ObservedObject private var artwork = ArtworkStore.shared
@@ -34,82 +34,91 @@ struct LibraryFeature: View {
         }
     }
 
-    private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
-
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Text("Library")
-                    .font(.largeTitle.weight(.bold))
-                    .padding(.top, 8)
+        GeometryReader { geo in
+            let pageW = max(geo.size.width, 1)
+            let columns = [
+                GridItem(.flexible(), spacing: LayoutMetrics.gridSpacing),
+                GridItem(.flexible(), spacing: LayoutMetrics.gridSpacing)
+            ]
 
-                if let label = session.accountLabel {
-                    Text(label)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text("Library")
+                        .font(.largeTitle.weight(.bold))
+                        .padding(.top, 8)
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(Segment.allCases, id: \.self) { seg in
-                            Button {
-                                segment = seg
-                            } label: {
-                                Text(seg.rawValue)
-                                    .font(.subheadline.weight(.semibold))
-                                    .lineLimit(1)
+                    if let label = session.accountLabel {
+                        Text(label)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(Segment.allCases, id: \.self) { seg in
+                                Button { segment = seg } label: {
+                                    Text(seg.rawValue)
+                                        .font(.subheadline.weight(.semibold))
+                                        .lineLimit(1)
+                                }
+                                .buttonStyle(.plain)
+                                .modifier(FeatureChipStyle(selected: segment == seg))
                             }
-                            .buttonStyle(.plain)
-                            .modifier(FeatureChipStyle(selected: segment == seg))
                         }
                     }
-                }
 
-                if games.isEmpty {
-                    FeatureEmptyCard(message: emptyMessage)
-                } else {
-                    LazyVGrid(columns: columns, spacing: 18) {
-                        ForEach(games) { game in
-                            PosterCard(
-                                game: game,
-                                artworkURL: artwork.url(for: game.id) ?? game.posterURL,
-                                isFavorite: session.isFavorite(game.id),
-                                onPlay: { session.playCatalogGame(game) },
-                                onOpen: { onOpenGame(game) },
-                                onFavorite: { session.toggleFavorite(game.tracked) }
-                            )
-                            .contextMenu {
-                                Button(session.isQueued(game.id) ? "Remove from queue" : "Add to queue") {
-                                    session.toggleQueue(game.tracked)
-                                }
-                                if segment == .recents {
-                                    Button("Remove from recents", role: .destructive) {
-                                        session.removeRecent(game.tracked)
+                    if games.isEmpty {
+                        FeatureEmptyCard(message: emptyMessage)
+                    } else {
+                        LazyVGrid(columns: columns, alignment: .center, spacing: 16) {
+                            ForEach(games) { game in
+                                PosterCard(
+                                    game: game,
+                                    artworkURL: artwork.url(for: game.id) ?? game.posterURL,
+                                    isFavorite: session.isFavorite(game.id),
+                                    onPlay: { session.playCatalogGame(game) },
+                                    onOpen: { onOpenGame(game) },
+                                    onFavorite: { session.toggleFavorite(game.tracked) }
+                                )
+                                .frame(maxWidth: .infinity, alignment: .top)
+                                .contextMenu {
+                                    Button(session.isQueued(game.id) ? "Remove from queue" : "Add to queue") {
+                                        session.toggleQueue(game.tracked)
+                                    }
+                                    if segment == .recents {
+                                        Button("Remove from recents", role: .destructive) {
+                                            session.removeRecent(game.tracked)
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
 
-                if segment == .queue, !queue.games.isEmpty {
-                    Button {
-                        session.clearQueue()
-                    } label: {
-                        Text("Clear queue")
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
+                    if segment == .queue, !queue.games.isEmpty {
+                        Button { session.clearQueue() } label: {
+                            Text("Clear queue")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                        }
+                        .buttonStyle(.glass)
                     }
-                    .buttonStyle(.glass)
                 }
+                .padding(.horizontal, LayoutMetrics.pagePadding)
+                .padding(.bottom, LayoutMetrics.tabBarClearance)
+                .frame(width: pageW, alignment: .leading)
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 88)
+            .scrollIndicators(.hidden)
         }
-        .scrollIndicators(.hidden)
         .onAppear {
-            artwork.prefetch(games.prefix(24).map(\.id))
+            artwork.prefetch(games.prefix(40).map(\.id))
+            artwork.prefetch(session.favorites.map(\.id))
+            artwork.prefetch(session.recents.map(\.id))
+        }
+        .onChange(of: segment) { _, _ in
+            artwork.prefetch(games.prefix(40).map(\.id))
         }
     }
 
