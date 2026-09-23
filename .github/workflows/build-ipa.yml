@@ -386,15 +386,37 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # --cleanup-tag removes the remote tag but leaves the local tag from
-          # fetch-depth: 0. gh then refuses to create because the tag exists
-          # locally and is not on origin.
-          gh release delete latest-ios --yes --cleanup-tag 2>/dev/null || true
-          git tag -d latest-ios 2>/dev/null || true
-          git push origin :refs/tags/latest-ios 2>/dev/null || true
-          gh release create latest-ios \
-            build/GameStream-unsigned.ipa \
-            --title "📱 iOS · Latest IPA" \
-            --notes "$(cat release_notes.md)" \
-            --target "${{ github.sha }}" \
-            --prerelease
+          TAG=latest-ios
+          TITLE="📱 iOS · Latest IPA"
+          TARGET="${{ github.sha }}"
+          ASSET=build/GameStream-unsigned.ipa
+
+          delete_pointer() {
+            gh release delete "$TAG" --yes --cleanup-tag || true
+            git tag -d "$TAG" || true
+            git push origin ":refs/tags/${TAG}" || true
+          }
+
+          delete_pointer
+          sleep 3
+
+          created=0
+          for attempt in 1 2 3 4 5; do
+            if gh release create "$TAG" "$ASSET" \
+              --title "$TITLE" \
+              --notes-file release_notes.md \
+              --target "$TARGET" \
+              --prerelease; then
+              created=1
+              break
+            fi
+            echo "create ${TAG} attempt ${attempt} failed; retry after delete"
+            delete_pointer
+            sleep $((attempt * 2))
+          done
+
+          if [ "$created" -ne 1 ]; then
+            echo "create still racing; update existing ${TAG} release in place"
+            gh release edit "$TAG" --title "$TITLE" --notes-file release_notes.md --prerelease || true
+            gh release upload "$TAG" "$ASSET" --clobber
+          fi
