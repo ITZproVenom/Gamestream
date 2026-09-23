@@ -6,6 +6,7 @@ struct SettingsFeature: View {
     @ObservedObject private var activity = PlayActivityStore.shared
     @ObservedObject private var appearance = AppearanceStore.shared
     @ObservedObject private var controller = ControllerManager.shared
+    @ObservedObject private var diagnostics = DiagnosticsStore.shared
     @State private var keepAwake = false
     @State private var resumeOnOpen = false
     @State private var resolution = SessionStore.storedResolution
@@ -221,6 +222,43 @@ struct SettingsFeature: View {
                     if session.isSignedIn {
                         Button { session.signOut() } label: {
                             Text("Sign Out").frame(maxWidth: .infinity).padding(.vertical, 11)
+                        }
+                        .buttonStyle(.glass)
+                    }
+                }
+
+                section("Diagnostics & Analytics") {
+                    Toggle("Share diagnostics", isOn: $diagnostics.isOptedIn)
+                    Text("Opt-in only. Queues sanitized events locally and uploads asynchronously. Never includes passwords, cookies, auth tokens, page HTML, or search queries.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    if diagnostics.isOptedIn {
+                        HStack {
+                            Text("Pending: \(diagnostics.pendingCount)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            if !diagnostics.lastUploadStatus.isEmpty {
+                                Text(diagnostics.lastUploadStatus)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Button {
+                            diagnostics.flushNow()
+                        } label: {
+                            Text("Upload now")
+                                .font(.subheadline.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.glass)
+                        Button {
+                            diagnostics.clearQueue()
+                        } label: {
+                            Text("Clear queue")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
                         }
                         .buttonStyle(.glass)
                     }
