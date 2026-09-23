@@ -268,7 +268,7 @@ struct RootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private fun tabDragGesture(slotWidth: CGFloat) -> some Gesture {
+    private func tabDragGesture(slotWidth: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 6, coordinateSpace: .local)
             .onChanged { value in
                 guard abs(value.translation.width) > abs(value.translation.height) * 0.6 else { return }
