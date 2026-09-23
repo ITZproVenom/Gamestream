@@ -47,6 +47,7 @@ struct LibraryFeature: View {
                     Text(label)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
 
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -57,6 +58,7 @@ struct LibraryFeature: View {
                             } label: {
                                 Text(seg.rawValue)
                                     .font(.subheadline.weight(.semibold))
+                                    .lineLimit(1)
                             }
                             .buttonStyle(.plain)
                             .modifier(FeatureChipStyle(selected: segment == seg))
@@ -67,7 +69,7 @@ struct LibraryFeature: View {
                 if games.isEmpty {
                     FeatureEmptyCard(message: emptyMessage)
                 } else {
-                    LazyVGrid(columns: columns, spacing: 16) {
+                    LazyVGrid(columns: columns, spacing: 18) {
                         ForEach(games) { game in
                             PosterCard(
                                 game: game,
@@ -103,7 +105,7 @@ struct LibraryFeature: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 36)
+            .padding(.bottom, 88)
         }
         .scrollIndicators(.hidden)
         .onAppear {

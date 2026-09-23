@@ -35,7 +35,8 @@ struct HeroCard: View {
                     .font(.title2.weight(.bold))
                     .foregroundStyle(.white)
                     .lineLimit(2)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.75)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(game.tagline)
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.85))
@@ -71,7 +72,7 @@ struct PosterCard: View {
     let onFavorite: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             ZStack(alignment: .topTrailing) {
                 Button(action: onOpen) {
                     RemoteImage(url: artworkURL) {
@@ -95,16 +96,21 @@ struct PosterCard: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
+            // Full title — never mid-glyph clip; allow 2 lines with scale-down
             Text(game.title)
                 .font(.caption.weight(.semibold))
+                .foregroundStyle(.primary)
                 .lineLimit(2)
-                .frame(maxWidth: .infinity, minHeight: 36, maxHeight: 36, alignment: .topLeading)
+                .multilineTextAlignment(.leading)
+                .minimumScaleFactor(0.85)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
 
             Button(action: onPlay) {
                 Text("Play")
                     .font(.caption.weight(.bold))
                     .frame(maxWidth: .infinity)
-                    .frame(height: 36)
+                    .frame(height: 34)
             }
             .buttonStyle(.glassProminent)
         }

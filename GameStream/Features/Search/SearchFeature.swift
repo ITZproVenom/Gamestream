@@ -60,7 +60,7 @@ struct SearchFeature: View {
                         if results.isEmpty {
                             FeatureEmptyCard(message: "No local titles match. Try Xbox Cloud search.")
                         } else {
-                            LazyVGrid(columns: columns, spacing: 16) {
+                            LazyVGrid(columns: columns, spacing: 18) {
                                 ForEach(results.prefix(40)) { game in
                                     PosterCard(
                                         game: game,
@@ -96,6 +96,7 @@ struct SearchFeature: View {
                                         Text(term)
                                             .font(.subheadline)
                                             .lineLimit(1)
+                                            .minimumScaleFactor(0.85)
                                         Spacer()
                                     }
                                     .padding(12)
@@ -107,7 +108,7 @@ struct SearchFeature: View {
 
                         Text("Browse")
                             .font(.title3.weight(.bold))
-                        LazyVGrid(columns: columns, spacing: 16) {
+                        LazyVGrid(columns: columns, spacing: 18) {
                             ForEach(Array(GameCatalog.sortedBrowse.prefix(12))) { game in
                                 PosterCard(
                                     game: game,
@@ -123,7 +124,7 @@ struct SearchFeature: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
-                .padding(.bottom, 36)
+                .padding(.bottom, 88)
             }
             .scrollIndicators(.hidden)
         }

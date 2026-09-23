@@ -57,7 +57,8 @@ struct HomeFeature: View {
     var body: some View {
         GeometryReader { geo in
             let width = max(geo.size.width - 40, 1)
-            let posterW = min(140, width * 0.38)
+            // Slightly narrower posters so title + Play fit without clipping
+            let posterW = min(128, width * 0.34)
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     header
@@ -70,7 +71,8 @@ struct HomeFeature: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
-                .padding(.bottom, 36)
+                // Clear the floating tab bar so last rail titles are not covered
+                .padding(.bottom, 88)
             }
             .scrollIndicators(.hidden)
             .refreshable { session.refreshXboxPlayHistory(force: true) }
@@ -99,6 +101,7 @@ struct HomeFeature: View {
                 Text("GameStream")
                     .font(.system(size: 30, weight: .bold, design: .rounded))
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 Text("Xbox Cloud Gaming")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -128,6 +131,7 @@ struct HomeFeature: View {
                         Text(chip.title)
                             .font(compact ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
                             .lineLimit(1)
+                            .minimumScaleFactor(0.85)
                     }
                     .buttonStyle(.plain)
                     .modifier(FeatureChipStyle(selected: filter == chip))
@@ -234,8 +238,10 @@ struct HomeFeature: View {
             Text(title)
                 .font(.title3.weight(.bold))
                 .lineLimit(1)
+                .minimumScaleFactor(0.9)
+            // Size by content — never fixed-height + clipped (that cut titles mid-word)
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
                     ForEach(games) { game in
                         PosterCard(
                             game: game,
@@ -245,12 +251,10 @@ struct HomeFeature: View {
                             onOpen: { onOpenGame(game) },
                             onFavorite: { session.toggleFavorite(game.tracked) }
                         )
-                        .frame(width: posterW)
+                        .frame(width: posterW, alignment: .topLeading)
                     }
                 }
             }
-            .frame(height: 240)
-            .clipped()
         }
     }
 }
