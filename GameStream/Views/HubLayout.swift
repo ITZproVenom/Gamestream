@@ -20,18 +20,17 @@ struct HubPage<Content: View>: View {
             let pageWidth = max(geo.size.width, 1)
             let contentWidth = max(pageWidth - (horizontalPadding * 2), 1)
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 22) {
                     content()
                 }
                 .frame(width: contentWidth, alignment: .leading)
                 .padding(.horizontal, horizontalPadding)
-                .padding(.top, 6)
-                .padding(.bottom, 24)
+                .padding(.top, 8)
+                .padding(.bottom, 28)
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .frame(width: pageWidth, height: geo.size.height, alignment: .top)
-            .clipped()
             .environment(\.hubContentWidth, contentWidth)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -40,6 +39,8 @@ struct HubPage<Content: View>: View {
 
 struct HubCarousel<Content: View>: View {
     var spacing: CGFloat = 12
+    /// Explicit row height stops LazyHStack from collapsing into the section above.
+    var rowHeight: CGFloat? = nil
     @ViewBuilder var content: () -> Content
     @Environment(\.hubContentWidth) private var hubWidth
 
@@ -51,7 +52,7 @@ struct HubCarousel<Content: View>: View {
             .padding(.trailing, 8)
         }
         .frame(width: max(hubWidth, 1), alignment: .leading)
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(height: rowHeight)
         .clipped()
     }
 }
@@ -63,10 +64,16 @@ enum HubMetrics {
 
     static func posterWidth(containerWidth: CGFloat, compact: Bool = false) -> CGFloat {
         let usable = max(containerWidth, 200)
-        let factor: CGFloat = compact ? 0.40 : 0.44
-        let cap: CGFloat = compact ? 132 : 150
-        let floor: CGFloat = compact ? 112 : 128
+        let factor: CGFloat = compact ? 0.40 : 0.43
+        let cap: CGFloat = compact ? 128 : 146
+        let floor: CGFloat = compact ? 110 : 124
         return min(cap, max(floor, usable * factor))
+    }
+
+    /// Art (3:4 of width) + title band + play + spacing.
+    static func posterRowHeight(posterWidth: CGFloat) -> CGFloat {
+        let art = posterWidth * (4.0 / 3.0)
+        return art + GamePosterCard.titleBand + GamePosterCard.playBand + GamePosterCard.spacing * 2 + 4
     }
 }
 
