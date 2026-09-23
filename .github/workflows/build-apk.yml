@@ -220,15 +220,40 @@ jobs:
         working-directory: .
         run: |
           set -euo pipefail
-          gh release delete latest-android --yes --cleanup-tag 2>/dev/null || true
-          git tag -d latest-android 2>/dev/null || true
-          git push origin :refs/tags/latest-android 2>/dev/null || true
-          gh release create latest-android \
-            GameStream-release.apk \
-            --title "🤖 Android · Latest APK" \
-            --notes "$(cat android_release_notes.md)" \
-            --target "${{ github.sha }}" \
-            --prerelease
+          TAG=latest-android
+          TITLE="🤖 Android · Latest APK"
+          TARGET="${{ github.sha }}"
+          ASSET=GameStream-release.apk
+
+          delete_pointer() {
+            gh release delete "$TAG" --yes --cleanup-tag || true
+            git tag -d "$TAG" || true
+            git push origin ":refs/tags/${TAG}" || true
+          }
+
+          delete_pointer
+          sleep 3
+
+          created=0
+          for attempt in 1 2 3 4 5; do
+            if gh release create "$TAG" "$ASSET" \
+              --title "$TITLE" \
+              --notes-file android_release_notes.md \
+              --target "$TARGET" \
+              --prerelease; then
+              created=1
+              break
+            fi
+            echo "create ${TAG} attempt ${attempt} failed; retry after delete"
+            delete_pointer
+            sleep $((attempt * 2))
+          done
+
+          if [ "$created" -ne 1 ]; then
+            echo "create still racing; update existing ${TAG} release in place"
+            gh release edit "$TAG" --title "$TITLE" --notes-file android_release_notes.md --prerelease || true
+            gh release upload "$TAG" "$ASSET" --clobber
+          fi
 
       - name: Publish versioned release APK
         if: startsWith(github.ref, 'refs/tags/v')
