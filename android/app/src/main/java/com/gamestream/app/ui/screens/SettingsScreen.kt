@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
@@ -51,24 +52,29 @@ fun SettingsScreen(session: SessionStore) {
     val top = activity.rankedThisWeek().firstOrNull()
     val last = session.recentGames().firstOrNull()
     val context = LocalContext.current
-    val appearance = remember { AppearancePrefs(context) }
+    val appearance = AppearancePrefs.get(context)
+    // Re-read prefs whenever revision changes so chips stay in sync
+    val rev = appearance.revision
     val rumble = remember { ControllerRumble.get(context) }
 
-    var mode by remember { mutableStateOf(appearance.mode) }
-    var accent by remember { mutableStateOf(appearance.accent) }
-    var background by remember { mutableStateOf(appearance.background) }
-    var customBg by remember { mutableStateOf(appearance.customBgColor) }
-    var cardStyle by remember { mutableStateOf(appearance.cardStyle) }
-    var density by remember { mutableStateOf(appearance.density) }
-    var hubLayout by remember { mutableStateOf(appearance.hubLayout) }
-    var animation by remember { mutableStateOf(appearance.animation) }
-    var effects by remember { mutableStateOf(appearance.effects) }
-    var uiSounds by remember { mutableStateOf(appearance.uiSounds) }
-    var controllerHaptics by remember { mutableStateOf(appearance.controllerHaptics) }
-    var rumbleIntensity by remember { mutableFloatStateOf(appearance.rumbleIntensity) }
-    var showActivity by remember { mutableStateOf(appearance.showActivityOnHome) }
-    var showGenres by remember { mutableStateOf(appearance.showGenreFilters) }
+    val mode = appearance.mode
+    val accent = appearance.accent
+    val background = appearance.background
+    val customBg = appearance.customBgColor
+    val cardStyle = appearance.cardStyle
+    val density = appearance.density
+    val hubLayout = appearance.hubLayout
+    val animation = appearance.animation
+    val effects = appearance.effects
+    val uiSounds = appearance.uiSounds
+    val controllerHaptics = appearance.controllerHaptics
+    var rumbleIntensity by remember(rev) { mutableFloatStateOf(appearance.rumbleIntensity) }
+    val showActivity = appearance.showActivityOnHome
+    val showGenres = appearance.showGenreFilters
     var testNote by remember { mutableStateOf("") }
+
+    @Suppress("UNUSED_VARIABLE")
+    val forceRead = rev
 
     val intensityLabel = when {
         rumbleIntensity < 0.85f -> "Light"
@@ -96,6 +102,11 @@ fun SettingsScreen(session: SessionStore) {
             .padding(20.dp)
     ) {
         Text("Settings", style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold), color = Color.White)
+        Text(
+            "Changes apply immediately across Library and theme.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Color(0xFFA0A0AA)
+        )
 
         Category("Account") {
             Text(session.accountLabel ?: "Not signed in", color = Color(0xFFB0B0B8))
@@ -103,7 +114,7 @@ fun SettingsScreen(session: SessionStore) {
 
         Category("Controller test") {
             ToggleRow("Controller haptics", controllerHaptics) {
-                controllerHaptics = it; appearance.controllerHaptics = it
+                appearance.controllerHaptics = it
             }
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -147,9 +158,11 @@ fun SettingsScreen(session: SessionStore) {
         }
 
         Category("Appearance") {
-            SettingChips("Theme", listOf("system", "light", "dark"), mode) { mode = it; appearance.mode = it }
+            SettingChips("Theme", listOf("system", "light", "dark"), mode) {
+                appearance.mode = it
+            }
             SettingChips("Accent", listOf("violet", "azure", "emerald", "crimson", "gold", "rose", "cyan", "mono"), accent) {
-                accent = it; appearance.accent = it
+                appearance.accent = it
             }
         }
 
@@ -159,7 +172,7 @@ fun SettingsScreen(session: SessionStore) {
                 listOf("aurora", "still", "solid", "mesh", "dusk", "midnight", "customColor"),
                 background
             ) {
-                background = it; appearance.background = it
+                appearance.background = it
             }
             if (background == "customColor" || background == "solid") {
                 Text("Color", style = MaterialTheme.typography.labelLarge, color = Color(0xFFB0B0B8))
@@ -179,10 +192,8 @@ fun SettingsScreen(session: SessionStore) {
                                     else Modifier
                                 )
                                 .clickable {
-                                    customBg = key
                                     appearance.customBgColor = key
                                     if (background != "customColor" && background != "solid") {
-                                        background = "customColor"
                                         appearance.background = "customColor"
                                     }
                                 }
@@ -191,7 +202,7 @@ fun SettingsScreen(session: SessionStore) {
                 }
             }
             Text(
-                "Aurora · Still · Solid · Mesh · Dusk · Midnight, or a custom solid color.",
+                "Pick a style or a solid color — Library background updates immediately.",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color(0xFF808088)
             )
@@ -199,34 +210,34 @@ fun SettingsScreen(session: SessionStore) {
 
         Category("Library") {
             SettingChips("Home layout", listOf("editorial", "rails", "grid"), hubLayout) {
-                hubLayout = it; appearance.hubLayout = it
+                appearance.hubLayout = it
             }
             SettingChips("Game cards", listOf("poster", "wide", "compact"), cardStyle) {
-                cardStyle = it; appearance.cardStyle = it
+                appearance.cardStyle = it
             }
             SettingChips("Density", listOf("spacious", "comfortable", "compact"), density) {
-                density = it; appearance.density = it
+                appearance.density = it
             }
             ToggleRow("Activity on home", showActivity) {
-                showActivity = it; appearance.showActivityOnHome = it
+                appearance.showActivityOnHome = it
             }
             ToggleRow("Genre filter row", showGenres) {
-                showGenres = it; appearance.showGenreFilters = it
+                appearance.showGenreFilters = it
             }
         }
 
         Category("Motion & effects") {
             SettingChips("Motion", listOf("full", "reduced", "off"), animation) {
-                animation = it; appearance.animation = it
+                appearance.animation = it
             }
             SettingChips("Effects", listOf("quality", "balanced", "performance"), effects) {
-                effects = it; appearance.effects = it
+                appearance.effects = it
             }
         }
 
         Category("Sound") {
             ToggleRow("UI sounds", uiSounds) {
-                uiSounds = it; appearance.uiSounds = it
+                appearance.uiSounds = it
             }
         }
 
@@ -284,7 +295,7 @@ fun SettingsScreen(session: SessionStore) {
 
         Category("About") {
             Text(
-                "GameStream Android — library layouts, backgrounds, and controller rumble parity with iOS.",
+                "GameStream Android 2.0 — customization updates theme and Library live.",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color(0xFF808088)
             )
@@ -336,9 +347,14 @@ private fun SettingChipsRow(options: List<String>, selected: String, onSelect: (
     ) {
         options.forEach { opt ->
             FilterChip(
-                selected = selected == opt,
+                selected = selected.equals(opt, ignoreCase = true),
                 onClick = { onSelect(opt) },
-                label = { Text(opt.replaceFirstChar { it.uppercase() }) }
+                label = { Text(opt.replaceFirstChar { it.uppercase() }, maxLines = 1) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                    selectedLabelColor = Color.White,
+                    labelColor = Color(0xFFC8C8D0)
+                )
             )
         }
     }
