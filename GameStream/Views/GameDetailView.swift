@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// New game detail surface. Play / Open Cloud go through existing SessionStore → StreamPlayerView.
 struct GameDetailView: View {
     @EnvironmentObject var session: SessionStore
     @ObservedObject private var artwork = ArtworkStore.shared
@@ -11,48 +12,36 @@ struct GameDetailView: View {
     let game: CatalogGame
     var onClose: () -> Void
 
-    private var related: [CatalogGame] {
-        GameCatalog.related(to: game)
-    }
+    private var related: [CatalogGame] { GameCatalog.related(to: game) }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 20) {
                     hero
                     actions
-                    meta
-                    if !related.isEmpty {
-                        relatedShelf
-                    }
+                    aboutCard
+                    if !related.isEmpty { relatedShelf }
                 }
                 .padding(20)
-                .padding(.bottom, 24)
+                .padding(.bottom, 28)
             }
-            // Static fill — a second aurora under the sheet doubles compositing cost.
-            .background {
-                Color.black.opacity(0.92).ignoresSafeArea()
-            }
+            .background(Color.black.opacity(0.94).ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button {
-                        onClose()
-                    } label: {
+                    Button(action: onClose) {
                         Image(systemName: "xmark")
                             .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.primary)
-                            .frame(width: 30, height: 30)
-                            .background(.ultraThinMaterial, in: Circle())
+                            .frame(width: 32, height: 32)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.glass)
                     .accessibilityLabel("Close")
                 }
                 ToolbarItem(placement: .principal) {
                     Text(game.title)
                         .font(.headline)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.85)
                 }
             }
         }
@@ -84,171 +73,120 @@ struct GameDetailView: View {
     private var hero: some View {
         ZStack(alignment: .bottomLeading) {
             GameArtView(url: artwork.url(for: game.id), accent: game.accent, title: game.title)
-                .frame(height: 210)
+                .frame(height: 220)
                 .frame(maxWidth: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.75)], startPoint: .top, endPoint: .bottom)
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .clipped()
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.85)],
+                startPoint: .center,
+                endPoint: .bottom
+            )
             VStack(alignment: .leading, spacing: 6) {
                 Text(game.provider)
-                    .font(.caption2.weight(.semibold))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .lineLimit(1)
+                    .font(.caption2.weight(.bold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .glassEffect(.regular, in: Capsule())
                 Text(game.title)
                     .font(.title2.weight(.bold))
                     .foregroundStyle(.white)
                     .lineLimit(2)
-                    .minimumScaleFactor(0.8)
                 Text(game.tagline)
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.88))
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2)
             }
             .padding(16)
         }
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
     private var actions: some View {
         VStack(spacing: 10) {
-            HStack(spacing: 8) {
-                Button {
-                    session.playCatalogGame(game)
-                    onClose()
-                } label: {
-                    Text("Play now")
+            Button {
+                // LOCKED PATH: SessionStore.playCatalogGame → existing StreamPlayerView
+                session.playCatalogGame(game)
+                onClose()
+            } label: {
+                Label("Play now", systemImage: "play.fill")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+            }
+            .buttonStyle(.glassProminent)
+
+            HStack(spacing: 10) {
+                Button { session.toggleFavorite(game.tracked) } label: {
+                    Label(
+                        session.isFavorite(game.id) ? "Favorited" : "Favorite",
+                        systemImage: session.isFavorite(game.id) ? "star.fill" : "star"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                }
+                .buttonStyle(.glass)
+
+                Button { session.toggleQueue(game.tracked) } label: {
+                    Text(session.isQueued(game.id) ? "Queued" : "Up Next")
                         .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                 }
-                .buttonStyle(.glassProminent)
-                .accessibilityLabel("Play \(game.title)")
-
-                Button {
-                    session.toggleFavorite(game.tracked)
-                } label: {
-                    Image(systemName: session.isFavorite(game.id) ? "star.fill" : "star")
-                        .font(.system(size: 15, weight: .semibold))
-                        .frame(width: 48, height: 44)
-                }
                 .buttonStyle(.glass)
-                .accessibilityLabel(session.isFavorite(game.id) ? "Remove favorite" : "Add favorite")
             }
 
-            Button {
-                session.toggleQueue(game.tracked)
-            } label: {
-                Text(session.isQueued(game.id) ? "Remove from Up Next" : "Add to Up Next")
-                    .font(.subheadline.weight(.medium))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-            }
-            .buttonStyle(.glass)
-            .accessibilityLabel(session.isQueued(game.id) ? "Remove \(game.title) from Up Next" : "Add \(game.title) to Up Next")
-
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Button {
-                    if lists.collections.isEmpty {
-                        showingNewList = true
-                    } else {
-                        showingLists = true
-                    }
+                    if lists.collections.isEmpty { showingNewList = true }
+                    else { showingLists = true }
                 } label: {
                     Text(lists.collections.isEmpty ? "New list" : "Lists")
                         .font(.subheadline.weight(.medium))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                 }
                 .buttonStyle(.glass)
-                .accessibilityLabel("Open lists")
 
-                if !lists.collections.isEmpty {
-                    Menu {
-                        ForEach(lists.collections) { list in
-                            Button {
-                                lists.toggle(game: game.tracked, inCollection: list.id)
-                            } label: {
-                                Label(
-                                    lists.contains(game.id, inCollection: list.id) ? "Remove from \(list.name)" : "Add to \(list.name)",
-                                    systemImage: lists.contains(game.id, inCollection: list.id) ? "checkmark" : "plus"
-                                )
-                            }
-                        }
-                        Button {
-                            showingNewList = true
-                        } label: {
-                            Label("New list", systemImage: "plus")
-                        }
-                    } label: {
-                        Text("Add to list")
-                            .font(.subheadline.weight(.medium))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.85)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                    }
-                    .buttonStyle(.glass)
-                    .accessibilityLabel("Add \(game.title) to a list")
+                Button {
+                    session.openCatalogGame(game)
+                    onClose()
+                } label: {
+                    Text("Xbox page")
+                        .font(.subheadline.weight(.medium))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
                 }
+                .buttonStyle(.glass)
             }
-
-            Button {
-                session.openCatalogGame(game)
-                onClose()
-            } label: {
-                Text("Open on Xbox Cloud")
-                    .font(.subheadline.weight(.medium))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-            }
-            .buttonStyle(.glass)
-            .accessibilityLabel("Open \(game.title) on Xbox Cloud")
         }
     }
 
-    private var meta: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("About")
-                .font(.title3.weight(.semibold))
-                .lineLimit(1)
+    private var aboutCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("About").font(.title3.weight(.bold))
             Text(game.tagline)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
             if let stat = activity.stat(for: game.id) {
-                Text("\(PlayActivityStore.format(stat.totalSeconds)) played · \(stat.sessionCount) sessions · \(PlayActivityStore.format(stat.weekSeconds)) this week")
-                    .font(.caption.weight(.medium))
+                Text("\(PlayActivityStore.format(stat.totalSeconds)) played · \(stat.sessionCount) sessions")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.85)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: 8) {
-                pill(game.genre)
-                pill(game.provider)
-                if session.isFavorite(game.id) { pill("Favorite") }
-                if session.recents.contains(where: { $0.id == game.id }) { pill("Played") }
+                glassPill(game.genre)
+                glassPill(game.provider)
+                if session.isFavorite(game.id) { glassPill("Favorite") }
             }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     private var relatedShelf: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("More like this")
-                .font(.title3.weight(.semibold))
-                .lineLimit(1)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("More like this").font(.title3.weight(.bold))
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(related) { item in
@@ -274,12 +212,12 @@ struct GameDetailView: View {
         }
     }
 
-    private func pill(_ text: String) -> some View {
+    private func glassPill(_ text: String) -> some View {
         Text(text)
             .font(.caption2.weight(.semibold))
             .lineLimit(1)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(.ultraThinMaterial, in: Capsule())
+            .glassEffect(.regular, in: Capsule())
     }
 }
