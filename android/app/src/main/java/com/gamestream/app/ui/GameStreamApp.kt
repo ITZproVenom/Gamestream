@@ -2,6 +2,10 @@ package com.gamestream.app.ui
 
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -12,6 +16,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -86,9 +91,7 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
     }
 
     if (!introCompleted) {
-        IntroScreen {
-            introCompleted = true
-        }
+        IntroScreen { introCompleted = true }
         return
     }
 
@@ -100,8 +103,19 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
     Scaffold(
         containerColor = bgColor,
         bottomBar = {
-            AnimatedVisibility(visible = !session.isStreaming) {
-                NavigationBar(containerColor = Color(0xEE14141A)) {
+            AnimatedVisibility(
+                visible = !session.isStreaming,
+                enter = slideInVertically { it } + fadeIn(),
+                exit = slideOutVertically { it } + fadeOut()
+            ) {
+                NavigationBar(containerColor = Color(0xF014141A)) {
+                    val itemColors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Color.White,
+                        selectedTextColor = Color.White,
+                        unselectedIconColor = Color(0xFF909098),
+                        unselectedTextColor = Color(0xFF909098),
+                        indicatorColor = Color(0xFF2A2A36)
+                    )
                     NavigationBarItem(
                         selected = tab == Tab.Library,
                         onClick = {
@@ -109,7 +123,8 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
                             tabPrefs.edit().putString("selectedTab", Tab.Library.name).apply()
                         },
                         icon = { Icon(Icons.Default.GridView, contentDescription = null) },
-                        label = { Text("Library") }
+                        label = { Text("Library") },
+                        colors = itemColors
                     )
                     NavigationBarItem(
                         selected = tab == Tab.Search,
@@ -118,7 +133,8 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
                             tabPrefs.edit().putString("selectedTab", Tab.Search.name).apply()
                         },
                         icon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        label = { Text("Search") }
+                        label = { Text("Search") },
+                        colors = itemColors
                     )
                     NavigationBarItem(
                         selected = tab == Tab.Settings,
@@ -127,13 +143,18 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
                             tabPrefs.edit().putString("selectedTab", Tab.Settings.name).apply()
                         },
                         icon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                        label = { Text("Settings") }
+                        label = { Text("Settings") },
+                        colors = itemColors
                     )
                 }
             }
         }
     ) { padding ->
-        Box(Modifier.padding(padding).fillMaxSize()) {
+        Box(
+            Modifier
+                .padding(if (session.isStreaming) androidx.compose.foundation.layout.PaddingValues(0.dp) else padding)
+                .fillMaxSize()
+        ) {
             when (tab) {
                 Tab.Library -> LibraryScreen(session)
                 Tab.Search -> SearchScreen(session)
