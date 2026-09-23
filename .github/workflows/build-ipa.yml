@@ -386,9 +386,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          # --cleanup-tag removes the remote tag but leaves the local tag from
+          # fetch-depth: 0. gh then refuses to create because the tag exists
+          # locally and is not on origin.
           gh release delete latest-ios --yes --cleanup-tag 2>/dev/null || true
+          git tag -d latest-ios 2>/dev/null || true
+          git push origin :refs/tags/latest-ios 2>/dev/null || true
           gh release create latest-ios \
             build/GameStream-unsigned.ipa \
             --title "📱 iOS · Latest IPA" \
             --notes "$(cat release_notes.md)" \
+            --target "${{ github.sha }}" \
             --prerelease
