@@ -14,7 +14,7 @@ extension EnvironmentValues {
 /// Keeps vertical scroll content locked to the container width so nested
 /// horizontal carousels cannot inflate the parent and clip off-screen.
 struct HubPage<Content: View>: View {
-    var horizontalPadding: CGFloat = 22
+    var horizontalPadding: CGFloat = 20
     @ViewBuilder var content: () -> Content
 
     var body: some View {
@@ -22,13 +22,14 @@ struct HubPage<Content: View>: View {
             let pageWidth = max(geo.size.width, 1)
             let contentWidth = max(pageWidth - (horizontalPadding * 2), 1)
             ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
+                VStack(alignment: .leading, spacing: 24) {
                     content()
                 }
                 .frame(width: contentWidth, alignment: .leading)
                 .padding(.horizontal, horizontalPadding)
-                .padding(.top, 12)
-                .padding(.bottom, 110)
+                .padding(.top, 8)
+                // Clearance for floating liquid-glass tab bar (~72pt) + home indicator.
+                .padding(.bottom, 120)
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
@@ -43,15 +44,16 @@ struct HubPage<Content: View>: View {
 
 /// Horizontal carousel that reports only the container width to its parent.
 struct HubCarousel<Content: View>: View {
-    var spacing: CGFloat = 14
+    var spacing: CGFloat = 12
     @ViewBuilder var content: () -> Content
     @Environment(\.hubContentWidth) private var hubWidth
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: spacing) {
+            LazyHStack(alignment: .top, spacing: spacing) {
                 content()
             }
+            .padding(.trailing, 4)
         }
         .frame(width: max(hubWidth, 1), alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
@@ -63,14 +65,16 @@ struct HubCarousel<Content: View>: View {
 enum HubMetrics {
     static func featuredCardWidth(containerWidth: CGFloat) -> CGFloat {
         let usable = max(containerWidth, 240)
-        return min(320, max(260, usable * 0.88))
+        return min(300, max(250, usable * 0.86))
     }
 
+    /// Two posters visible with breathing room; never so wide that titles clip.
     static func posterWidth(containerWidth: CGFloat, compact: Bool = false) -> CGFloat {
         let usable = max(containerWidth, 200)
-        let factor: CGFloat = compact ? 0.34 : 0.40
-        let cap: CGFloat = compact ? 128 : 148
-        let floor: CGFloat = compact ? 108 : 120
+        // Target ~2.15 cards on screen so the next peeks without crowding.
+        let factor: CGFloat = compact ? 0.40 : 0.44
+        let cap: CGFloat = compact ? 132 : 152
+        let floor: CGFloat = compact ? 112 : 128
         return min(cap, max(floor, usable * factor))
     }
 }
