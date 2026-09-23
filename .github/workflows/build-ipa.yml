@@ -20,10 +20,6 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: build-ipa-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   build:
     runs-on: macos-latest
@@ -274,7 +270,7 @@ jobs:
           STAMP="$(date -u +'%Y%m%d-%H%M')"
           RUN="${{ github.run_number }}"
           echo "tag=ios-build-${STAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "name=📱 iOS · GameStream #${RUN} (${SHORT_SHA})" >> "$GITHUB_OUTPUT"
+          echo "name=📱 iOS \u00b7 GameStream #${RUN} (${SHORT_SHA})" >> "$GITHUB_OUTPUT"
 
           python3 - "$SHORT_SHA" "$DATE_UTC" "$EVENT_NAME" <<'PY'
           import subprocess, sys
@@ -379,6 +375,7 @@ jobs:
           body_path: release_notes.md
           files: build/GameStream-unsigned.ipa
           fail_on_unmatched_files: true
+          overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -386,15 +383,15 @@ jobs:
         if: >-
           steps.meta.outputs.should_release == 'true' &&
           (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
-        continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest-ios
-          name: 📱 iOS · Latest IPA
+          name: "📱 iOS · Latest IPA"
           prerelease: true
           make_latest: false
           body_path: release_notes.md
           files: build/GameStream-unsigned.ipa
-          fail_on_unmatched_files: false
+          fail_on_unmatched_files: true
+          overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
