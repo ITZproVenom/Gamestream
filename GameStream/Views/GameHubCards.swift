@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Hero (featured)
+// MARK: - Hero
 
 struct FeaturedGameCard: View {
     let game: CatalogGame
@@ -11,22 +11,21 @@ struct FeaturedGameCard: View {
     var openDetail: () -> Void = {}
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack(alignment: .bottomLeading) {
             Button(action: openDetail) {
                 GameArtView(url: artworkURL, accent: game.accent, title: game.title)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
             }
             .buttonStyle(.plain)
 
             LinearGradient(
-                colors: [.clear, .black.opacity(0.55), .black.opacity(0.92)],
-                startPoint: .top,
+                colors: [.clear, .black.opacity(0.5), .black.opacity(0.92)],
+                startPoint: UnitPoint(x: 0.5, y: 0.25),
                 endPoint: .bottom
             )
             .allowsHitTesting(false)
 
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(game.provider)
                     .font(.caption2.weight(.bold))
                     .padding(.horizontal, 10)
@@ -37,42 +36,41 @@ struct FeaturedGameCard: View {
                     .font(.title2.weight(.bold))
                     .foregroundStyle(.white)
                     .lineLimit(2)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.75)
 
                 Text(game.tagline)
-                    .font(.subheadline)
+                    .font(.caption)
                     .foregroundStyle(.white.opacity(0.85))
                     .lineLimit(1)
 
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
                     Button {
                         SoundManager.playSuccess()
                         play()
                     } label: {
                         Label("Play", systemImage: "play.fill")
                             .font(.subheadline.weight(.semibold))
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 11)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
                     }
                     .buttonStyle(.glassProminent)
 
                     Button(action: favorite) {
                         Image(systemName: isFavorite() ? "star.fill" : "star")
-                            .font(.system(size: 15, weight: .semibold))
-                            .frame(width: 44, height: 44)
+                            .font(.system(size: 14, weight: .semibold))
+                            .frame(width: 42, height: 42)
                     }
                     .buttonStyle(.glass)
                 }
             }
-            .padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 }
 
-// MARK: - Poster tile
+// MARK: - Poster — fixed footprint so carousels never overlap
 
 struct GamePosterCard: View {
     let game: CatalogGame
@@ -82,8 +80,13 @@ struct GamePosterCard: View {
     let onOpen: () -> Void
     let onFavorite: () -> Void
 
+    /// Total height is art (3:4) + title band + play button — locked.
+    static let titleBand: CGFloat = 44
+    static let playBand: CGFloat = 40
+    static let spacing: CGFloat = 8
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Self.spacing) {
             ZStack(alignment: .topTrailing) {
                 Button(action: onOpen) {
                     GameArtView(url: artworkURL, accent: game.accent, title: game.title)
@@ -95,21 +98,22 @@ struct GamePosterCard: View {
 
                 Button(action: onFavorite) {
                     Image(systemName: isFavorite ? "star.fill" : "star")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(isFavorite ? .yellow : .white)
-                        .padding(9)
+                        .padding(8)
                         .glassEffect(.regular, in: Circle())
                 }
                 .buttonStyle(.plain)
-                .padding(8)
+                .padding(6)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .layoutPriority(1)
 
             Text(game.title)
-                .font(.subheadline.weight(.semibold))
+                .font(.caption.weight(.semibold))
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, minHeight: 40, alignment: .topLeading)
+                .frame(maxWidth: .infinity, minHeight: Self.titleBand, maxHeight: Self.titleBand, alignment: .topLeading)
 
             Button {
                 SoundManager.playTap()
@@ -118,11 +122,11 @@ struct GamePosterCard: View {
                 Text("Play")
                     .font(.caption.weight(.bold))
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
+                    .frame(height: Self.playBand - 4)
             }
             .buttonStyle(.glassProminent)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 }
 
@@ -137,12 +141,17 @@ struct GameArtView: View {
         ZStack {
             Color(hex: accent)
             RemoteImage(url: url) {
-                Text(String(title.prefix(1)))
-                    .font(.system(size: 44, weight: .bold, design: .rounded))
+                Text(String(displayLetter))
+                    .font(.system(size: 40, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.9))
             }
         }
         .clipped()
+    }
+
+    private var displayLetter: Character {
+        let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.first ?? "?"
     }
 }
 
