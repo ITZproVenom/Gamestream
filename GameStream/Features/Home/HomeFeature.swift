@@ -65,7 +65,7 @@ struct HomeFeature: View {
             .scrollIndicators(.hidden)
         }
         .onAppear {
-            ArtworkStore.shared.prefetch(GameCatalog.games.prefix(24).map { $0.id })
+            ArtworkStore.shared.prefetch(GameCatalog.games.prefix(24).map(\.id))
         }
     }
 
