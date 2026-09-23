@@ -17,13 +17,13 @@ struct FeaturedGameCard: View {
             .buttonStyle(.plain)
 
             LinearGradient(
-                colors: [.clear, .black.opacity(0.45), .black.opacity(0.88)],
+                colors: [.clear, .black.opacity(0.35), .black.opacity(0.9)],
                 startPoint: .center,
                 endPoint: .bottom
             )
             .allowsHitTesting(false)
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(game.provider)
                     .font(.caption2.weight(.semibold))
                     .padding(.horizontal, 8)
@@ -35,7 +35,8 @@ struct FeaturedGameCard: View {
                     .font(.title3.weight(.bold))
                     .foregroundStyle(.white)
                     .lineLimit(2)
-                    .minimumScaleFactor(0.72)
+                    .minimumScaleFactor(0.75)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Text(game.tagline)
                     .font(.caption)
@@ -43,34 +44,37 @@ struct FeaturedGameCard: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
 
-                HStack(spacing: 8) {
+                HStack(spacing: 10) {
                     Button {
                         SoundManager.playSuccess()
                         play()
                     } label: {
                         Text("Play")
-                            .font(.caption.weight(.semibold))
+                            .font(.subheadline.weight(.semibold))
                             .lineLimit(1)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
+                            .frame(minWidth: 72)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 9)
                     }
                     .buttonStyle(.glassProminent)
 
                     Button(action: favorite) {
                         Image(systemName: isFavorite() ? "star.fill" : "star")
-                            .font(.system(size: 13, weight: .semibold))
-                            .frame(width: 36, height: 36)
+                            .font(.system(size: 14, weight: .semibold))
+                            .frame(width: 40, height: 40)
                     }
                     .buttonStyle(.glass)
                 }
             }
-            .padding(14)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 }
 
+/// Poster tile: art + title + full-width Play. No overlapping chrome.
 struct GamePosterCard: View {
     let game: CatalogGame
     let artworkURL: URL?
@@ -80,54 +84,48 @@ struct GamePosterCard: View {
     let onFavorite: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             ZStack(alignment: .topTrailing) {
                 Button(action: onOpen) {
                     GameArtView(url: artworkURL, accent: game.accent, title: game.title)
-                        .frame(maxWidth: .infinity)
                         .aspectRatio(3 / 4, contentMode: .fill)
-                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .frame(maxWidth: .infinity)
+                        .clipped()
                 }
                 .buttonStyle(.plain)
 
                 Button(action: onFavorite) {
                     Image(systemName: isFavorite ? "star.fill" : "star")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(isFavorite ? .yellow : .primary)
+                        .foregroundStyle(isFavorite ? .yellow : .white)
                         .padding(8)
                         .background(.ultraThinMaterial, in: Circle())
                 }
                 .buttonStyle(.plain)
-                .padding(10)
+                .padding(8)
             }
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(game.title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
+            Text(game.title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, minHeight: 36, alignment: .topLeading)
 
-                HStack(spacing: 8) {
-                    Text(game.provider)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                    Button {
-                        SoundManager.playTap()
-                        onPlay()
-                    } label: {
-                        Text("Play")
-                            .font(.caption.weight(.semibold))
-                            .lineLimit(1)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                    }
-                    .buttonStyle(.glassProminent)
-                }
+            Button {
+                SoundManager.playTap()
+                onPlay()
+            } label: {
+                Text("Play")
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 9)
             }
+            .buttonStyle(.glassProminent)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
