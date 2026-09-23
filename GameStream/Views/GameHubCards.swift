@@ -1,5 +1,7 @@
 import SwiftUI
 
+// MARK: - Hero (featured)
+
 struct FeaturedGameCard: View {
     let game: CatalogGame
     let artworkURL: URL?
@@ -9,72 +11,69 @@ struct FeaturedGameCard: View {
     var openDetail: () -> Void = {}
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
+        ZStack(alignment: .bottom) {
             Button(action: openDetail) {
                 GameArtView(url: artworkURL, accent: game.accent, title: game.title)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
             }
             .buttonStyle(.plain)
 
             LinearGradient(
-                colors: [.clear, .black.opacity(0.35), .black.opacity(0.9)],
-                startPoint: .center,
+                colors: [.clear, .black.opacity(0.55), .black.opacity(0.92)],
+                startPoint: .top,
                 endPoint: .bottom
             )
             .allowsHitTesting(false)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 Text(game.provider)
-                    .font(.caption2.weight(.semibold))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .lineLimit(1)
+                    .font(.caption2.weight(.bold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .glassEffect(.regular, in: Capsule())
 
                 Text(game.title)
-                    .font(.title3.weight(.bold))
+                    .font(.title2.weight(.bold))
                     .foregroundStyle(.white)
                     .lineLimit(2)
-                    .minimumScaleFactor(0.75)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .minimumScaleFactor(0.8)
 
                 Text(game.tagline)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.88))
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.85))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.85)
 
-                HStack(spacing: 10) {
+                HStack(spacing: 12) {
                     Button {
                         SoundManager.playSuccess()
                         play()
                     } label: {
-                        Text("Play")
+                        Label("Play", systemImage: "play.fill")
                             .font(.subheadline.weight(.semibold))
-                            .lineLimit(1)
-                            .frame(minWidth: 72)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 9)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 11)
                     }
                     .buttonStyle(.glassProminent)
 
                     Button(action: favorite) {
                         Image(systemName: isFavorite() ? "star.fill" : "star")
-                            .font(.system(size: 14, weight: .semibold))
-                            .frame(width: 40, height: 40)
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.glass)
                 }
             }
-            .padding(16)
+            .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
 }
 
-/// Poster tile: art + title + full-width Play. No overlapping chrome.
+// MARK: - Poster tile
+
 struct GamePosterCard: View {
     let game: CatalogGame
     let artworkURL: URL?
@@ -84,7 +83,7 @@ struct GamePosterCard: View {
     let onFavorite: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             ZStack(alignment: .topTrailing) {
                 Button(action: onOpen) {
                     GameArtView(url: artworkURL, accent: game.accent, title: game.title)
@@ -98,36 +97,36 @@ struct GamePosterCard: View {
                     Image(systemName: isFavorite ? "star.fill" : "star")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(isFavorite ? .yellow : .white)
-                        .padding(8)
-                        .background(.ultraThinMaterial, in: Circle())
+                        .padding(9)
+                        .glassEffect(.regular, in: Circle())
                 }
                 .buttonStyle(.plain)
                 .padding(8)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
             Text(game.title)
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, minHeight: 36, alignment: .topLeading)
+                .frame(maxWidth: .infinity, minHeight: 40, alignment: .topLeading)
 
             Button {
                 SoundManager.playTap()
                 onPlay()
             } label: {
                 Text("Play")
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
+                    .font(.caption.weight(.bold))
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 9)
+                    .padding(.vertical, 10)
             }
             .buttonStyle(.glassProminent)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
+
+// MARK: - Art
 
 struct GameArtView: View {
     let url: URL?
@@ -136,17 +135,14 @@ struct GameArtView: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(Color(hex: accent).gradient)
-            RemoteImage(url: url) { artFallback }
+            Color(hex: accent)
+            RemoteImage(url: url) {
+                Text(String(title.prefix(1)))
+                    .font(.system(size: 44, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.9))
+            }
         }
         .clipped()
-    }
-
-    private var artFallback: some View {
-        Text(String(title.prefix(1)))
-            .font(.system(size: 48, weight: .bold, design: .rounded))
-            .foregroundStyle(.white.opacity(0.9))
     }
 }
 
