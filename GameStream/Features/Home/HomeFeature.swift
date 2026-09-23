@@ -50,22 +50,34 @@ struct HomeFeature: View {
         }
     }
 
+    /// Prefer a featured title that already has art; fall back to any featured / first game.
+    private var heroGame: CatalogGame? {
+        _ = artwork.urls
+        let featured = GameCatalog.featured
+        if let hit = featured.first(where: { artwork.url(for: $0.id) != nil || $0.posterURL != nil }) {
+            return hit
+        }
+        return featured.first ?? GameCatalog.games.first
+    }
+
     var body: some View {
         GeometryReader { geo in
             let pageW = max(geo.size.width, 1)
             let railW = LayoutMetrics.railPosterWidth(containerWidth: pageW)
             let gridW = LayoutMetrics.gridPosterWidth(containerWidth: pageW)
             let rowH = LayoutMetrics.cardHeight(posterWidth: railW)
+            // Fixed hero height for this phone class — never pageH-fraction (that caused overlap)
+            let heroH: CGFloat = appearance.density == .compact ? 196 : 220
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 20) {
                     header
                     PlayNextBannerFeature()
                     chipRow(primaryChips)
                     if !secondaryChips.isEmpty {
                         chipRow(secondaryChips, compact: true)
                     }
-                    filterBody(railW: railW, gridW: gridW, rowH: rowH, pageH: geo.size.height)
+                    filterBody(railW: railW, gridW: gridW, rowH: rowH, heroH: heroH)
                 }
                 .padding(.horizontal, LayoutMetrics.pagePadding)
                 .padding(.top, 12)
@@ -76,9 +88,11 @@ struct HomeFeature: View {
             .refreshable { session.refreshXboxPlayHistory(force: true) }
         }
         .onAppear {
-            artwork.prefetch(GameCatalog.featured.map(\.id) + Array(GameCatalog.sortedBrowse.prefix(40)).map(\.id))
-            artwork.prefetch(session.recents.map(\.id))
-            artwork.prefetch(session.favorites.map(\.id))
+            let ids = GameCatalog.featured.map(\.id)
+                + Array(GameCatalog.sortedBrowse.prefix(40)).map(\.id)
+                + session.recents.map(\.id)
+                + session.favorites.map(\.id)
+            artwork.prefetch(ids)
         }
         .sheet(isPresented: $showingLists) {
             NavigationStack {
@@ -140,10 +154,10 @@ struct HomeFeature: View {
     }
 
     @ViewBuilder
-    private func filterBody(railW: CGFloat, gridW: CGFloat, rowH: CGFloat, pageH: CGFloat) -> some View {
+    private func filterBody(railW: CGFloat, gridW: CGFloat, rowH: CGFloat, heroH: CGFloat) -> some View {
         switch filter {
         case .home:
-            homeContent(railW: railW, rowH: rowH, pageH: pageH)
+            homeContent(railW: railW, rowH: rowH, heroH: heroH)
         case .lists:
             ListsFeature(onOpenGame: onOpenGame)
         case .activity:
@@ -153,8 +167,8 @@ struct HomeFeature: View {
         }
     }
 
-    private func homeContent(railW: CGFloat, rowH: CGFloat, pageH: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 24) {
+    private func homeContent(railW: CGFloat, rowH: CGFloat, heroH: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 22) {
             JumpBackInFeature(onOpen: onOpenGame)
 
             if appearance.showActivityOnHome {
@@ -163,7 +177,7 @@ struct HomeFeature: View {
                 }
             }
 
-            if let hero = GameCatalog.featured.first {
+            if let hero = heroGame {
                 HeroCard(
                     game: hero,
                     artworkURL: artwork.url(for: hero.id) ?? hero.posterURL,
@@ -173,7 +187,10 @@ struct HomeFeature: View {
                     isFavorite: session.isFavorite(hero.id)
                 )
                 .frame(maxWidth: .infinity)
-                .frame(height: min(appearance.density == .compact ? 200 : 236, max(pageH * 0.34, 180)))
+                .frame(height: heroH)
+                .clipped()
+                // Keep the next shelf from sliding under the hero
+                .padding(.bottom, 4)
             }
 
             ForEach(Array(GameCatalog.hubShelves(favorites: session.favorites, recents: session.recents).enumerated()), id: \.offset) { _, row in
@@ -243,6 +260,8 @@ struct HomeFeature: View {
                 .font(.title3.weight(.bold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.9)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: LayoutMetrics.railSpacing) {
                     ForEach(games) { game in
@@ -255,11 +274,12 @@ struct HomeFeature: View {
                             onFavorite: { session.toggleFavorite(game.tracked) }
                         )
                         .frame(width: posterW, height: rowH, alignment: .top)
+                        .clipped()
                     }
                 }
             }
-            // Explicit row height so the next section never slides under titles
             .frame(height: rowH, alignment: .top)
+            .clipped()
         }
     }
 }

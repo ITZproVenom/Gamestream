@@ -10,24 +10,32 @@ struct HeroCard: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            Button(action: onOpen) {
-                RemoteImage(url: artworkURL) {
-                    Color(hex: game.accent)
-                }
-                .scaledToFill()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
+            // Background art — always fills the card bounds
+            RemoteImage(url: artworkURL) {
+                LinearGradient(
+                    colors: [Color(hex: game.accent), Color(hex: game.accent).opacity(0.55), .black.opacity(0.9)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
             }
-            .buttonStyle(.plain)
+            .scaledToFill()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .allowsHitTesting(false)
 
             LinearGradient(
-                colors: [.clear, .black.opacity(0.55), .black.opacity(0.92)],
-                startPoint: UnitPoint(x: 0.5, y: 0.3),
+                colors: [.clear, .black.opacity(0.45), .black.opacity(0.92)],
+                startPoint: UnitPoint(x: 0.5, y: 0.28),
                 endPoint: .bottom
             )
             .allowsHitTesting(false)
 
+            // Tap target for details
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onOpen)
+
             VStack(alignment: .leading, spacing: 8) {
+                Spacer(minLength: 0)
                 Text(game.provider)
                     .font(.caption2.weight(.bold))
                     .padding(.horizontal, 10)
@@ -41,7 +49,8 @@ struct HeroCard: View {
                 Text(game.tagline)
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.85))
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
                 HStack(spacing: 10) {
                     Button(action: onPlay) {
                         Label("Play", systemImage: "play.fill")
@@ -58,14 +67,17 @@ struct HeroCard: View {
                     .buttonStyle(.glass)
                 }
             }
-            .padding(16)
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 16)
         }
+        // Hard bounds — nothing draws outside the card
+        .compositingGroup()
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 }
 
-/// Poster + fixed title band + Play. Art is constrained so it never bleeds into the next grid column.
+/// Poster + fixed title band + Play. Art constrained so it never bleeds into the next column.
 struct PosterCard: View {
     let game: CatalogGame
     let artworkURL: URL?
@@ -78,7 +90,6 @@ struct PosterCard: View {
         VStack(alignment: .leading, spacing: LayoutMetrics.cardStackSpacing) {
             ZStack(alignment: .topTrailing) {
                 Button(action: onOpen) {
-                    // Fit box first, then fill+clip inside — prevents column overflow on narrow phones
                     Color.clear
                         .aspectRatio(3 / 4, contentMode: .fit)
                         .overlay {
@@ -109,7 +120,12 @@ struct PosterCard: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
                 .minimumScaleFactor(0.8)
-                .frame(maxWidth: .infinity, minHeight: LayoutMetrics.titleBand, maxHeight: LayoutMetrics.titleBand, alignment: .topLeading)
+                .frame(
+                    maxWidth: .infinity,
+                    minHeight: LayoutMetrics.titleBand,
+                    maxHeight: LayoutMetrics.titleBand,
+                    alignment: .topLeading
+                )
 
             Button(action: onPlay) {
                 Text("Play")
