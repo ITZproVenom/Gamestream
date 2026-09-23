@@ -17,7 +17,7 @@ import kotlin.math.roundToInt
  * Intensity is amplified for weak wired pads via AppearancePrefs.rumbleIntensity.
  */
 class ControllerRumble(private val context: Context) {
-    private val appearance = AppearancePrefs(context)
+    private val appearance = AppearancePrefs.get(context)
 
     private val deviceVibrator: Vibrator? by lazy {
         try {
