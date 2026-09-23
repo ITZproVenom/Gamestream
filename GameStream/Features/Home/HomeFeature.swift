@@ -1,86 +1,256 @@
 import SwiftUI
 
-/// Clean-slate home / library surface. Calls locked play path only.
+/// Full native hub: filters, jump-back-in, activity, shelves, lists, browse.
 struct HomeFeature: View {
     @EnvironmentObject var session: SessionStore
     @ObservedObject private var catalogLive = CatalogLiveStore.shared
+    @ObservedObject private var appearance = AppearanceStore.shared
+    @ObservedObject private var artwork = ArtworkStore.shared
+    @State private var filter: HubFilter = .home
+    @State private var showingLists = false
     var onOpenGame: (CatalogGame) -> Void
 
-    private var shelves: [(String, [CatalogGame])] {
-        _ = catalogLive.revision
-        return GameCatalog.shelves(favorites: session.favorites, recents: session.recents)
+    private var primaryChips: [HubFilter] {
+        [.home, .library, .browse, .forYou, .favorites, .recents, .lists, .activity]
     }
 
-    private var featured: CatalogGame? {
-        GameCatalog.featured.first ?? GameCatalog.games.first
+    private var secondaryChips: [HubFilter] {
+        guard appearance.showGenreFilters else { return [] }
+        return DiscoveryMode.allCases.map { .mode($0) }
+            + GameCatalog.genreNames.prefix(10).map { .genre($0) }
+    }
+
+    private var filteredGames: [CatalogGame] {
+        _ = catalogLive.revision
+        switch filter {
+        case .home:
+            return GameCatalog.games
+        case .browse:
+            return GameCatalog.sortedBrowse
+        case .library:
+            var seen = Set<String>()
+            var out: [CatalogGame] = []
+            for t in session.favorites + session.recents {
+                let g = GameCatalog.catalog(from: t)
+                if seen.insert(g.id.uppercased()).inserted { out.append(g) }
+            }
+            return out
+        case .forYou:
+            return GameCatalog.forYou(favorites: session.favorites, recents: session.recents)
+        case .favorites:
+            return session.favorites.map { GameCatalog.catalog(from: $0) }
+        case .recents:
+            return session.recents.map { GameCatalog.catalog(from: $0) }
+        case .lists, .activity:
+            return []
+        case .mode(let mode):
+            return GameCatalog.games(in: mode)
+        case .genre(let name):
+            return GameCatalog.games.filter { $0.genre == name }
+        }
+    }
+
+    private var gridColumns: [GridItem] {
+        [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
     }
 
     var body: some View {
         GeometryReader { geo in
             let width = max(geo.size.width - 40, 1)
+            let posterW = min(140, width * 0.38)
             ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
+                VStack(alignment: .leading, spacing: 22) {
                     header
-                    if let hero = featured {
-                        HeroCard(
-                            game: hero,
-                            artworkURL: ArtworkStore.shared.url(for: hero.id) ?? hero.posterURL,
-                            onPlay: { session.playCatalogGame(hero) },
-                            onOpen: { onOpenGame(hero) },
-                            onFavorite: { session.toggleFavorite(hero.tracked) },
-                            isFavorite: session.isFavorite(hero.id)
-                        )
-                        .frame(height: min(360, geo.size.height * 0.42))
-                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    PlayNextBannerFeature()
+                    chipRow(primaryChips)
+                    if !secondaryChips.isEmpty {
+                        chipRow(secondaryChips, compact: true)
                     }
-                    ForEach(Array(shelves.enumerated()), id: \.offset) { _, shelf in
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text(shelf.0)
-                                .font(.title3.weight(.bold))
-                                .lineLimit(1)
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                LazyHStack(alignment: .top, spacing: 12) {
-                                    ForEach(shelf.1) { game in
-                                        PosterCard(
-                                            game: game,
-                                            artworkURL: ArtworkStore.shared.url(for: game.id) ?? game.posterURL,
-                                            isFavorite: session.isFavorite(game.id),
-                                            onPlay: { session.playCatalogGame(game) },
-                                            onOpen: { onOpenGame(game) },
-                                            onFavorite: { session.toggleFavorite(game.tracked) }
-                                        )
-                                        .frame(width: min(140, width * 0.38))
-                                    }
-                                }
-                            }
-                            .frame(height: 240)
-                            .clipped()
-                        }
-                    }
+                    filterBody(posterW: posterW, height: geo.size.height)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
-                .padding(.bottom, 32)
+                .padding(.bottom, 36)
             }
             .scrollIndicators(.hidden)
+            .refreshable { session.refreshXboxPlayHistory(force: true) }
         }
         .onAppear {
-            ArtworkStore.shared.prefetch(GameCatalog.games.prefix(24).map(\.id))
+            artwork.prefetch(GameCatalog.featured.map(\.id) + Array(GameCatalog.sortedBrowse.prefix(40)).map(\.id))
+            artwork.prefetch(session.recents.map(\.id))
+        }
+        .sheet(isPresented: $showingLists) {
+            NavigationStack {
+                ListsFeature(onOpenGame: onOpenGame)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Close") { showingLists = false }
+                        }
+                    }
+            }
+            .environmentObject(session)
+            .presentationDetents([.large])
         }
     }
 
     private var header: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Library")
-                    .font(.largeTitle.weight(.bold))
-                if let label = session.accountLabel {
-                    Text(label)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("GameStream")
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .lineLimit(1)
+                Text("Xbox Cloud Gaming")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            Button {
+                session.openXboxCloud()
+            } label: {
+                Image(systemName: "cloud.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.glass)
+            .accessibilityLabel("Open Xbox Cloud")
+        }
+    }
+
+    private func chipRow(_ chips: [HubFilter], compact: Bool = false) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(chips, id: \.self) { chip in
+                    Button {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                            filter = chip
+                        }
+                    } label: {
+                        Text(chip.title)
+                            .font(compact ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                    .modifier(FeatureChipStyle(selected: filter == chip))
                 }
             }
-            Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private func filterBody(posterW: CGFloat, height: CGFloat) -> some View {
+        switch filter {
+        case .home:
+            homeContent(posterW: posterW, height: height)
+        case .lists:
+            ListsFeature(onOpenGame: onOpenGame)
+        case .activity:
+            ActivityFeature(onOpenGame: onOpenGame)
+        default:
+            filteredGrid
+        }
+    }
+
+    private func homeContent(posterW: CGFloat, height: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 24) {
+            JumpBackInFeature(onOpen: onOpenGame)
+
+            if appearance.showActivityOnHome {
+                ActivityBannerFeature {
+                    filter = .activity
+                }
+            }
+
+            if let hero = GameCatalog.featured.first {
+                HeroCard(
+                    game: hero,
+                    artworkURL: artwork.url(for: hero.id) ?? hero.posterURL,
+                    onPlay: { session.playCatalogGame(hero) },
+                    onOpen: { onOpenGame(hero) },
+                    onFavorite: { session.toggleFavorite(hero.tracked) },
+                    isFavorite: session.isFavorite(hero.id)
+                )
+                .frame(height: min(appearance.density == .compact ? 200 : 236, height * 0.36))
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            }
+
+            ForEach(Array(GameCatalog.hubShelves(favorites: session.favorites, recents: session.recents).enumerated()), id: \.offset) { _, row in
+                rail(title: row.0, games: row.1, posterW: posterW)
+            }
+
+            Button {
+                filter = .browse
+            } label: {
+                HStack {
+                    Image(systemName: "square.grid.2x2.fill")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Browse all games").font(.headline)
+                        Text("Full native catalog").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.secondary)
+                }
+                .padding(16)
+            }
+            .buttonStyle(.glass)
+        }
+    }
+
+    private var filteredGrid: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(filter.title)
+                .font(.title2.weight(.bold))
+            if filteredGames.isEmpty {
+                FeatureEmptyCard(message: emptyCopy)
+            } else {
+                LazyVGrid(columns: gridColumns, spacing: 16) {
+                    ForEach(filteredGames) { game in
+                        PosterCard(
+                            game: game,
+                            artworkURL: artwork.url(for: game.id) ?? game.posterURL,
+                            isFavorite: session.isFavorite(game.id),
+                            onPlay: { session.playCatalogGame(game) },
+                            onOpen: { onOpenGame(game) },
+                            onFavorite: { session.toggleFavorite(game.tracked) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private var emptyCopy: String {
+        switch filter {
+        case .browse: return "Catalog is still loading."
+        case .library: return "Star or play a game and it will appear here."
+        case .favorites: return "Star a game to pin it here."
+        case .recents: return "Play a title, or wait for Xbox recents after sign-in."
+        case .forYou: return "Play a few games so For You can learn your taste."
+        default: return "Nothing in this filter yet."
+        }
+    }
+
+    private func rail(title: String, games: [CatalogGame], posterW: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.title3.weight(.bold))
+                .lineLimit(1)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: 12) {
+                    ForEach(games) { game in
+                        PosterCard(
+                            game: game,
+                            artworkURL: artwork.url(for: game.id) ?? game.posterURL,
+                            isFavorite: session.isFavorite(game.id),
+                            onPlay: { session.playCatalogGame(game) },
+                            onOpen: { onOpenGame(game) },
+                            onFavorite: { session.toggleFavorite(game.tracked) }
+                        )
+                        .frame(width: posterW)
+                    }
+                }
+            }
+            .frame(height: 240)
+            .clipped()
         }
     }
 }
