@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// Signed-in shell: new tab architecture. Streaming hands off to locked StreamPlayerView.
+/// Signed-in shell: full feature tabs. Streaming hands off to locked StreamPlayerView.
 struct AppShell: View {
     @EnvironmentObject var session: SessionStore
     @ObservedObject private var hub = HubState.shared
@@ -34,6 +34,8 @@ struct AppShell: View {
                     TabView(selection: $selectedTab) {
                         HomeFeature(onOpenGame: { detailGame = $0 })
                             .tag(AppTab.home)
+                        LibraryFeature(onOpenGame: { detailGame = $0 })
+                            .tag(AppTab.library)
                         SearchFeature(onOpenGame: { detailGame = $0 })
                             .tag(AppTab.search)
                         SettingsFeature()
@@ -52,7 +54,7 @@ struct AppShell: View {
                     selected: $selectedTab,
                     dragOffset: $tabDragOffset
                 )
-                .padding(.horizontal, 24)
+                .padding(.horizontal, 16)
                 .padding(.top, 4)
                 .padding(.bottom, 6)
             }

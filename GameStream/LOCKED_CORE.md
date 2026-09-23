@@ -22,11 +22,21 @@
 ## CLEAN-SLATE APP (compiled)
 
 ```
-Core/          AppTab + architecture notes
+Core/          AppTab (Home, Library, Search, Settings)
 App/           AppRoot, AppShell
-Features/      Home, Search, Settings, Details, Onboarding
-UI/            AppBackground, GlassTabBar, GameCards
+Features/      Home, Library, Lists, Activity, Search, Settings, Details, Onboarding
+UI/            AppBackground, GlassTabBar, GameCards, HubChrome
 ```
 
 Legacy `Views/GameHubView`, `RootView`, `LibraryView`, `SearchView`, `SettingsView`, etc.
 are **excluded from XcodeGen** and are not the foundation of the running UI.
+
+## Feature parity (rebuilt under Features)
+
+- Home hub filters, Jump Back In, activity banner, shelves, browse / For You / favorites / recents / lists / activity
+- Library tab (all / favorites / recents / queue)
+- Lists (create, browse, play, add from details)
+- Activity (week + rankings)
+- Search (local + Xbox Cloud + recent searches)
+- Settings (controller, appearance, background, library prefs, motion, playback, stream, actions)
+- About credits: **Made with ♥ by Bestin**
