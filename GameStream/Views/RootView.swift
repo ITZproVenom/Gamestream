@@ -40,7 +40,7 @@ struct RootView: View {
     }
 
     private var signedInRoot: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
             Group {
                 if session.isStreaming {
                     Color.black
@@ -53,6 +53,7 @@ struct RootView: View {
             Group {
                 if session.isStreaming && selectedTab == .library {
                     StreamPlayerView()
+                        .ignoresSafeArea()
                 } else if !session.isStreaming {
                     TabView(selection: $selectedTab) {
                         GameHubView()
@@ -78,16 +79,16 @@ struct RootView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .ignoresSafeArea(edges: .bottom)
-
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             if !hideTabBar {
                 glassNavigation
                     .padding(.horizontal, 24)
-                    .padding(.top, 6)
-                    .padding(.bottom, 10)
+                    .padding(.top, 4)
+                    .padding(.bottom, 6)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onChange(of: selectedTab) { _, tab in
             UserDefaults.standard.set(tab.rawValue, forKey: Self.tabStorageKey)
             if tab == .library && !session.isStreaming {
@@ -114,7 +115,6 @@ struct RootView: View {
                 }
             } else {
                 hub.showNativeHub = true
-                // After leaving a stream, re-pull Xbox account recents.
                 session.refreshXboxPlayHistory(force: true)
             }
         }
@@ -129,7 +129,6 @@ struct RootView: View {
             BetterXCloudInjector.shared.preload()
             syncIdleTimer()
             session.consumeLaunchResumeIfNeeded()
-            // First hub paint: fill Recents from Xbox account play history.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 session.refreshXboxPlayHistory()
             }
@@ -140,14 +139,10 @@ struct RootView: View {
         guard controller.isConnected, !session.isStreaming else { return }
 
         switch press {
-        case .lb:
-            advanceTab(-1)
-        case .rb:
-            advanceTab(1)
-        case .left:
-            advanceTab(-1)
-        case .right:
-            advanceTab(1)
+        case .lb: advanceTab(-1)
+        case .rb: advanceTab(1)
+        case .left: advanceTab(-1)
+        case .right: advanceTab(1)
         case .menu:
             HapticManager.impact()
             SoundManager.playTap()
@@ -160,18 +155,12 @@ struct RootView: View {
                     selectedTab = .library
                 }
             }
-        case .stickLeft:
-            ControllerNavState.shared.send(.left)
-        case .stickRight:
-            ControllerNavState.shared.send(.right)
-        case .stickUp:
-            ControllerNavState.shared.send(.up)
-        case .stickDown:
-            ControllerNavState.shared.send(.down)
-        case .a:
-            ControllerNavState.shared.send(.activate)
-        case .up, .down, .x, .y:
-            break
+        case .stickLeft: ControllerNavState.shared.send(.left)
+        case .stickRight: ControllerNavState.shared.send(.right)
+        case .stickUp: ControllerNavState.shared.send(.up)
+        case .stickDown: ControllerNavState.shared.send(.down)
+        case .a: ControllerNavState.shared.send(.activate)
+        case .up, .down, .x, .y: break
         }
     }
 
@@ -279,7 +268,7 @@ struct RootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func tabDragGesture(slotWidth: CGFloat) -> some Gesture {
+    private fun tabDragGesture(slotWidth: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 6, coordinateSpace: .local)
             .onChanged { value in
                 guard abs(value.translation.width) > abs(value.translation.height) * 0.6 else { return }
