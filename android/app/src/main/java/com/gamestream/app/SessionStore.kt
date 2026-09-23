@@ -7,6 +7,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 class SessionStore(app: Application) : AndroidViewModel(app) {
     private val prefs = app.getSharedPreferences("gamestream", Context.MODE_PRIVATE)
@@ -137,7 +139,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
     }
     fun rememberRecent(id: String) {
         recentIds = listOf(id) + recentIds.filter { it != id }
-        if (recentIds.size > 12) recentIds = recentIds.take(12)
+        if (recentIds.size > 24) recentIds = recentIds.take(24)
         prefs.edit().putString("recent_ids", recentIds.joinToString(",")).apply()
     }
     fun isQueued(id: String) = queueIds.contains(id)
@@ -158,29 +160,40 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
     }
     fun favoriteGames(): List<CatalogGame> = favoriteIds.mapNotNull { id -> GameCatalog.games.find { it.id == id } }
     fun recentGames(): List<CatalogGame> = recentIds.mapNotNull { id -> GameCatalog.games.find { it.id == id } }
+
+    /** Open Xbox Cloud search in the stream WebView so results are live catalog. */
     fun openSearch(query: String) {
         val q = query.trim()
         if (q.isEmpty()) return
         searchQuery = q
-        isStreaming = false
+        val encoded = URLEncoder.encode(q, StandardCharsets.UTF_8.toString())
+        pendingJs = null
+        webUrl = "https://www.xbox.com/play/search/$encoded"
+        isStreaming = true
         offerPlayNext = false
-        showNativeHub = true
-        requestedTab = "search"
+        showNativeHub = false
+        requestedTab = "library"
     }
+
     fun reloadCurrent() { reloadNonce++; pendingJs = "try { location.reload(); } catch(e){}" }
+
     fun updateStreamingFromUrl(url: String) {
         val streaming = isStreamingUrl(url)
-        if (isStreaming && !streaming) {
+        val isSearch = url.lowercase().contains("/play/search")
+        // Stay in player for cloud search pages
+        if (isStreaming && !streaming && !isSearch) {
             offerPlayNext = queuedGames().isNotEmpty()
             playActivity.end()
         }
-        if (isStreaming != streaming) isStreaming = streaming
-        if (streaming) {
+        if (isStreaming != streaming && !isSearch) isStreaming = streaming
+        if (streaming || isSearch) {
+            if (!isStreaming) isStreaming = true
             showNativeHub = false
             offerPlayNext = false
-            recentGames().firstOrNull()?.let { playActivity.begin(it.id, it.title) }
+            if (streaming) recentGames().firstOrNull()?.let { playActivity.begin(it.id, it.title) }
         }
     }
+
     fun applyResolution(option: String) {
         streamResolution = option
         prefs.edit().putString(KEY_RES, option).apply()
@@ -264,6 +277,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         fun isStreamingUrl(url: String): Boolean {
             val lower = url.lowercase()
             if (lower.contains("/play/games")) return false
+            if (lower.contains("/play/search")) return false
             return lower.contains("/play/launch") || lower.contains("/launch/") || lower.contains("/launch?") || lower.contains("/stream/") || lower.contains("/streaming")
         }
     }
