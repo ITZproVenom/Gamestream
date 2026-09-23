@@ -13,7 +13,7 @@ final class SessionStore: ObservableObject {
     }
 
     @Published var webURL: URL = URL(string: "about:blank")!
-    @Published var requestedTab: RootView.Tab? = nil
+    @Published var requestedTab: AppTab? = nil
     @Published var isStreaming: Bool = false
     @Published var pendingJavaScript: String?
     @Published var betterXCloudRefreshToken: Int = 0
@@ -71,7 +71,6 @@ final class SessionStore: ObservableObject {
         UserDefaults.standard.set(MicrosoftAuth.proofVersion, forKey: MicrosoftAuth.proofKey)
         self.accountLabel = label
         self.isSignedIn = true
-        // Account session is fresh — pull Xbox recently played into native Recents.
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
             self?.refreshXboxPlayHistory(force: true)
         }
@@ -120,7 +119,7 @@ final class SessionStore: ObservableObject {
     }
 
     func openGame(_ game: TrackedGame) {
-        requestedTab = .library
+        requestedTab = .home
         HubState.shared.showNativeHub = true
         isStreaming = false
         offerPlayNext = false
@@ -351,7 +350,7 @@ final class SessionStore: ObservableObject {
                 self?.currentGame = nil
                 self?.reloadNonce += 1
                 HubState.shared.showNativeHub = true
-                self?.requestedTab = .library
+                self?.requestedTab = .home
             }
         }
     }

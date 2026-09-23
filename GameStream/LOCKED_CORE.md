@@ -1,33 +1,32 @@
-# GameStream — locked core vs rebuild surface
+# GameStream — locked core vs clean-slate app
 
 ## LOCKED (do not rewrite)
 
-These systems are trusted and working. New UI calls into them; it does not replace them.
-
 | Area | Files |
 |------|--------|
-| Microsoft / Xbox login WebView | `Views/SignInWebView.swift` |
-| Streaming WebView + rumble bridge | `Views/StreamPlayerView.swift` |
-| Auth URLs / cookie checks | `Services/MicrosoftAuth.swift` |
-| Play / stream / search launch | `Services/PlayCommands.swift`, `Services/HubSession.swift` |
+| Microsoft login WebView | `Views/SignInWebView.swift` |
+| Streaming WebView + rumble | `Views/StreamPlayerView.swift` |
+| Stream boot loader | `Views/PlayLoadingView.swift` |
+| Auth URLs / cookies | `Services/MicrosoftAuth.swift` |
+| Play / search launch | `Services/PlayCommands.swift`, `Services/HubSession.swift` |
 | Better xCloud injection | `Services/BetterXCloudInjector.swift` |
-| Session flags used by player | `Services/SessionStore.swift` (auth + stream fields) |
+| Session flags | `Services/SessionStore.swift` |
 
-### Contract the new UI uses
+### Contract
 
-- `session.playCatalogGame(_:)` / `playGame(_:)` → sets `isStreaming` + `webURL` → `StreamPlayerView`
-- `session.openSearch(query:)` → `openCloudSearch` → same WebView path
-- `session.markSignedInAfterMicrosoftAuth()` → called only from `SignInWebView`
-- `session.signOut()` / `revalidatePersistedLogin()` → existing cookie logic
-- Shared `WKProcessPool` between SignIn and stream WebViews — never split
+- `session.playCatalogGame` / `playGame` → `isStreaming` + `webURL` → **StreamPlayerView**
+- `session.openCloudSearch` → same player path
+- `session.markSignedInAfterMicrosoftAuth()` → only from **SignInWebView**
+- Shared `WKProcessPool` between SignIn and stream — never split
 
-## REBUILT (UI / navigation)
+## CLEAN-SLATE APP (compiled)
 
-- `RootView`, `GameHubView`, `SearchHubView`, `SettingsView`
-- `GameHubCards`, `HubLayout`, `JumpBackInDock`, `GameDetailView`
-- `IntroView`, `WelcomeView` (still hand off to SignInWebView)
-- Glass helpers: `GlassCompat`, `LiquidGlassComponents`
+```
+Core/          AppTab + architecture notes
+App/           AppRoot, AppShell
+Features/      Home, Search, Settings, Details, Onboarding
+UI/            AppBackground, GlassTabBar, GameCards
+```
 
-## Acceptance flow
-
-Fresh install → Intro → Welcome → **SignInWebView (locked)** → new Home → Play → **StreamPlayerView (locked)**
+Legacy `Views/GameHubView`, `RootView`, `LibraryView`, `SearchView`, `SettingsView`, etc.
+are **excluded from XcodeGen** and are not the foundation of the running UI.

@@ -5,7 +5,7 @@ options:
     iOS: "26.0"
   xcodeVersion: "26"
 
-# No SPM packages — native GameHub + Better xCloud service layer
+# No SPM packages — native hub + Better xCloud service layer
 
 targets:
   GameStream:
@@ -15,6 +15,31 @@ targets:
       - path: GameStream
         excludes:
           - "Resources/**"
+          # Legacy UI (specification only — not compiled into the clean-slate app)
+          - "Views/AnimatedBackground.swift"
+          - "Views/EmptyStateView.swift"
+          - "Views/GameDetailView.swift"
+          - "Views/GameHubActivity.swift"
+          - "Views/GameHubCards.swift"
+          - "Views/GameHubLists.swift"
+          - "Views/GameHubQueue.swift"
+          - "Views/GameHubView.swift"
+          - "Views/GlassCompat.swift"
+          - "Views/HubLayout.swift"
+          - "Views/IntroView.swift"
+          - "Views/JumpBackInDock.swift"
+          - "Views/LibraryView.swift"
+          - "Views/LiquidGlassComponents.swift"
+          - "Views/ListsBrowserView.swift"
+          - "Views/RootView.swift"
+          - "Views/SearchHubView.swift"
+          - "Views/SearchPlaySupport.swift"
+          - "Views/SearchView.swift"
+          - "Views/SettingsView.swift"
+          - "Views/WelcomeView.swift"
+          # Locked core remains compiled:
+          # Views/SignInWebView.swift, StreamPlayerView.swift, PlayLoadingView.swift
+          # Views/OnboardingStore.swift (shared key store used by App onboarding)
     resources:
       - path: GameStream/Assets.xcassets
       - path: GameStream/Resources
@@ -32,8 +57,8 @@ targets:
       properties:
         CFBundleDisplayName: GameStream
         CFBundleName: GameStream
-        CFBundleShortVersionString: "1.5.8"
-        CFBundleVersion: "46"
+        CFBundleShortVersionString: "2.0.0"
+        CFBundleVersion: "50"
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
