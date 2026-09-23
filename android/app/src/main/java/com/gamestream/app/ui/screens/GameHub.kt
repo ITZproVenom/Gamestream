@@ -34,7 +34,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,7 +48,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
@@ -63,7 +61,9 @@ import com.gamestream.app.SessionStore
 
 @Composable
 fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
-    val appearance = AppearancePrefs.get(LocalContext.current)
+    val context = LocalContext.current
+    val appearance = AppearancePrefs.get(context)
+    @Suppress("UNUSED_VARIABLE")
     val rev = appearance.revision
 
     var filter by remember { mutableStateOf("Home") }
@@ -74,17 +74,7 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
     val forYou = remember(session.favoriteIds, session.recentIds) { ForYouCatalog.forYou(favs, recents) }
     val because = remember(session.recentIds) { ForYouCatalog.becauseYouPlayed(recents) }
 
-    val hubLayout = appearance.hubLayout
-    val showGenres = appearance.showGenreFilters
-    val showActivity = appearance.showActivityOnHome
-    val posterW = appearance.posterWidthDp().dp
-    val heroH = appearance.heroHeightDp().dp
-    val sectionGap = appearance.sectionSpacingDp().dp
-
-    val primaryChips = listOf("Home", "Library", "Browse", "For You", "Favorites", "Recents")
-    val genreChips = if (showGenres) {
-        GameDiscovery.shelves().map { it.first }.take(12)
-    } else emptyList()
+    val chips = listOf("Home", "Library", "Browse", "For You", "Favorites", "Recents")
 
     val filtered = when (filter) {
         "For You" -> forYou
@@ -93,12 +83,10 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
         "Library" -> (favs + recents).distinctBy { it.id }
         "Browse", "Home" -> GameCatalog.games
         else -> GameDiscovery.fromTitle(filter)?.let { GameDiscovery.games(it) }
-            ?: GameCatalog.games.filter { it.genre.equals(filter, ignoreCase = true) }
+            ?: GameCatalog.games.filter { it.genre == filter }
     }
 
     val bg = Color(appearance.backgroundColorArgb())
-    @Suppress("UNUSED_VARIABLE")
-    val forceLayout = rev to hubLayout
 
     Box(modifier.fillMaxSize().background(bg)) {
         LazyColumn(
@@ -129,7 +117,7 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
                         .padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    primaryChips.forEach { chip ->
+                    chips.forEach { chip ->
                         FilterChip(
                             selected = filter == chip,
                             onClick = { filter = chip },
@@ -142,138 +130,57 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
                         )
                     }
                 }
-                if (genreChips.isNotEmpty()) {
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        genreChips.forEach { chip ->
-                            FilterChip(
-                                selected = filter == chip,
-                                onClick = { filter = chip },
-                                label = { Text(chip, maxLines = 1) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                                    selectedLabelColor = Color.White,
-                                    labelColor = Color(0xFFA8A8B0)
-                                )
-                            )
-                        }
-                    }
-                }
                 Spacer(Modifier.height(8.dp))
             }
 
             if (filter == "Home") {
-                if (showActivity) {
+                recents.firstOrNull()?.let { last ->
                     item {
-                        ActivityStrip(session, Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+                        JumpBackInCard(
+                            game = last,
+                            onResume = { session.playGame(last) },
+                            onOpen = { detail = last },
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                        )
                     }
                 }
 
-                when (hubLayout) {
-                    "grid" -> {
-                        recents.firstOrNull()?.let { last ->
-                            item {
-                                JumpBackInCard(
-                                    game = last,
-                                    onResume = { session.playGame(last) },
-                                    onOpen = { detail = last },
-                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = sectionGap / 2)
-                                )
-                            }
-                        }
-                        item { ShelfHeader("All games") }
-                        item {
-                            PosterStrip(
-                                games = GameCatalog.games.take(48),
-                                posterWidth = posterW,
-                                isFavorite = { session.isFavorite(it) },
-                                onOpen = { detail = it },
-                                onPlay = { session.playGame(it) },
-                                onFav = { session.toggleFavorite(it) }
-                            )
-                        }
+                GameCatalog.featured.firstOrNull()?.let { hero ->
+                    item {
+                        HeroCard(
+                            game = hero,
+                            favorite = session.isFavorite(hero.id),
+                            onPlay = { session.playGame(hero) },
+                            onFav = { session.toggleFavorite(hero) },
+                            onOpen = { detail = hero },
+                            modifier = Modifier
+                                .padding(horizontal = 20.dp, vertical = 8.dp)
+                                .fillMaxWidth()
+                        )
                     }
-                    "rails" -> {
-                        recents.firstOrNull()?.let { last ->
-                            item {
-                                JumpBackInCard(
-                                    game = last,
-                                    onResume = { session.playGame(last) },
-                                    onOpen = { detail = last },
-                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = sectionGap / 2)
-                                )
-                            }
-                        }
-                        item { ShelfHeader("Featured") }
-                        item {
-                            PosterStrip(
-                                games = GameCatalog.featured.ifEmpty { GameCatalog.games.take(8) },
-                                posterWidth = posterW,
-                                isFavorite = { session.isFavorite(it) },
-                                onOpen = { detail = it },
-                                onPlay = { session.playGame(it) },
-                                onFav = { session.toggleFavorite(it) }
-                            )
-                        }
-                        homeShelves(session, recents, favs, forYou, because).forEach { (title, games) ->
-                            item { ShelfHeader(title) }
-                            item {
-                                PosterStrip(
-                                    games = games,
-                                    posterWidth = posterW,
-                                    isFavorite = { session.isFavorite(it) },
-                                    onOpen = { detail = it },
-                                    onPlay = { session.playGame(it) },
-                                    onFav = { session.toggleFavorite(it) }
-                                )
-                            }
-                        }
-                    }
-                    else -> { // editorial
-                        recents.firstOrNull()?.let { last ->
-                            item {
-                                JumpBackInCard(
-                                    game = last,
-                                    onResume = { session.playGame(last) },
-                                    onOpen = { detail = last },
-                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = sectionGap / 2)
-                                )
-                            }
-                        }
-                        GameCatalog.featured.firstOrNull()?.let { hero ->
-                            item {
-                                HeroCard(
-                                    game = hero,
-                                    favorite = session.isFavorite(hero.id),
-                                    height = heroH,
-                                    onPlay = { session.playGame(hero) },
-                                    onFav = { session.toggleFavorite(hero) },
-                                    onOpen = { detail = hero },
-                                    modifier = Modifier
-                                        .padding(horizontal = 20.dp, vertical = sectionGap / 2)
-                                        .fillMaxWidth()
-                                )
-                            }
-                        }
-                        homeShelves(session, recents, favs, forYou, because).forEach { (title, games) ->
-                            item { ShelfHeader(title) }
-                            item {
-                                PosterStrip(
-                                    games = games,
-                                    posterWidth = posterW,
-                                    isFavorite = { session.isFavorite(it) },
-                                    onOpen = { detail = it },
-                                    onPlay = { session.playGame(it) },
-                                    onFav = { session.toggleFavorite(it) }
-                                )
-                            }
-                        }
+                }
+
+                val shelves = buildList {
+                    val queued = session.queuedGames()
+                    if (queued.isNotEmpty()) add("Up Next" to queued)
+                    if (recents.isNotEmpty()) add("Continue playing" to recents)
+                    if (favs.isNotEmpty()) add("Favorites" to favs)
+                    if (forYou.isNotEmpty()) add("For You" to forYou)
+                    because.forEach { add(it) }
+                    add("Popular on Cloud" to GameCatalog.games.take(12))
+                    addAll(GameDiscovery.shelves())
+                }
+
+                shelves.forEach { (title, games) ->
+                    item {
+                        ShelfHeader(title)
+                        PosterStrip(
+                            games = games,
+                            isFavorite = { session.isFavorite(it) },
+                            onOpen = { detail = it },
+                            onPlay = { session.playGame(it) },
+                            onFav = { session.toggleFavorite(it) }
+                        )
                     }
                 }
 
@@ -309,7 +216,6 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
                     item {
                         PosterStrip(
                             games = filtered,
-                            posterWidth = posterW,
                             isFavorite = { session.isFavorite(it) },
                             onOpen = { detail = it },
                             onPlay = { session.playGame(it) },
@@ -334,23 +240,6 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
     }
 }
 
-private fun homeShelves(
-    session: SessionStore,
-    recents: List<CatalogGame>,
-    favs: List<CatalogGame>,
-    forYou: List<CatalogGame>,
-    because: List<Pair<String, List<CatalogGame>>>
-): List<Pair<String, List<CatalogGame>>> = buildList {
-    val queued = session.queuedGames()
-    if (queued.isNotEmpty()) add("Up Next" to queued)
-    if (recents.isNotEmpty()) add("Continue playing" to recents)
-    if (favs.isNotEmpty()) add("Favorites" to favs)
-    if (forYou.isNotEmpty()) add("For You" to forYou)
-    because.forEach { add(it) }
-    add("Popular on Cloud" to GameCatalog.games.take(12))
-    addAll(GameDiscovery.shelves())
-}
-
 private fun emptyCopy(filter: String): String = when (filter) {
     "Favorites" -> "Star a game to pin it here."
     "Recents" -> "Launch a title and it will appear here."
@@ -368,25 +257,6 @@ private fun ShelfHeader(title: String) {
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 10.dp)
     )
-}
-
-@Composable
-private fun ActivityStrip(session: SessionStore, modifier: Modifier = Modifier) {
-    val activity = session.activity()
-    Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = Color(0xFF16161E),
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Column(Modifier.padding(14.dp)) {
-            Text("This week", color = Color.White, fontWeight = FontWeight.SemiBold)
-            Text(
-                "${activity.format(activity.weekTotal())} streamed",
-                color = Color(0xFFA0A0AA),
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
-    }
 }
 
 @Composable
@@ -452,7 +322,6 @@ private fun JumpBackInCard(
 private fun HeroCard(
     game: CatalogGame,
     favorite: Boolean,
-    height: Dp,
     onPlay: () -> Unit,
     onFav: () -> Unit,
     onOpen: () -> Unit,
@@ -461,7 +330,7 @@ private fun HeroCard(
     Box(
         modifier
             .fillMaxWidth()
-            .height(height)
+            .height(200.dp)
             .clip(RoundedCornerShape(22.dp))
             .background(Color(game.accent.toInt()))
             .clickable(onClick = onOpen)
@@ -530,7 +399,6 @@ private fun HeroCard(
 @Composable
 private fun PosterStrip(
     games: List<CatalogGame>,
-    posterWidth: Dp,
     isFavorite: (String) -> Boolean,
     onOpen: (CatalogGame) -> Unit,
     onPlay: (CatalogGame) -> Unit,
@@ -543,7 +411,6 @@ private fun PosterStrip(
         items(games, key = { it.id }) { game ->
             PosterCard(
                 game = game,
-                width = posterWidth,
                 favorite = isFavorite(game.id),
                 onOpen = { onOpen(game) },
                 onPlay = { onPlay(game) },
@@ -556,7 +423,6 @@ private fun PosterStrip(
 @Composable
 private fun PosterCard(
     game: CatalogGame,
-    width: Dp,
     favorite: Boolean,
     onOpen: () -> Unit,
     onPlay: () -> Unit,
@@ -564,7 +430,7 @@ private fun PosterCard(
 ) {
     Column(
         Modifier
-            .width(width)
+            .width(118.dp)
             .clickable(onClick = onOpen)
     ) {
         Box(
@@ -644,34 +510,33 @@ private fun GameDetailDialog(
                 Text(
                     game.title,
                     color = Color.White,
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                 )
-                Spacer(Modifier.height(8.dp))
-                Text(game.tagline, color = Color(0xFFA0A0AA), maxLines = 3, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(4.dp))
-                Text("${game.genre} · ${game.provider}", color = Color(0xFF808088), style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(6.dp))
+                Text(game.tagline, color = Color(0xFFA0A0AA), style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(16.dp))
                 Button(onClick = onPlay, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null)
-                    Text("  Play now")
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Text("  Play")
                 }
                 Spacer(Modifier.height(8.dp))
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    TextButton(onClick = onFav) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onFav, modifier = Modifier.weight(1f)) {
                         Text(if (favorite) "Unfavorite" else "Favorite")
                     }
-                    TextButton(onClick = onQueue) {
-                        Text(if (queued) "Queued" else "Up Next")
-                    }
-                    TextButton(onClick = onDismiss) {
-                        Text("Close")
+                    Button(onClick = onQueue, modifier = Modifier.weight(1f)) {
+                        Text(if (queued) "Queued" else "Queue")
                     }
                 }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Close",
+                    color = Color(0xFFA0A0AA),
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .clickable(onClick = onDismiss)
+                        .padding(8.dp)
+                )
             }
         }
     }
