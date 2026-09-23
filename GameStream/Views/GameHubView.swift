@@ -102,6 +102,9 @@ struct GameHubView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .refreshable {
+            session.refreshXboxPlayHistory(force: true)
+        }
         .onAppear {
             prefetchHubArtwork()
         }
@@ -437,7 +440,7 @@ struct GameHubView: View {
         case .browse: return "The catalog hasn't loaded yet."
         case .mine: return "Star a game or play a title and it will live here."
         case .favorites: return "Star a game to pin it here."
-        case .recents: return "Launch a title and it will appear here."
+        case .recents: return "Play a title here, or wait a moment after sign-in so Xbox recents can fill this list."
         case .forYou: return "Play or favorite a few games so For You can learn your genres."
         default: return "No titles in this filter."
         }
