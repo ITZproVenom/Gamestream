@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -51,6 +52,11 @@ enum class Tab(val label: String) {
 @Composable
 fun GameStreamApp(session: SessionStore = viewModel()) {
     val context = LocalContext.current
+    val appearance = AppearancePrefs.get(context)
+    // Recompose when any appearance setting changes
+    @Suppress("UNUSED_VARIABLE")
+    val appearanceRev = appearance.revision
+
     val tabPrefs = remember { context.getSharedPreferences("gamestream.ui", Context.MODE_PRIVATE) }
     var tab by remember {
         mutableStateOf(
@@ -62,10 +68,7 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
         )
     }
     var introCompleted by remember { mutableStateOf(OnboardingPrefs.isIntroDone(context)) }
-    val appearance = remember { AppearancePrefs(context) }
-    @Suppress("UNUSED_VARIABLE")
-    val rev = appearance.revision
-    val bgColor = Color(appearance.backgroundColorArgb())
+    val bgColor = MaterialTheme.colorScheme.background
 
     LaunchedEffect(Unit) {
         CloudCatalogService.refreshIfNeeded(context.applicationContext)
@@ -116,7 +119,7 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
                         selectedTextColor = Color.White,
                         unselectedIconColor = Color(0xFF909098),
                         unselectedTextColor = Color(0xFF909098),
-                        indicatorColor = Color(0xFF2A2A36)
+                        indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
                     )
                     NavigationBarItem(
                         selected = tab == Tab.Library,
