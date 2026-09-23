@@ -31,6 +31,7 @@ struct GameHubView: View {
     @State private var filter: HubBrowseFilter = .home
     @State private var detailGame: CatalogGame?
     @State private var showingLists = false
+    @Environment(\.hubContentWidth) private var hubWidth
 
     private var primaryChips: [HubBrowseFilter] {
         [.home, .library, .browse, .forYou, .favorites, .recents, .lists, .activity]
@@ -69,6 +70,13 @@ struct GameHubView: View {
         [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
     }
 
+    private var posterW: CGFloat {
+        HubMetrics.posterWidth(
+            containerWidth: max(hubWidth, 320),
+            compact: appearance.density == .compact || appearance.cardStyle == .compact
+        )
+    }
+
     var body: some View {
         HubPage {
             let _ = catalogLive.revision
@@ -88,7 +96,10 @@ struct GameHubView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .refreshable { session.refreshXboxPlayHistory(force: true) }
-        .onAppear { artwork.prefetch(GameCatalog.featured.map(\.id) + Array(GameCatalog.sortedBrowse.prefix(40)).map(\.id)) }
+        .onAppear {
+            artwork.prefetch(GameCatalog.featured.map(\.id) + Array(GameCatalog.sortedBrowse.prefix(40)).map(\.id))
+            artwork.prefetch(session.recents.map(\.id))
+        }
         .sheet(item: $detailGame) { game in
             GameDetailView(game: game) { detailGame = nil }
                 .environmentObject(session)
@@ -101,8 +112,6 @@ struct GameHubView: View {
             .environmentObject(session)
         }
     }
-
-    // MARK: - Header
 
     private var header: some View {
         HStack(alignment: .center) {
@@ -164,8 +173,6 @@ struct GameHubView: View {
         }
     }
 
-    // MARK: - Search results
-
     private var searchResults: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(catalogHits.isEmpty ? "No matches" : "Results")
@@ -194,19 +201,17 @@ struct GameHubView: View {
         }
     }
 
-    // MARK: - Play next
-
     @ViewBuilder
     private var playNextBanner: some View {
         if session.offerPlayNext, let next = session.nextQueuedGame {
             let catalog = GameCatalog.catalog(from: next)
             HStack(spacing: 14) {
-                GameArtView(url: artwork.url(for: next.id), accent: catalog.accent, title: next.title)
+                GameArtView(url: artwork.url(for: next.id), accent: catalog.accent, title: catalog.title)
                     .frame(width: 52, height: 70)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Up next").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    Text(next.title).font(.headline).lineLimit(1)
+                    Text(catalog.title).font(.headline).lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 Button {
@@ -221,8 +226,6 @@ struct GameHubView: View {
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
     }
-
-    // MARK: - Filter body
 
     @ViewBuilder
     private var filterBody: some View {
@@ -239,7 +242,7 @@ struct GameHubView: View {
     }
 
     private var homeContent: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: 24) {
             JumpBackInDock()
 
             if appearance.showActivityOnHome {
@@ -256,7 +259,8 @@ struct GameHubView: View {
                     openDetail: { detailGame = hero }
                 )
                 .frame(maxWidth: .infinity)
-                .frame(height: appearance.density == .compact ? 200 : 240)
+                .frame(height: appearance.density == .compact ? 200 : 236)
+                .clipped()
             }
 
             ForEach(Array(GameCatalog.hubShelves(favorites: session.favorites, recents: session.recents).enumerated()), id: \.offset) { _, row in
@@ -312,18 +316,15 @@ struct GameHubView: View {
     }
 
     private func rail(title: String, games: [CatalogGame]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let height = HubMetrics.posterRowHeight(posterWidth: posterW)
+        return VStack(alignment: .leading, spacing: 12) {
             Text(title)
                 .font(.title3.weight(.bold))
-            HubCarousel(spacing: 12) {
+                .lineLimit(1)
+            HubCarousel(spacing: 12, rowHeight: height) {
                 ForEach(games) { game in
                     poster(game)
-                        .containerRelativeFrame(.horizontal) { width, _ in
-                            HubMetrics.posterWidth(
-                                containerWidth: width,
-                                compact: appearance.density == .compact || appearance.cardStyle == .compact
-                            )
-                        }
+                        .frame(width: posterW)
                 }
             }
         }
