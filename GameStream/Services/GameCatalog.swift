@@ -81,11 +81,16 @@ enum GameCatalog {
         games.first(where: { $0.id.caseInsensitiveCompare(id) == .orderedSame })
     }
 
+    /// Prefer real catalog title; never show scraped marketing junk like "D Fallout 76: The Slasher...".
     static func catalog(from tracked: TrackedGame) -> CatalogGame {
-        game(id: tracked.id) ?? CatalogGame(
+        if let known = game(id: tracked.id) {
+            return known
+        }
+        let clean = sanitizeTitle(tracked.title)
+        return CatalogGame(
             id: tracked.id,
             slug: tracked.slug,
-            title: tracked.title,
+            title: clean,
             tagline: "Xbox Cloud Gaming",
             genre: "Cloud",
             provider: "Xbox Cloud",
@@ -93,6 +98,30 @@ enum GameCatalog {
             accent: 0x4361EE,
             posterURL: nil
         )
+    }
+
+    /// Strip page-title noise from Xbox play-history scrapes.
+    static func sanitizeTitle(_ raw: String) -> String {
+        var t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Leading single letter + space (bad parse of "D Fallout…").
+        if t.count > 3,
+           let first = t.first,
+           first.isLetter,
+           t.dropFirst().first == " " {
+            let rest = String(t.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+            if rest.count > 2 { t = rest }
+        }
+        // Cut at marketing separators.
+        for sep in [" | ", " – ", " — ", ": Season", ": New Season"] {
+            if let range = t.range(of: sep) {
+                let head = String(t[..<range.lowerBound]).trimmingCharacters(in: .whitespaces)
+                if head.count >= 3 { t = head }
+            }
+        }
+        if t.count > 48 {
+            t = String(t.prefix(45)).trimmingCharacters(in: .whitespaces) + "…"
+        }
+        return t.isEmpty ? "Cloud game" : t
     }
 
     static func matches(_ query: String) -> [CatalogGame] {
