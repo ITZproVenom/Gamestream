@@ -1,11 +1,19 @@
 package com.gamestream.app
 
 import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 
-class AppearancePrefs(context: Context) {
-    private val prefs = context.getSharedPreferences("gamestream.appearance", Context.MODE_PRIVATE)
+/**
+ * Shared appearance store. [revision] is Compose state so Settings changes
+ * recompose Theme / Hub / bottom bar instead of looking like dead buttons.
+ */
+class AppearancePrefs private constructor(context: Context) {
+    private val prefs = context.applicationContext.getSharedPreferences("gamestream.appearance", Context.MODE_PRIVATE)
 
-    var revision: Int = 0
+    /** Bumps on every write — read this in composables to subscribe. */
+    var revision by mutableIntStateOf(0)
         private set
 
     private fun bump() {
@@ -83,11 +91,24 @@ class AppearancePrefs(context: Context) {
         else -> 18
     }
 
+    fun posterWidthDp(): Int = when {
+        density == "compact" || cardStyle == "compact" -> 96
+        cardStyle == "wide" -> 150
+        density == "spacious" -> 132
+        else -> 118
+    }
+
     fun posterWidthFraction(): Float = when {
         density == "compact" || cardStyle == "compact" -> 0.28f
         cardStyle == "wide" -> 0.42f
         density == "spacious" -> 0.36f
         else -> 0.32f
+    }
+
+    fun heroHeightDp(): Int = when (density) {
+        "compact" -> 168
+        "spacious" -> 220
+        else -> 200
     }
 
     fun backgroundColorArgb(): Int = when (background) {
@@ -104,6 +125,17 @@ class AppearancePrefs(context: Context) {
         "midnight" -> 0xFF050514.toInt()
         "dusk" -> 0xFF140A1F.toInt()
         "mesh" -> 0xFF0C0C18.toInt()
-        else -> 0xFF0A0A12.toInt()
+        "still" -> 0xFF0E0E16.toInt()
+        else -> 0xFF0A0A12.toInt() // aurora / default
+    }
+
+    companion object {
+        @Volatile private var instance: AppearancePrefs? = null
+
+        fun get(context: Context): AppearancePrefs {
+            return instance ?: synchronized(this) {
+                instance ?: AppearancePrefs(context.applicationContext).also { instance = it }
+            }
+        }
     }
 }
