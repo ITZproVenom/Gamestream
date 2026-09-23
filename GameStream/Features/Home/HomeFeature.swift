@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Full native hub — layout scales from container width (Dynamic Island phones ~390–430pt).
+/// Full native hub — sized from container width (iPhone 13 = 390pt baseline).
 struct HomeFeature: View {
     @EnvironmentObject var session: SessionStore
     @ObservedObject private var catalogLive = CatalogLiveStore.shared
@@ -50,7 +50,6 @@ struct HomeFeature: View {
         }
     }
 
-    /// Prefer a featured title that already has art; fall back to any featured / first game.
     private var heroGame: CatalogGame? {
         _ = artwork.urls
         let featured = GameCatalog.featured
@@ -66,11 +65,10 @@ struct HomeFeature: View {
             let railW = LayoutMetrics.railPosterWidth(containerWidth: pageW)
             let gridW = LayoutMetrics.gridPosterWidth(containerWidth: pageW)
             let rowH = LayoutMetrics.cardHeight(posterWidth: railW)
-            // Fixed hero height for this phone class — never pageH-fraction (that caused overlap)
-            let heroH: CGFloat = appearance.density == .compact ? 196 : 220
+            let heroH = LayoutMetrics.heroHeight(compact: appearance.density == .compact)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 18) {
                     header
                     PlayNextBannerFeature()
                     chipRow(primaryChips)
@@ -80,7 +78,7 @@ struct HomeFeature: View {
                     filterBody(railW: railW, gridW: gridW, rowH: rowH, heroH: heroH)
                 }
                 .padding(.horizontal, LayoutMetrics.pagePadding)
-                .padding(.top, 12)
+                .padding(.top, 8)
                 .padding(.bottom, LayoutMetrics.tabBarClearance)
                 .frame(maxWidth: pageW, alignment: .leading)
             }
@@ -112,7 +110,7 @@ struct HomeFeature: View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("GameStream")
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
                 Text("Xbox Cloud Gaming")
@@ -168,7 +166,7 @@ struct HomeFeature: View {
     }
 
     private func homeContent(railW: CGFloat, rowH: CGFloat, heroH: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: 20) {
             JumpBackInFeature(onOpen: onOpenGame)
 
             if appearance.showActivityOnHome {
@@ -189,8 +187,7 @@ struct HomeFeature: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: heroH)
                 .clipped()
-                // Keep the next shelf from sliding under the hero
-                .padding(.bottom, 4)
+                .padding(.bottom, 6)
             }
 
             ForEach(Array(GameCatalog.hubShelves(favorites: session.favorites, recents: session.recents).enumerated()), id: \.offset) { _, row in

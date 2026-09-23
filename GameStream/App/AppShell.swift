@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 /// Signed-in shell: full feature tabs. Streaming hands off to locked StreamPlayerView.
+/// Layout targets iPhone 13 (390×844, notch) and scales via GeometryReader.
 struct AppShell: View {
     @EnvironmentObject var session: SessionStore
     @ObservedObject private var hub = HubState.shared
@@ -54,9 +55,10 @@ struct AppShell: View {
                     selected: $selectedTab,
                     dragOffset: $tabDragOffset
                 )
-                .padding(.horizontal, 16)
+                // iPhone 13: slightly tighter horizontal inset so 4 tabs fit cleanly
+                .padding(.horizontal, 12)
                 .padding(.top, 4)
-                .padding(.bottom, 6)
+                .padding(.bottom, 4)
             }
         }
         .sheet(item: $detailGame) { game in

@@ -1,42 +1,49 @@
 import SwiftUI
 
 /// Screen-adaptive metrics for poster grids and rails.
-/// Sized for modern Dynamic Island phones (390–430pt wide) and larger.
+///
+/// Baseline: **iPhone 13** — 390 × 844 pt, notch, home indicator.
+/// Also covers 14/15/16 (390) and Plus/Max (~428–430) via container width.
 enum LayoutMetrics {
-    /// Horizontal page padding.
-    static let pagePadding: CGFloat = 20
+    /// Horizontal page padding (comfortable on 390pt).
+    static let pagePadding: CGFloat = 16
 
-    /// Space reserved under scroll content for the floating glass tab bar.
-    static let tabBarClearance: CGFloat = 96
+    /// Space under scroll content for floating glass tab bar + home indicator.
+    /// iPhone 13 home indicator ~34pt; tab bar ~62pt + padding.
+    static let tabBarClearance: CGFloat = 100
 
     static let gridSpacing: CGFloat = 12
     static let railSpacing: CGFloat = 12
 
-    /// Title band: exactly 2 caption lines (no layout thrash between 1- and 2-line titles).
+    /// Title band: exactly 2 caption lines.
     static let titleBand: CGFloat = 36
     static let playBand: CGFloat = 34
     static let cardStackSpacing: CGFloat = 6
 
-    /// Two-column library / search grid cell width.
+    /// Hero height for notch phones (iPhone 13 class).
+    static func heroHeight(compact: Bool) -> CGFloat {
+        compact ? 188 : 208
+    }
+
+    /// Two-column library / search cell width from full page width.
     static func gridPosterWidth(containerWidth: CGFloat) -> CGFloat {
         let usable = max(containerWidth - pagePadding * 2 - gridSpacing, 200)
         return floor(usable / 2)
     }
 
-    /// Horizontal rail poster width (~2.4–2.7 visible on phone).
+    /// Horizontal rail poster width.
+    /// On 390pt: ~2.45 cards visible so titles stay readable.
     static func railPosterWidth(containerWidth: CGFloat) -> CGFloat {
         let usable = max(containerWidth - pagePadding * 2, 280)
-        // Prefer ~2.5 cards on screen for 390–430pt devices
-        let target = usable / 2.55
-        return min(148, max(112, floor(target)))
+        let target = usable / 2.45
+        // Floor/cap tuned for iPhone 13 (390) through Max (430)
+        return min(142, max(118, floor(target)))
     }
 
-    /// Art height for a 3:4 poster at a given width.
     static func artHeight(posterWidth: CGFloat) -> CGFloat {
         posterWidth * (4.0 / 3.0)
     }
 
-    /// Full card height: art + spacers + title + play.
     static func cardHeight(posterWidth: CGFloat) -> CGFloat {
         artHeight(posterWidth: posterWidth)
             + cardStackSpacing
