@@ -13,6 +13,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -216,6 +220,7 @@ jobs:
         if: >-
           steps.meta.outputs.should_release == 'true' &&
           (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+        continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest-android
