@@ -204,7 +204,7 @@ struct HomeFeature: View {
                         Text("Full native catalog").font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Image(systemName: "chevron.right").font(.caption.weight(.bold).foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.secondary)
                 }
                 .padding(16)
             }
