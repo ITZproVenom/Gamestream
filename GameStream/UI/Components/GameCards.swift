@@ -34,42 +34,42 @@ struct HeroCard: View {
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onOpen)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 Spacer(minLength: 0)
                 Text(game.provider)
                     .font(.caption2.weight(.bold))
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
+                    .padding(.vertical, 4)
                     .glassEffect(.regular, in: Capsule())
                 Text(game.title)
-                    .font(.title2.weight(.bold))
+                    .font(.title3.weight(.bold))
                     .foregroundStyle(.white)
                     .lineLimit(2)
-                    .minimumScaleFactor(0.75)
+                    .minimumScaleFactor(0.8)
                 Text(game.tagline)
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.85))
-                    .lineLimit(2)
+                    .lineLimit(1)
                     .minimumScaleFactor(0.85)
                 HStack(spacing: 10) {
                     Button(action: onPlay) {
                         Label("Play", systemImage: "play.fill")
                             .font(.subheadline.weight(.semibold))
                             .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 8)
                     }
                     .buttonStyle(.glassProminent)
                     Button(action: onFavorite) {
                         Image(systemName: isFavorite ? "star.fill" : "star")
                             .font(.system(size: 14, weight: .semibold))
-                            .frame(width: 42, height: 42)
+                            .frame(width: 40, height: 40)
                     }
                     .buttonStyle(.glass)
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 16)
-            .padding(.bottom, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 12)
         }
         // Hard bounds — nothing draws outside the card
         .compositingGroup()
