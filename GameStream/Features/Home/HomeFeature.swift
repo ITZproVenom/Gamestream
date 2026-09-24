@@ -167,14 +167,7 @@ struct HomeFeature: View {
 
     private func homeContent(railW: CGFloat, rowH: CGFloat, heroH: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 20) {
-            JumpBackInFeature(onOpen: onOpenGame)
-
-            if appearance.showActivityOnHome {
-                ActivityBannerFeature {
-                    filter = .activity
-                }
-            }
-
+            // Editorial stack: clipped hero first, then continue / activity below.
             if let hero = heroGame {
                 HeroCard(
                     game: hero,
@@ -187,7 +180,14 @@ struct HomeFeature: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: heroH)
                 .clipped()
-                .padding(.bottom, 6)
+            }
+
+            JumpBackInFeature(onOpen: onOpenGame)
+
+            if appearance.showActivityOnHome {
+                ActivityBannerFeature {
+                    filter = .activity
+                }
             }
 
             ForEach(Array(GameCatalog.hubShelves(favorites: session.favorites, recents: session.recents).enumerated()), id: \.offset) { _, row in
@@ -204,7 +204,7 @@ struct HomeFeature: View {
                         Text("Full native catalog").font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right").font(.caption.weight(.bold).foregroundStyle(.secondary)
                 }
                 .padding(16)
             }
