@@ -21,8 +21,9 @@ enum LayoutMetrics {
     static let cardStackSpacing: CGFloat = 6
 
     /// Hero height for notch phones (iPhone 13 class).
+    /// Tall enough for provider + 2-line title + play row without clipping.
     static func heroHeight(compact: Bool) -> CGFloat {
-        compact ? 188 : 208
+        compact ? 204 : 228
     }
 
     /// Two-column library / search cell width from full page width.
