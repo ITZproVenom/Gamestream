@@ -243,12 +243,6 @@ struct GameHubView: View {
 
     private var homeContent: some View {
         VStack(alignment: .leading, spacing: 24) {
-            JumpBackInDock()
-
-            if appearance.showActivityOnHome {
-                GameHubActivityBanner(detailGame: $detailGame) { filter = .activity }
-            }
-
             if let hero = GameCatalog.featured.first {
                 FeaturedGameCard(
                     game: hero,
@@ -261,6 +255,12 @@ struct GameHubView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: appearance.density == .compact ? 200 : 236)
                 .clipped()
+            }
+
+            JumpBackInDock()
+
+            if appearance.showActivityOnHome {
+                GameHubActivityBanner(detailGame: $detailGame) { filter = .activity }
             }
 
             ForEach(Array(GameCatalog.hubShelves(favorites: session.favorites, recents: session.recents).enumerated()), id: \.offset) { _, row in
