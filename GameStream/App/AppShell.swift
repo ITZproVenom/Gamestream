@@ -32,18 +32,7 @@ struct AppShell: View {
                     StreamPlayerView()
                         .ignoresSafeArea()
                 } else if !session.isStreaming {
-                    TabView(selection: $selectedTab) {
-                        HomeFeature(onOpenGame: { detailGame = $0 })
-                            .tag(AppTab.home)
-                        LibraryFeature(onOpenGame: { detailGame = $0 })
-                            .tag(AppTab.library)
-                        SearchFeature(onOpenGame: { detailGame = $0 })
-                            .tag(AppTab.search)
-                        SettingsFeature()
-                            .tag(AppTab.settings)
-                    }
-                    .tabViewStyle(.page(indexDisplayMode: .never))
-                    .animation(.spring(response: 0.32, dampingFraction: 0.82), value: selectedTab)
+                    activeTab
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -104,6 +93,20 @@ struct AppShell: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 session.refreshXboxPlayHistory()
             }
+        }
+    }
+
+    @ViewBuilder
+    private var activeTab: some View {
+        switch selectedTab {
+        case .home:
+            HomeFeature(onOpenGame: { detailGame = $0 })
+        case .library:
+            LibraryFeature(onOpenGame: { detailGame = $0 })
+        case .search:
+            SearchFeature(onOpenGame: { detailGame = $0 })
+        case .settings:
+            SettingsFeature()
         }
     }
 
