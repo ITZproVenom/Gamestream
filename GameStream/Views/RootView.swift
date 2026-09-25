@@ -55,27 +55,7 @@ struct RootView: View {
                     StreamPlayerView()
                         .ignoresSafeArea()
                 } else if !session.isStreaming {
-                    TabView(selection: $selectedTab) {
-                        GameHubView()
-                            .tag(Tab.library)
-
-                        SearchHubView(isActive: selectedTab == .search)
-                            .safeAreaInset(edge: .top, spacing: 0) {
-                                if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                                   let game = session.continueGame {
-                                    ContinuePlayingCard(game: game)
-                                        .padding(.horizontal, 20)
-                                        .padding(.top, 8)
-                                        .padding(.bottom, 4)
-                                }
-                            }
-                            .tag(Tab.search)
-
-                        SettingsView(isActive: selectedTab == .settings)
-                            .tag(Tab.settings)
-                    }
-                    .tabViewStyle(.page(indexDisplayMode: .never))
-                    .animation(.spring(response: 0.32, dampingFraction: 0.82), value: selectedTab)
+                    activeTab
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -132,6 +112,27 @@ struct RootView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 session.refreshXboxPlayHistory()
             }
+        }
+    }
+
+    @ViewBuilder
+    private var activeTab: some View {
+        switch selectedTab {
+        case .library:
+            GameHubView()
+        case .search:
+            SearchHubView(isActive: true)
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                       let game = session.continueGame {
+                        ContinuePlayingCard(game: game)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 8)
+                            .padding(.bottom, 4)
+                    }
+                }
+        case .settings:
+            SettingsView(isActive: true)
         }
     }
 
