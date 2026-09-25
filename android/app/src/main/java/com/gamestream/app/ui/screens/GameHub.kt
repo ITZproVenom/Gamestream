@@ -134,17 +134,6 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
             }
 
             if (filter == "Home") {
-                recents.firstOrNull()?.let { last ->
-                    item {
-                        JumpBackInCard(
-                            game = last,
-                            onResume = { session.playGame(last) },
-                            onOpen = { detail = last },
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-                        )
-                    }
-                }
-
                 GameCatalog.featured.firstOrNull()?.let { hero ->
                     item {
                         HeroCard(
@@ -156,6 +145,17 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
                             modifier = Modifier
                                 .padding(horizontal = 20.dp, vertical = 8.dp)
                                 .fillMaxWidth()
+                        )
+                    }
+                }
+
+                recents.firstOrNull()?.let { last ->
+                    item {
+                        JumpBackInCard(
+                            game = last,
+                            onResume = { session.playGame(last) },
+                            onOpen = { detail = last },
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                         )
                     }
                 }
@@ -330,7 +330,7 @@ private fun HeroCard(
     Box(
         modifier
             .fillMaxWidth()
-            .height(200.dp)
+            .height(216.dp)
             .clip(RoundedCornerShape(22.dp))
             .background(Color(game.accent.toInt()))
             .clickable(onClick = onOpen)
