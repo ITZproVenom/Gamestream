@@ -38,7 +38,8 @@ struct IntroView: View {
 
                 actionArea
             }
-            .frame(width: physicalWidth, maxHeight: .infinity, alignment: .top)
+            .frame(width: physicalWidth, alignment: .top)
+            .frame(maxHeight: .infinity, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
