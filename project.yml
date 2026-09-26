@@ -12,6 +12,7 @@ targets:
     sources:
       - path: GameStream/GameStreamApp.swift
       - path: GameStream/Fresh
+      - path: GameStream/Assets.xcassets
       - path: GameStream/Services/SessionStore.swift
       - path: GameStream/Services/MicrosoftAuth.swift
       - path: GameStream/Services/BetterXCloudInjector.swift
@@ -22,7 +23,6 @@ targets:
       - path: GameStream/Views/SignInWebView.swift
       - path: GameStream/Views/StreamPlayerView.swift
     resources:
-      - path: GameStream/Assets.xcassets
       - path: GameStream/Resources
         includes:
           - "**/*"
