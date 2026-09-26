@@ -7,6 +7,7 @@ struct SearchHubView: View {
     @State private var pinned: [String] = SearchHistory.pinned
     @State private var detailGame: CatalogGame?
     @ObservedObject private var artwork = ArtworkStore.shared
+    @ObservedObject private var catalogLive = CatalogLiveStore.shared
 
     /// Set by RootView. The view stays mounted (for snappy tab switching) and
     /// uses this to re-sync cached lists only when it becomes the visible tab.
@@ -41,7 +42,7 @@ struct SearchHubView: View {
                 resultsSection
             }
         }
-        .onAppear { reload() }
+        .onAppear { let _ = catalogLive.revision; reload() }
         .onChange(of: isActive) { _, active in
             if active { reload() }
         }
