@@ -212,9 +212,9 @@ struct RootView: View {
             let width = max(geo.size.width, 1)
             let horizontalInset: CGFloat = 6
             let trackWidth = max(width - (horizontalInset * 2), 1)
-            let stopSpacing = trackWidth / max(tabCount - 1, 1)
             let thumbWidth = max(min(trackWidth / tabCount, 116), 92)
-            let selectedX = horizontalInset + (stopSpacing * CGFloat(selectedTab.index))
+            let usable = max(trackWidth - thumbWidth, 1)
+            let selectedX = horizontalInset + (thumbWidth / 2) + (usable * CGFloat(selectedTab.index) / max(tabCount - 1, 1))
 
             ZStack(alignment: .leading) {
                 // A single native Liquid Glass track. The control is a slider,
