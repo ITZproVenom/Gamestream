@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import CryptoKit
 import ImageIO
 import SwiftUI
 
@@ -16,9 +17,18 @@ final class RemoteImageLoader: ObservableObject {
     private let cache = NSCache<NSURL, UIImage>()
     private var inflight: [URL: Bool] = [:]
 
+    private static let diskDirectoryName = "GameStreamArtwork"
+    private let fileManager = FileManager.default
+
+    private var diskDirectory: URL? {
+        fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first?
+            .appendingPathComponent(Self.diskDirectoryName, isDirectory: true)
+    }
+
     init() {
         cache.countLimit = 200
         cache.totalCostLimit = 96 * 1024 * 1024
+        try? diskDirectory.map { try fileManager.createDirectory(at: $0, withIntermediateDirectories: true) }
     }
 
     /// Synchronous cache hop for use from `body`; never performs network.
@@ -27,15 +37,25 @@ final class RemoteImageLoader: ObservableObject {
         return cache.object(forKey: url as NSURL)
     }
 
-    /// Starts a download only if not cached and not already in flight.
+    /// Serves artwork from memory, then the persistent artwork cache, and only
+    /// then downloads it. This keeps the GameHub fast across launches.
     func request(_ url: URL?) {
         guard let url else { return }
         guard inflight[url] == nil, stored(url) == nil else { return }
         inflight[url] = true
-        let download = Task { await Self.image(for: url) }
+
         Task { [weak self] in
-            let image = await download.value
             guard let self else { return }
+
+            var image = await Self.loadDiskImage(url: url, directory: diskDirectory)
+
+            if image == nil {
+                image = await Self.image(for: url)
+                if let image {
+                    await Self.saveDiskImage(image, url: url, directory: diskDirectory)
+                }
+            }
+
             self.inflight[url] = nil
             if let image {
                 let cost = Int(image.size.width * image.size.height * 4)
@@ -45,9 +65,42 @@ final class RemoteImageLoader: ObservableObject {
         }
     }
 
+    /// Clears both the in-memory and persistent poster caches. Settings > Clear
+    /// cache calls this method, so the user controls both layers with one action.
     func clear() {
         cache.removeAllObjects()
         inflight.removeAll(keepingCapacity: true)
+        if let directory = diskDirectory {
+            try? fileManager.removeItem(at: directory)
+            try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+    }
+
+    nonisolated private static func diskURL(for url: URL, directory: URL?) -> URL? {
+        guard let directory else { return nil }
+        let digest = SHA256.hash(data: Data(url.absoluteString.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return directory.appendingPathComponent(digest).appendingPathExtension("jpg")
+    }
+
+    nonisolated private static func loadDiskImage(url: URL, directory: URL?) async -> UIImage? {
+        guard let path = diskURL(for: url, directory: directory),
+              let data = try? Data(contentsOf: path),
+              let image = UIImage(data: data) else {
+            return nil
+        }
+        return image
+    }
+
+    nonisolated private static func saveDiskImage(_ image: UIImage, url: URL, directory: URL?) async {
+        guard let directory,
+              let path = diskURL(for: url, directory: directory),
+              let data = image.jpegData(compressionQuality: 0.86) else {
+            return
+        }
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? data.write(to: path, options: .atomic)
     }
 
     nonisolated private static func image(for url: URL) async -> UIImage? {
