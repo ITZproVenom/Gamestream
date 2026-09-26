@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 /**
- * game-diagnostics — production Edge Function (v7)
+ * game-diagnostics — production Edge Function (v8)
  *
  * Project: fswswvhpszebuxnloysy
  * Table: public.diagnostics
@@ -134,7 +134,7 @@ Deno.serve(async (req: Request) => {
         "Content-Type": "application/json",
         apikey: serviceRoleKey,
         Authorization: `Bearer ${serviceRoleKey}`,
-        Prefer: "resolution=ignore-duplicates,return=minimal",
+        Prefer: "resolution=ignore-duplicates,return=representation",
       },
       body: JSON.stringify(events),
     });
@@ -143,7 +143,9 @@ Deno.serve(async (req: Request) => {
       console.error("diagnostics insert failed", response.status, detail.slice(0, 500));
       throw new Error("database_insert_failed");
     }
-    return new Response(JSON.stringify({ ok: true, inserted: events.length }), {
+    const insertedRows = await response.json().catch(() => []);
+    const inserted = Array.isArray(insertedRows) ? insertedRows.length : events.length;
+    return new Response(JSON.stringify({ ok: true, inserted }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
