@@ -13,6 +13,7 @@ targets:
       - path: GameStream/GameStreamApp.swift
       - path: GameStream/Fresh
       - path: GameStream/Assets.xcassets
+      - path: GameStream/Services/DiagnosticsStore.swift
       - path: GameStream/Services/SessionStore.swift
       - path: GameStream/Services/MicrosoftAuth.swift
       - path: GameStream/Services/BetterXCloudInjector.swift
