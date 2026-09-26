@@ -943,41 +943,99 @@ struct FreshPosterTile: View {
     }
 }
 
-struct FreshHeroImage: View {
+@MainActor
+final class FreshPosterCache: ObservableObject {
+    static let shared = FreshPosterCache()
+    private let memory = NSCache<NSURL, UIImage>()
+    private let ioQueue = DispatchQueue(label: "GameStream.fresh.poster-cache", qos: .utility)
+    private let directory: URL
+
+    private init() {
+        let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        directory = base.appendingPathComponent("GameStream/Posters", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        memory.countLimit = 160
+        memory.totalCostLimit = 48 * 1024 * 1024
+    }
+
+    func image(for url: URL) -> UIImage? {
+        if let image = memory.object(forKey: url as NSURL) { return image }
+        let file = diskURL(for: url)
+        guard let data = try? Data(contentsOf: file), let image = UIImage(data: data) else { return nil }
+        memory.setObject(image, forKey: url as NSURL, cost: data.count)
+        return image
+    }
+
+    func store(_ image: UIImage, data: Data, for url: URL) {
+        memory.setObject(image, forKey: url as NSURL, cost: data.count)
+        let file = diskURL(for: url)
+        ioQueue.async {
+            try? FileManager.default.createDirectory(at: self.directory, withIntermediateDirectories: true)
+            try? data.write(to: file, options: .atomic)
+        }
+    }
+
+    func clear() {
+        memory.removeAllObjects()
+        ioQueue.async {
+            try? FileManager.default.removeItem(at: self.directory)
+            try? FileManager.default.createDirectory(at: self.directory, withIntermediateDirectories: true)
+        }
+    }
+
+    private func diskURL(for url: URL) -> URL {
+        let digest = SHA256.hash(data: Data(url.absoluteString.utf8))
+        let key = digest.map { String(format: "%02x", $0) }.joined()
+        return directory.appendingPathComponent(key).appendingPathExtension("img")
+    }
+}
+
+struct FreshPosterImage: View {
     let url: URL?
+    @State private var image: UIImage?
+    @State private var loading = false
 
     var body: some View {
         ZStack {
-            Rectangle()
-                .fill(Color(uiColor: .tertiarySystemFill))
-
-            if let url {
-                AsyncImage(url: url, transaction: Transaction(animation: .easeOut(duration: 0.2))) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    case .failure:
-                        fallback
-                    case .empty:
-                        ProgressView()
-                    @unknown default:
-                        fallback
-                    }
-                }
+            Rectangle().fill(Color(uiColor: .tertiarySystemFill))
+            if let image {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else if loading {
+                ProgressView()
             } else {
-                fallback
+                Image(systemName: "gamecontroller.fill").font(.system(size: 42)).foregroundStyle(.tertiary)
             }
         }
         .clipped()
+        .task(id: url) { await load() }
     }
 
-    private var fallback: some View {
-        Image(systemName: "gamecontroller.fill")
-            .font(.system(size: 42))
-            .foregroundStyle(.tertiary)
+    private func load() async {
+        guard let url else { return }
+        let cache = FreshPosterCache.shared
+        if let cached = cache.image(for: url) {
+            image = cached
+            return
+        }
+
+        loading = true
+        defer { loading = false }
+
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard let http = response as? HTTPURLResponse,
+                  (200...299).contains(http.statusCode),
+                  let decoded = UIImage(data: data) else { return }
+            cache.store(decoded, data: data, for: url)
+            guard !Task.isCancelled else { return }
+            image = decoded
+        } catch {}
     }
+}
+
+struct FreshHeroImage: View {
+    let url: URL?
+    var body: some View { FreshPosterImage(url: url) }
 }
 
 struct FreshSectionHeader: View {
