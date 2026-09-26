@@ -59,7 +59,7 @@ struct FeaturedGameCard: View {
                     Button(action: favorite) {
                         Image(systemName: isFavorite() ? "star.fill" : "star")
                             .font(.system(size: 14, weight: .semibold))
-                            .frame(width: 40, height: 40)
+                            .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.glass)
                     .accessibilityLabel(isFavorite() ? "Remove from favorites" : "Add to favorites")
