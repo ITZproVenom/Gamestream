@@ -16,6 +16,8 @@ final class RemoteImageLoader: ObservableObject {
 
     private let cache = NSCache<NSURL, UIImage>()
     private var inflight: [URL: Bool] = [:]
+    private var cacheGeneration = 0
+    @Published private(set) var revision = 0
 
     private static let diskDirectoryName = "GameStreamArtwork"
     private let fileManager = FileManager.default
@@ -43,6 +45,7 @@ final class RemoteImageLoader: ObservableObject {
         guard let url else { return }
         guard inflight[url] == nil, stored(url) == nil else { return }
         inflight[url] = true
+        let generation = cacheGeneration
 
         Task { [weak self] in
             guard let self else { return }
@@ -57,6 +60,7 @@ final class RemoteImageLoader: ObservableObject {
             }
 
             self.inflight[url] = nil
+            guard generation == self.cacheGeneration else { return }
             if let image {
                 let cost = Int(image.size.width * image.size.height * 4)
                 self.cache.setObject(image, forKey: url as NSURL, cost: max(cost, 1))
@@ -68,12 +72,14 @@ final class RemoteImageLoader: ObservableObject {
     /// Clears both the in-memory and persistent poster caches. Settings > Clear
     /// cache calls this method, so the user controls both layers with one action.
     func clear() {
+        cacheGeneration &+= 1
         cache.removeAllObjects()
         inflight.removeAll(keepingCapacity: true)
         if let directory = diskDirectory {
             try? fileManager.removeItem(at: directory)
             try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         }
+        revision &+= 1
     }
 
     nonisolated private static func diskURL(for url: URL, directory: URL?) -> URL? {
@@ -135,6 +141,7 @@ final class RemoteImageLoader: ObservableObject {
 struct RemoteImage<Placeholder: View>: View {
     let url: URL?
     @ViewBuilder var placeholder: () -> Placeholder
+    @ObservedObject private var loader = RemoteImageLoader.shared
     @State private var loaded: UIImage?
 
     var body: some View {
@@ -148,7 +155,12 @@ struct RemoteImage<Placeholder: View>: View {
             }
         }
         .onAppear {
-            RemoteImageLoader.shared.request(url)
+            loaded = loader.stored(url)
+            loader.request(url)
+        }
+        .onChange(of: loader.revision) { _, _ in
+            loaded = nil
+            loader.request(url)
         }
         .onReceive(
             NotificationCenter.default.publisher(for: .remoteImageLoaded)
