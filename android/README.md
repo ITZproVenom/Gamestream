@@ -1,37 +1,65 @@
 # GameStream for Android
 
-Native **Kotlin + Jetpack Compose** port of GameStream: Xbox Cloud Gaming in a WebView with **Better xCloud** injected on every load.
+> A clean Kotlin + Jetpack Compose companion to the GameStream iOS client.
 
-## Features
+GameStream for Android provides a native shell around Xbox Cloud Gaming while keeping the active cloud session inside WebView with Better xCloud integration.
 
-- Library / Search / Settings tabs
-- Better xCloud userscript + modern CSS overrides
-- Resolution & region settings written into BX `localStorage`
-- Bottom bar hides while streaming
-- Persistent cookies / sign-in flag
+## ✦ Features
 
-## Build
+- 🎮 Native Library, Search, and Settings surfaces
+- 🌐 Persistent WebView session and sign-in state
+- ⚙️ Resolution and region preferences
+- 🧩 Better xCloud integration
+- 🌙 Material 3 dark UI
+- 📦 CI-built release APK
+
+## 🧱 Stack
+
+| Layer | Technology |
+| --- | --- |
+| UI | Kotlin + Jetpack Compose |
+| Design | Material 3 |
+| Streaming | WebView + Xbox Cloud Gaming |
+| Enhancements | Better xCloud |
+| Build | Gradle + GitHub Actions |
+
+## 🛠️ Build
+
+From the repository root:
 
 ```bash
 cd android
-# first time only if gradlew is missing:
-gradle wrapper --gradle-version 8.9
-
-./gradlew :app:assembleDebug
+./gradlew :app:assembleRelease
 ```
 
-APK output:
+APK:
 
-`app/build/outputs/apk/debug/app-debug.apk`
+```text
+app/build/outputs/apk/release/app-release.apk
+```
 
-Or open the `android/` folder in **Android Studio** and Run.
+Or open `android/` in Android Studio and run the app.
 
-## CI
+## 📦 Releases
 
-`.github/workflows/build-apk.yml` builds a debug APK on pushes that touch `android/` and attaches it to the **latest** GitHub Release.
+The current Android build is published through the repository's Android release channel:
+
+**[Latest Android release](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-android)**
+
+CI workflow:
+
+```text
+.github/workflows/build-apk.yml
+```
 
 ## Notes
 
-- This is **not** Liquid Glass (iOS-only). UI uses Material 3 dark theme.
-- Streaming quality depends on device WebView / network; Better xCloud still helps a lot.
-- Debug APK is unsigned for Play Store — sideload only.
+- The Android UI intentionally does not attempt to reproduce iOS Liquid Glass.
+- Streaming quality depends on the device WebView, network, and Xbox Cloud Gaming.
+- Release APKs are intended for sideloading unless separately distributed through an app store.
+
+## ♥ Credits
+
+**Created and maintained by Bestin.**
+
+See the root [Credits](../CREDITS.md) for project acknowledgements.
