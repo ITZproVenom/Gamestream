@@ -534,6 +534,7 @@ struct FreshSettingsView: View {
 
     @State private var resolution = "Auto"
     @State private var region = "Auto"
+    @State private var rumbleIntensity = 1.6
     @State private var confirmClear = false
     @State private var showAbout = false
 
@@ -675,6 +676,8 @@ struct FreshSettingsView: View {
                 region = session.storedRegion
                 if resolution.isEmpty { resolution = "Auto" }
                 if region.isEmpty { region = "Auto" }
+                let stored = UserDefaults.standard.object(forKey: "GameStream.controllerRumbleIntensity") as? Double
+                rumbleIntensity = min(max(stored ?? 1.6, 0.5), 3.0)
             }
             .confirmationDialog(
                 "Clear local cache?",
@@ -694,18 +697,15 @@ struct FreshSettingsView: View {
         }
     }
 
-    private var rumbleIntensity: Double {
-        let value = UserDefaults.standard.object(forKey: "GameStream.controllerRumbleIntensity") as? Double
-        return min(max(value ?? 1.6, 0.5), 3.0)
-    }
 }
 
 struct FreshGameDetail: View {
     @EnvironmentObject private var session: SessionStore
     @EnvironmentObject private var catalog: FreshCatalogStore
-    @Environment(.dismiss) private var dismiss
+    @Environment(\\.dismiss) private var dismiss
     let game: FreshGame
     @State private var showingLists = false
+    @State private var relatedGame: FreshGame?
 
     private var isFavorite: Bool { session.isFavorite(game.id) }
     private var isQueued: Bool { session.isQueued(game.id) }
@@ -775,7 +775,7 @@ struct FreshGameDetail: View {
                     FreshHorizontalGames(
                         games: Array(catalog.genreGames(game.genre).filter { $0.id != game.id }.prefix(8))
                     ) {
-                        // Detail navigation is handled by the parent stack.
+                        relatedGame = $0
                     }
                 }
 
@@ -792,6 +792,9 @@ struct FreshGameDetail: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $relatedGame) { related in
+            FreshGameDetail(game: related)
+        }
         .sheet(isPresented: $showingLists) {
             FreshListsPicker(game: game)
         }
@@ -1202,7 +1205,7 @@ struct FreshActivityView: View {
 struct FreshListsView: View {
     @EnvironmentObject private var lists: FreshListsStore
     @EnvironmentObject private var catalog: FreshCatalogStore
-    @Environment(.dismiss) private var dismiss
+    @Environment(\\.dismiss) private var dismiss
     @State private var showingCreate = false
     @State private var newName = ""
 
@@ -1323,7 +1326,7 @@ struct FreshListDetail: View {
 
 struct FreshListsPicker: View {
     @EnvironmentObject private var lists: FreshListsStore
-    @Environment(.dismiss) private var dismiss
+    @Environment(\\.dismiss) private var dismiss
     let game: FreshGame
 
     var body: some View {
@@ -1365,7 +1368,7 @@ struct FreshListsPicker: View {
 }
 
 struct FreshAboutView: View {
-    @Environment(.dismiss) private var dismiss
+    @Environment(\\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
@@ -1465,7 +1468,7 @@ struct FreshErrorBlock: View {
 
 struct FreshCloudBrowser: View {
     @EnvironmentObject private var session: SessionStore
-    @Environment(.dismiss) private var dismiss
+    @Environment(\\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
@@ -1478,6 +1481,31 @@ struct FreshCloudBrowser: View {
                 }
                 .navigationTitle("Xbox Cloud")
                 .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+
+struct PlayLoadingView: View {
+    let title: String
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.86).ignoresSafeArea()
+            VStack(spacing: 18) {
+                ProgressView()
+                    .tint(.white)
+                    .controlSize(.large)
+                Text(title.isEmpty ? "Starting cloud session" : title)
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                Text("Connecting to Xbox Cloud Gaming")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.65))
+            }
+            .padding(28)
         }
     }
 }
