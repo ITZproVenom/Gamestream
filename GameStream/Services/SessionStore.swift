@@ -295,6 +295,7 @@ final class SessionStore: ObservableObject {
     }
 
     func refreshBetterXCloudScript() {
+        BetterXCloudInjector.shared.invalidateCache()
         UserDefaults.standard.removeObject(forKey: "BetterXCloud.Script.v2")
         UserDefaults.standard.removeObject(forKey: "BetterXCloud.Script.Date.v2")
         betterXCloudRefreshToken += 1
