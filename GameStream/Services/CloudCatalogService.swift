@@ -16,7 +16,6 @@ enum CloudCatalogService {
         Task.detached(priority: .utility) {
             do {
                 try await fetchRemoteProgressive()
-                await MainActor.run { started = false }
             } catch {
                 await MainActor.run { started = false }
             }
