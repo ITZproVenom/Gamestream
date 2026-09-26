@@ -7,23 +7,35 @@ struct AppRoot: View {
     @State private var showIntro = !OnboardingStore.hasCompletedIntro
     @State private var showingMicrosoftLogin = false
     @State private var didBootstrap = false
+    @State private var showOpeningIntro = true
 
     var body: some View {
-        Group {
-            if session.isSignedIn {
-                AppShell()
-            } else if showIntro {
-                OnboardingIntroView {
-                    OnboardingStore.markIntroCompleted()
-                    withAnimation(.easeInOut(duration: 0.45)) {
-                        showIntro = false
+        ZStack {
+            Group {
+                if session.isSignedIn {
+                    AppShell()
+                } else if showIntro {
+                    OnboardingIntroView {
+                        OnboardingStore.markIntroCompleted()
+                        withAnimation(.easeInOut(duration: 0.45)) {
+                            showIntro = false
+                        }
+                    }
+                } else {
+                    OnboardingWelcomeView {
+                        DiagnosticsStore.shared.record(event: "login_started", feature: "auth")
+                        showingMicrosoftLogin = true
                     }
                 }
-            } else {
-                OnboardingWelcomeView {
-                    DiagnosticsStore.shared.record(event: "login_started", feature: "auth")
-                    showingMicrosoftLogin = true
+            }
+
+            if showOpeningIntro {
+                OpeningIntroView {
+                    withAnimation(.easeInOut(duration: 0.28)) {
+                        showOpeningIntro = false
+                    }
                 }
+                .zIndex(100)
             }
         }
         .environmentObject(session)
