@@ -427,6 +427,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          # Retire the old standalone experimental pointer now that experiments live in beta.
+          gh release delete latest-ios-experimental-rumble --yes --cleanup-tag 2>/dev/null || true
           gh release delete latest-ios-beta --yes --cleanup-tag 2>/dev/null || true
           gh release create latest-ios-beta \
             build/GameStream-unsigned.ipa \
