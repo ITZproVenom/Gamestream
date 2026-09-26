@@ -310,7 +310,6 @@ struct XboxCloudWebView: UIViewRepresentable {
             switch type {
             case "url":
                 if let href = body["href"] as? String {
-                    NotificationCenter.default.post(name: .playerStreamPageReached, object: nil)
                     if let streaming = body["streaming"] as? Bool, streaming {
                         NotificationCenter.default.post(name: .playerStreamPageReached, object: href)
                     }
