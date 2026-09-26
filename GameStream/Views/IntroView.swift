@@ -162,7 +162,7 @@ struct IntroView: View {
                 .foregroundStyle(.white.opacity(0.58))
                 .multilineTextAlignment(.center)
         }
-        .frame(width: contentWidth)
+        .frame(width: width)
         .opacity(appeared ? 1 : 0)
         .offset(y: appeared ? 0 : 10)
     }
