@@ -16,8 +16,10 @@ enum CloudCatalogService {
         started = true
         let generation = Self.generation
         stateLock.unlock()
-        Task { @MainActor in
-            if let cached = loadCache(), cached.count >= 20 {
+        Task.detached(priority: .utility) {
+            let cached = loadCache()
+            guard let cached, cached.count >= 20 else { return }
+            await MainActor.run {
                 guard Self.isCurrentGeneration(generation) else { return }
                 GameCatalog.installLiveCatalog(cached)
             }
