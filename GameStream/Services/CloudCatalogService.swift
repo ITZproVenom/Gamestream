@@ -4,22 +4,27 @@ enum CloudCatalogService {
     private static let siglURL = URL(string: "https://catalog.gamepass.com/sigls/v2?id=29a81209-df6f-41fd-a528-2ae6b91f719c&language=en-us&market=US")!
     private static let cacheName = "xcloud-catalog-v2.json"
     private static var started = false
+    private static var completion: (() -> Void)?
 
-    static func refreshIfNeeded() {
+    static func refreshIfNeeded(onReady: (() -> Void)? = nil) {
+        if let onReady { completion = onReady }
         guard !started else { return }
         started = true
         Task { @MainActor in
             if let cached = loadCache(), cached.count >= 20 {
                 GameCatalog.installLiveCatalog(cached)
+                completion?()
+                completion = nil
             }
         }
         Task { @MainActor in
             do {
                 try await fetchRemoteProgressive()
             } catch {
-                // A transient catalog failure must not permanently disable
-                // refreshes for the lifetime of the process.
+                // A transient catalog failure must not permanently disable refreshes.
                 started = false
+                completion?()
+                completion = nil
             }
         }
     }
