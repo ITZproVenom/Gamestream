@@ -131,6 +131,20 @@ jobs:
           print(f"Stamped app version {run} (CFBundleShortVersionString + CFBundleVersion {run})")
           PY
           xcodegen generate
+          SUBJECT="$(git log -1 --pretty=%s)"
+          if printf '%s' "$SUBJECT" | grep -Eqi 'experimental.*controller|controller.*experimental|experimental.*rumble|rumble.*experimental'; then
+            python3 - <<'PY'
+          from pathlib import Path
+          p = Path("project.yml")
+          text = p.read_text()
+          text = text.replace('CFBundleDisplayName: GameStream', 'CFBundleDisplayName: "GameStream Experimental"', 1)
+          p.write_text(text)
+          PY
+            echo "EXPERIMENTAL_RUMBLE=true" >> "$GITHUB_ENV"
+            echo "Experimental controller backend build enabled"
+          else
+            echo "EXPERIMENTAL_RUMBLE=false" >> "$GITHUB_ENV"
+          fi
           echo "--- pbxproj resource refs ---"
           rg -n "better-xcloud|Resources|embedded\\.json|\\.wav" GameStream.xcodeproj/project.pbxproj | head -40 || true
 
@@ -269,8 +283,16 @@ jobs:
           DATE_UTC="$(date -u +'%Y-%m-%d %H:%M UTC')"
           STAMP="$(date -u +'%Y%m%d-%H%M')"
           RUN="${{ github.run_number }}"
-          echo "tag=ios-build-${STAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "name=📱 iOS · GameStream #${RUN} (${SHORT_SHA})" >> "$GITHUB_OUTPUT"
+          SUBJECT="$(git log -1 --pretty=%s)"
+          if printf '%s' "$SUBJECT" | grep -Eqi 'experimental.*controller|controller.*experimental|experimental.*rumble|rumble.*experimental'; then
+            echo "tag=ios-experimental-rumble-${STAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "name=Experimental iOS Rumble · GameStream #${RUN} (${SHORT_SHA})" >> "$GITHUB_OUTPUT"
+            echo "experimental=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=ios-build-${STAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "name=📱 iOS · GameStream #${RUN} (${SHORT_SHA})" >> "$GITHUB_OUTPUT"
+            echo "experimental=false" >> "$GITHUB_OUTPUT"
+          fi
 
           python3 - "$SHORT_SHA" "$DATE_UTC" "$EVENT_NAME" <<'PY'
           import subprocess, sys
@@ -323,6 +345,7 @@ jobs:
               "## 📱 iOS build",
               "",
               f"**Platform:** iOS only · **Build:** `{short}` · **{date}**",
+              ("**EXPERIMENTAL BUILD:** OpenNOW-style native controller-input event routing is enabled for this IPA. This build is for controller/rumble testing and is not the normal iOS release." if "experimental" in subprocess.check_output(["git","log","-1","--pretty=%s"], text=True).strip().lower() else ""),
               f"**Android builds:** use tag [`latest-android`](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-android) — not this release.{since}",
               "",
               "### What's changed (iOS)",
@@ -381,6 +404,7 @@ jobs:
       - name: Refresh latest-ios pointer
         if: >-
           steps.meta.outputs.should_release == 'true' &&
+          steps.meta.outputs.experimental != 'true' &&
           (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -390,5 +414,21 @@ jobs:
           gh release create latest-ios \
             build/GameStream-unsigned.ipa \
             --title "📱 iOS · Latest IPA" \
+            --notes "$(cat release_notes.md)" \
+            --prerelease
+
+      - name: Publish experimental iOS pointer
+        if: >-
+          steps.meta.outputs.should_release == 'true' &&
+          steps.meta.outputs.experimental == 'true' &&
+          (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release delete latest-ios-experimental-rumble --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest-ios-experimental-rumble \
+            build/GameStream-unsigned.ipa \
+            --title "GameStream Experimental Rumble" \
             --notes "$(cat release_notes.md)" \
             --prerelease
