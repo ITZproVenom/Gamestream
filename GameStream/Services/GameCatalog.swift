@@ -234,8 +234,9 @@ final class ArtworkStore: ObservableObject {
 
     private func fetchBatch(_ ids: [String], generation: Int) async {
         defer {
-            guard generation == fetchGeneration else { return }
-            ids.forEach { inflight.remove($0) }
+            if generation == fetchGeneration {
+                ids.forEach { inflight.remove($0) }
+            }
         }
         let joined = ids.joined(separator: ",")
         guard let endpoint = URL(string: "https://displaycatalog.mp.microsoft.com/v7.0/products?bigIds=\(joined)&market=US&languages=en-US") else {
