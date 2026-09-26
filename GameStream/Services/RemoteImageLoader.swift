@@ -59,7 +59,9 @@ final class RemoteImageLoader: ObservableObject {
                 }
             }
 
-            self.inflight[url] = nil
+            if generation == self.cacheGeneration {
+                self.inflight[url] = nil
+            }
             guard generation == self.cacheGeneration else { return }
             if let image {
                 let cost = Int(image.size.width * image.size.height * 4)
@@ -115,7 +117,10 @@ final class RemoteImageLoader: ObservableObject {
     }
 
     nonisolated private static func data(for url: URL) async -> Data? {
-        (try? await URLSession.shared.data(from: url))?.0
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 15
+        request.cachePolicy = .reloadRevalidatingCacheData
+        return (try? await URLSession.shared.data(for: request))?.0
     }
 
     /// ImageIO thumbnail: decodes to ~720px instead of the poster's full size.

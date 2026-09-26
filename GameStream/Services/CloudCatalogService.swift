@@ -4,10 +4,16 @@ enum CloudCatalogService {
     private static let siglURL = URL(string: "https://catalog.gamepass.com/sigls/v2?id=29a81209-df6f-41fd-a528-2ae6b91f719c&language=en-us&market=US")!
     private static let cacheName = "xcloud-catalog-v2.json"
     private static var started = false
+    private static let stateLock = NSLock()
 
     static func refreshIfNeeded() {
-        guard !started else { return }
+        stateLock.lock()
+        guard !started else {
+            stateLock.unlock()
+            return
+        }
         started = true
+        stateLock.unlock()
         Task { @MainActor in
             if let cached = loadCache(), cached.count >= 20 {
                 GameCatalog.installLiveCatalog(cached)
@@ -17,7 +23,11 @@ enum CloudCatalogService {
             do {
                 try await fetchRemoteProgressive()
             } catch {
-                await MainActor.run { started = false }
+                await MainActor.run {
+                    stateLock.lock()
+                    started = false
+                    stateLock.unlock()
+                }
             }
         }
     }
@@ -204,7 +214,9 @@ enum CloudCatalogService {
     }
 
     static func clearDiskCache() {
+        stateLock.lock()
         started = false
+        stateLock.unlock()
         guard let url = cacheURL() else { return }
         try? FileManager.default.removeItem(at: url)
     }
