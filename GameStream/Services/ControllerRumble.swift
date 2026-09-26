@@ -84,13 +84,39 @@ final class ControllerRumble {
         }
     }
 
-    /// Settings test: produces a clearly audible/physical dual pulse.
+    /// Full rumble test: left handle, then right handle, then both.
+    /// Useful for confirming that a controller exposes independent handle haptics.
     func playTest() {
-        play(weak: 1.0, strong: 1.0, durationMs: 260, force: true)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.31) { [weak self] in
-            Task { @MainActor in
-                self?.play(weak: 0.8, strong: 1.0, durationMs: 220, force: true)
+        testLeft()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) { [weak self] in
+            Task { @MainActor in self?.testRight() }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.30) { [weak self] in
+            Task { @MainActor in self?.play(weak: 1.0, strong: 1.0, durationMs: 320, force: true) }
+        }
+    }
+
+    func testLeft() {
+        playHandle(left: true, right: false, intensity: 1.0, durationMs: 420)
+    }
+
+    func testRight() {
+        playHandle(left: false, right: true, intensity: 1.0, durationMs: 420)
+    }
+
+    private func playHandle(left: Bool, right: Bool, intensity: Float, durationMs: Double) {
+        guard isEnabled || true else { return }
+        do {
+            try ensureEngines()
+            let duration = min(max(durationMs / 1000.0, 0.025), 2.5)
+            if left, leftSupported, let engine = leftEngine {
+                _ = try play(on: engine, intensity: boosted(intensity), duration: duration)
             }
+            if right, rightSupported, let engine = rightEngine {
+                _ = try play(on: engine, intensity: boosted(intensity), duration: duration)
+            }
+        } catch {
+            teardownEngines()
         }
     }
 
