@@ -4,6 +4,7 @@ enum CloudCatalogService {
     private static let siglURL = URL(string: "https://catalog.gamepass.com/sigls/v2?id=29a81209-df6f-41fd-a528-2ae6b91f719c&language=en-us&market=US")!
     private static let cacheName = "xcloud-catalog-v2.json"
     private static var started = false
+    private static var generation = 0
     private static let stateLock = NSLock()
 
     static func refreshIfNeeded() {
@@ -13,30 +14,33 @@ enum CloudCatalogService {
             return
         }
         started = true
+        let generation = Self.generation
         stateLock.unlock()
         Task { @MainActor in
             if let cached = loadCache(), cached.count >= 20 {
+                guard Self.isCurrentGeneration(generation) else { return }
                 GameCatalog.installLiveCatalog(cached)
             }
         }
         Task.detached(priority: .utility) {
             do {
-                try await fetchRemoteProgressive()
+                try await fetchRemoteProgressive(generation: generation)
             } catch {
                 await MainActor.run {
                     stateLock.lock()
-                    started = false
+                    if Self.generation == generation { started = false }
                     stateLock.unlock()
                 }
             }
         }
     }
 
-    private static func fetchRemoteProgressive() async throws {
+    private static func fetchRemoteProgressive(generation: Int) async throws {
         var request = URLRequest(url: siglURL)
         request.timeoutInterval = 15
         request.cachePolicy = .reloadIgnoringLocalCacheData
         let (data, response) = try await URLSession.shared.data(for: request)
+        guard isCurrentGeneration(generation) else { return }
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw URLError(.badServerResponse)
         }
@@ -60,6 +64,7 @@ enum CloudCatalogService {
             if !published && collected.count >= 24 {
                 let snapshot = collected
                 await MainActor.run {
+                    guard Self.isCurrentGeneration(generation) else { return }
                     GameCatalog.installLiveCatalog(snapshot)
                 }
                 published = true
@@ -67,8 +72,10 @@ enum CloudCatalogService {
         }
         let unique = dedupe(collected)
         guard unique.count >= 20 else { throw URLError(.cannotParseResponse) }
-        saveCache(unique)
+        guard isCurrentGeneration(generation) else { return }
+        saveCache(unique, generation: generation)
         await MainActor.run {
+            guard Self.isCurrentGeneration(generation) else { return }
             GameCatalog.installLiveCatalog(unique)
         }
     }
@@ -215,13 +222,21 @@ enum CloudCatalogService {
 
     static func clearDiskCache() {
         stateLock.lock()
+        generation &+= 1
         started = false
         stateLock.unlock()
         guard let url = cacheURL() else { return }
         try? FileManager.default.removeItem(at: url)
     }
 
-    private static func saveCache(_ games: [CatalogGame]) {
+    private static func isCurrentGeneration(_ value: Int) -> Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return generation == value
+    }
+
+    private static func saveCache(_ games: [CatalogGame], generation: Int) {
+        guard isCurrentGeneration(generation) else { return }
         guard let url = cacheURL() else { return }
         let payload: [[String: String]] = games.map { game in
             [
