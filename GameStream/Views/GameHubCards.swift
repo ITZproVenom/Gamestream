@@ -62,6 +62,7 @@ struct FeaturedGameCard: View {
                             .frame(width: 40, height: 40)
                     }
                     .buttonStyle(.glass)
+                    .accessibilityLabel(isFavorite() ? "Remove from favorites" : "Add to favorites")
                 }
             }
             .padding(16)
@@ -99,6 +100,7 @@ struct GamePosterCard: View {
                 }
                 .buttonStyle(.plain)
                 .padding(8)
+                .accessibilityLabel(isFavorite ? "Remove from favorites" : "Add to favorites")
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -165,9 +167,13 @@ struct HubChipStyle: ViewModifier {
     let selected: Bool
     func body(content: Content) -> some View {
         if selected {
-            content.buttonStyle(.glassProminent)
+            content
+                .frame(minHeight: 44)
+                .buttonStyle(.glassProminent)
         } else {
-            content.buttonStyle(.glass)
+            content
+                .frame(minHeight: 44)
+                .buttonStyle(.glass)
         }
     }
 }
