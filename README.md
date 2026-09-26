@@ -60,7 +60,9 @@ Choose the channel you want. **Stable and Beta are intentionally separate.**
 | 🧪 **iOS Beta** | [Latest iOS Beta](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios-beta) | Experimental and in-development changes |
 | 🤖 **Android** | [Latest Android](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-android) | Current Android APK |
 
-**Important:** Beta builds never replace the stable iOS pointer. Experimental iOS work belongs in Beta.
+> ⚠️ **Experimental software:** GameStream is still an experimental project. Even the **Stable** channel can contain significant bugs, crashes, broken features, incomplete integrations, and regressions. “Stable” only identifies the normal release channel, not production readiness.
+>
+> **Build IDs are channel-separated:** Stable builds use the `STABLE-*` namespace, while Beta builds use `BETA-*`. Beta builds never replace the stable iOS pointer.
 
 ### Installation
 
@@ -137,10 +139,11 @@ The Beta channel is the safe place for unfinished or experimental iOS work.
 
 That means:
 
-- Stable `latest-ios` stays isolated
+- Stable `latest-ios` stays isolated, but is still experimental software
 - Experimental changes publish through `latest-ios-beta`
-- Beta builds use the same IPA packaging pipeline
-- No experimental release should replace the stable pointer
+- Stable builds use the `STABLE-*` build ID namespace
+- Beta builds use the separate `BETA-*` build ID namespace
+- Beta builds never replace the stable pointer
 - Controller, streaming, UI, and architecture experiments belong here until they are ready
 
 ---
