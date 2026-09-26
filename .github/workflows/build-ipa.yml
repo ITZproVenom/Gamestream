@@ -308,11 +308,11 @@ jobs:
             echo "experimental=false" >> "$GITHUB_OUTPUT"
           fi
 
-          python3 - "$SHORT_SHA" "$DATE_UTC" "$EVENT_NAME" <<'PY'
+          python3 - "$SHORT_SHA" "$DATE_UTC" "$EVENT_NAME" "$RUN" <<'PY'
           import subprocess, sys
           from pathlib import Path
 
-          short, date, event = sys.argv[1], sys.argv[2], sys.argv[3]
+          short, date, event, run = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 
           prev = subprocess.check_output(
               ["git", "tag", "-l", "ios-build-*", "--sort=-creatordate"],
@@ -369,8 +369,8 @@ jobs:
           body = "\n".join([
               "## 📱 iOS build",
               "",
-              f"**Platform:** iOS only · **Build ID:** `{"BETA-" if is_beta else "STABLE-"}{short}` · **{date}**",
-              (f"**BETA BUILD:** Beta build ID `BETA-{short}`. Experimental and in-development, and does not replace the stable iOS release." if is_beta else f"**STABLE BUILD:** Build ID `STABLE-{short}`. This is still an experimental project release and may contain significant bugs, crashes, broken features, or regressions. Stable means the release channel, not production-ready software."),
+              f"**Platform:** iOS only · **Build ID:** `{"BETA-" if is_beta else "STABLE-"}{run}` · **{date}**",
+              (f"**BETA BUILD:** Beta build ID `BETA-{run}`. Experimental and in-development, and does not replace the stable iOS release." if is_beta else f"**STABLE BUILD:** Build ID `STABLE-{run}`. This is still an experimental project release and may contain significant bugs, crashes, broken features, or regressions. Stable means the release channel, not production-ready software."),
               f"**Android builds:** use tag [`latest-android`](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-android) — not this release.{since}",
               "",
               "### What's changed (iOS)",
