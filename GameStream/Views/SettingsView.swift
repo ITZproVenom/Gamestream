@@ -358,7 +358,6 @@ struct SettingsView: View {
             .padding(.bottom, 24)
         }
         .safeAreaPadding(.top, 12)
-        .safeAreaPadding(.bottom, 18)
         .scrollIndicators(.hidden)
         .onAppear {
             keepAwake = session.keepScreenAwake
