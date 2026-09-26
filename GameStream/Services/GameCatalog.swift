@@ -196,6 +196,7 @@ final class ArtworkStore: ObservableObject {
     static let shared = ArtworkStore()
     @Published private(set) var urls: [String: URL] = [:]
     private var inflight: Set<String> = []
+    private var cacheGeneration = 0
 
     init() {
         ingest(GameCatalog.games)
@@ -214,6 +215,7 @@ final class ArtworkStore: ObservableObject {
     }
 
     func clear() {
+        cacheGeneration &+= 1
         urls.removeAll(keepingCapacity: true)
         inflight.removeAll(keepingCapacity: true)
     }
@@ -222,15 +224,17 @@ final class ArtworkStore: ObservableObject {
         let missing = Array(Set(ids.filter { !$0.isEmpty && urls[$0] == nil && !inflight.contains($0) }))
         missing.forEach { inflight.insert($0) }
         guard !missing.isEmpty else { return }
-        Task { await fetchBatch(missing) }
+        let generation = cacheGeneration
+        Task { await fetchBatch(missing, generation: generation) }
     }
 
     func load(_ productId: String) {
         prefetch([productId])
     }
 
-    private func fetchBatch(_ ids: [String]) async {
+    private func fetchBatch(_ ids: [String], generation: Int) async {
         defer { ids.forEach { inflight.remove($0) } }
+        guard generation == cacheGeneration else { return }
         let joined = ids.joined(separator: ",")
         guard let endpoint = URL(string: "https://displaycatalog.mp.microsoft.com/v7.0/products?bigIds=\(joined)&market=US&languages=en-US") else {
             return
@@ -244,15 +248,22 @@ final class ArtworkStore: ObservableObject {
                 throw URLError(.badServerResponse)
             }
             let parsed = Self.parseAllPosters(from: data)
+            guard generation == cacheGeneration else { return }
             for (id, url) in parsed where urls[id] != url {
                 urls[id] = url
             }
             for id in ids where urls[id] == nil {
-                if let single = await fetchOne(id) { urls[id] = single }
+                guard generation == cacheGeneration else { return }
+                if let single = await fetchOne(id), generation == cacheGeneration {
+                    urls[id] = single
+                }
             }
         } catch {
             for id in ids where urls[id] == nil {
-                if let single = await fetchOne(id) { urls[id] = single }
+                guard generation == cacheGeneration else { return }
+                if let single = await fetchOne(id), generation == cacheGeneration {
+                    urls[id] = single
+                }
             }
         }
     }
