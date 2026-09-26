@@ -2,13 +2,17 @@ import Foundation
 import GameController
 import CoreHaptics
 
-/// Plays dual-motor style rumble on a connected physical controller while streaming.
+/// Native controller rumble bridge for Xbox / MFi / supported Bluetooth controllers.
 ///
-/// Safety rules (crash isolation):
-/// - No work at process launch or static init.
-/// - Engine created lazily on first rumble request.
-/// - Every failure is swallowed; rumble is best-effort only.
-/// - Respects AppearanceStore.controllerHapticsEnabled + controllerRumbleIntensity.
+/// The web player sends standard weak/strong magnitudes through XboxCloudWebView.
+/// This class translates those requests into Core Haptics on the controller's
+/// actual handle actuators instead of relying on a generic/default locality.
+///
+/// Crash isolation:
+/// - No controller or haptic engine is touched at process launch.
+/// - Engines are created lazily on the first rumble request.
+/// - Controller disconnects/reset are handled by rebuilding the engines.
+/// - Every hardware/API failure is best-effort and swallowed.
 @MainActor
 final class ControllerRumble {
     static let shared = ControllerRumble()
@@ -16,22 +20,22 @@ final class ControllerRumble {
     private static let intensityKey = "GameStream.controllerRumbleIntensity"
     private static let enabledKey = "GameStream.controllerHapticsEnabled"
 
-    /// Base software gain for weak wired pads (before user intensity multiplier).
-    private let baseGain: Float = 2.8
-    /// Minimum intensity after boost when the game reports any non-zero pulse.
-    private let floor: Float = 0.45
+    /// Software gain before the user's intensity setting.
+    private let baseGain: Float = 2.4
+    private let minimumOutput: Float = 0.16
 
-    private var engine: CHHapticEngine?
-    private var engineControllerID: ObjectIdentifier?
-    private var lastStopWorkItem: DispatchWorkItem?
+    private var leftEngine: CHHapticEngine?
+    private var rightEngine: CHHapticEngine?
+    private var controllerID: ObjectIdentifier?
+    private var leftSupported = false
+    private var rightSupported = false
+    private var stopWorkItem: DispatchWorkItem?
 
     private init() {}
 
-    /// User multiplier from Settings (0.5 ... 3.0). Default 1.6 for wired pads.
     private var userIntensity: Float {
         let stored = UserDefaults.standard.object(forKey: Self.intensityKey) as? Double
-        let v = Float(stored ?? 1.6)
-        return min(max(v, 0.5), 3.0)
+        return min(max(Float(stored ?? 1.6), 0.5), 3.0)
     }
 
     private var isEnabled: Bool {
@@ -39,173 +43,240 @@ final class ControllerRumble {
         return UserDefaults.standard.bool(forKey: Self.enabledKey)
     }
 
-    /// Continuous dual-motor pulse. Intensities are 0...1 from the game/stream.
+    /// Plays a dual-handle rumble. The weak/strong values are intentionally
+    /// mapped to left/right handle energy so both physical handle actuators
+    /// receive output on controllers that expose separate handle haptics.
     func play(weak: Float, strong: Float, durationMs: Double, force: Bool = false) {
         guard force || isEnabled else { return }
 
-        var w = amplify(weak)
-        var s = amplify(strong)
-        if w > 0.05 && s < 0.05 { s = w * 0.9 }
-        if s > 0.05 && w < 0.05 { w = s * 0.85 }
+        let weakValue = boosted(weak)
+        let strongValue = boosted(strong)
 
-        guard w > 0.02 || s > 0.02 else {
+        guard weakValue > 0 || strongValue > 0 else {
             stop()
             return
         }
 
         do {
-            try ensureEngine()
-            guard let engine else { return }
+            try ensureEngines()
 
-            let duration = min(max(durationMs / 1000.0, 0.1), 3.0)
-            var events: [CHHapticEvent] = []
-            let peak = min(max(w, s), 1)
+            let duration = min(max(durationMs / 1000.0, 0.025), 2.5)
+            var played = false
 
-            events.append(
-                CHHapticEvent(
-                    eventType: .hapticTransient,
-                    parameters: [
-                        CHHapticEventParameter(parameterID: .hapticIntensity, value: peak),
-                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 1.0),
-                    ],
-                    relativeTime: 0
-                )
-            )
-
-            if w > 0.02 {
-                events.append(
-                    CHHapticEvent(
-                        eventType: .hapticContinuous,
-                        parameters: [
-                            CHHapticEventParameter(parameterID: .hapticIntensity, value: w),
-                            CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.12),
-                        ],
-                        relativeTime: 0,
-                        duration: duration
-                    )
-                )
+            if leftSupported, let leftEngine {
+                played = try play(on: leftEngine, intensity: weakValue, duration: duration) || played
             }
 
-            if s > 0.02 {
-                events.append(
-                    CHHapticEvent(
-                        eventType: .hapticContinuous,
-                        parameters: [
-                            CHHapticEventParameter(parameterID: .hapticIntensity, value: s),
-                            CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.98),
-                        ],
-                        relativeTime: 0,
-                        duration: duration
-                    )
-                )
+            if rightSupported, let rightEngine {
+                played = try play(on: rightEngine, intensity: strongValue, duration: duration) || played
             }
 
-            if duration >= 0.12 {
-                events.append(
-                    CHHapticEvent(
-                        eventType: .hapticTransient,
-                        parameters: [
-                            CHHapticEventParameter(parameterID: .hapticIntensity, value: peak),
-                            CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.75),
-                        ],
-                        relativeTime: min(duration * 0.3, 0.18)
-                    )
-                )
-            }
-            if duration >= 0.22 {
-                events.append(
-                    CHHapticEvent(
-                        eventType: .hapticTransient,
-                        parameters: [
-                            CHHapticEventParameter(parameterID: .hapticIntensity, value: peak * 0.9),
-                            CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.85),
-                        ],
-                        relativeTime: min(duration * 0.55, 0.35)
-                    )
-                )
+            // Some controllers expose only the combined handle locality.
+            // Fall back to the strongest signal instead of silently dropping
+            // rumble altogether.
+            if !played {
+                try playCombinedFallback(weak: weakValue, strong: strongValue, duration: duration)
             }
 
-            let pattern = try CHHapticPattern(events: events, parameters: [])
-            let player = try engine.makePlayer(with: pattern)
-            try player.start(atTime: 0)
-
-            lastStopWorkItem?.cancel()
-            let item = DispatchWorkItem { [weak self] in
-                Task { @MainActor in self?.softStop() }
-            }
-            lastStopWorkItem = item
-            DispatchQueue.main.asyncAfter(deadline: .now() + duration + 0.1, execute: item)
+            scheduleStop(after: duration)
         } catch {
-            engine = nil
-            engineControllerID = nil
+            teardownEngines()
         }
     }
 
-    /// Settings test — always attempts a strong dual pulse at current intensity.
+    /// Settings test: produces a clearly audible/physical dual pulse.
     func playTest() {
-        play(weak: 1.0, strong: 1.0, durationMs: 420, force: true)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
+        play(weak: 1.0, strong: 1.0, durationMs: 260, force: true)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.31) { [weak self] in
             Task { @MainActor in
-                self?.play(weak: 0.9, strong: 1.0, durationMs: 300, force: true)
+                self?.play(weak: 0.8, strong: 1.0, durationMs: 220, force: true)
             }
         }
     }
 
     func stop() {
-        lastStopWorkItem?.cancel()
-        lastStopWorkItem = nil
-        softStop()
+        stopWorkItem?.cancel()
+        stopWorkItem = nil
+        // Stopping the engine is intentionally avoided for every shot. The
+        // controller haptic engine is kept warm so rapid COD gunfire does not
+        // pay an engine restart penalty.
     }
 
     func teardown() {
         stop()
-        engine?.stop(completionHandler: { _ in })
-        engine = nil
-        engineControllerID = nil
+        teardownEngines()
     }
 
-    private func amplify(_ v: Float) -> Float {
-        let raw = min(max(v, 0), 1)
-        guard raw > 0.008 else { return 0 }
-        let boosted = min(raw * baseGain * userIntensity, 1)
-        return max(boosted, min(floor * userIntensity, 1))
+    private func boosted(_ value: Float) -> Float {
+        let raw = min(max(value, 0), 1)
+        guard raw > 0.005 else { return 0 }
+        let scaled = min(raw * baseGain * userIntensity, 1)
+        return max(scaled, minimumOutput)
     }
 
-    private func ensureEngine() throws {
+    private func ensureEngines() throws {
         let controllers = GCController.controllers()
-        guard let controller = controllers.first(where: { $0.haptics != nil }) ?? controllers.first else {
-            engine = nil
-            engineControllerID = nil
+
+        // Prefer the active controller, then any controller that actually
+        // advertises haptics. This avoids accidentally attaching rumble to a
+        // stale/snapshot controller.
+        guard let controller =
+            GCController.current ??
+            controllers.first(where: { $0.haptics != nil }) ??
+            controllers.first
+        else {
+            throw RumbleError.noController
+        }
+
+        let id = ObjectIdentifier(controller)
+
+        if controllerID == id, leftEngine != nil || rightEngine != nil {
             return
         }
-        let id = ObjectIdentifier(controller)
-        if engine != nil, engineControllerID == id { return }
 
-        engine?.stop(completionHandler: { _ in })
-        engine = nil
-        engineControllerID = nil
+        teardownEngines()
 
-        guard let haptics = controller.haptics else { return }
-        guard let created = haptics.createEngine(withLocality: .default) else { return }
-        created.playsHapticsOnly = true
-        created.isAutoShutdownEnabled = false
-        try created.start()
-        engine = created
-        engineControllerID = id
+        guard let haptics = controller.haptics else {
+            throw RumbleError.noHaptics
+        }
 
-        created.resetHandler = { [weak self] in
+        let localities = haptics.supportedLocalities
+
+        if localities.contains(.leftHandle),
+           let engine = haptics.createEngine(withLocality: .leftHandle) {
+            configure(engine)
+            try engine.start()
+            leftEngine = engine
+            leftSupported = true
+            installHandlers(on: engine)
+        }
+
+        if localities.contains(.rightHandle),
+           let engine = haptics.createEngine(withLocality: .rightHandle) {
+            configure(engine)
+            try engine.start()
+            rightEngine = engine
+            rightSupported = true
+            installHandlers(on: engine)
+        }
+
+        // A number of controllers expose only the aggregate handles locality.
+        // Keep a combined engine as a fallback in that case.
+        if !leftSupported && !rightSupported,
+           localities.contains(.handles),
+           let engine = haptics.createEngine(withLocality: .handles) {
+            configure(engine)
+            try engine.start()
+            leftEngine = engine
+            leftSupported = true
+            installHandlers(on: engine)
+        }
+
+        guard leftSupported || rightSupported else {
+            throw RumbleError.unsupportedLocality
+        }
+
+        controllerID = id
+    }
+
+    private func configure(_ engine: CHHapticEngine) {
+        engine.playsHapticsOnly = true
+        engine.isAutoShutdownEnabled = false
+    }
+
+    private func installHandlers(on engine: CHHapticEngine) {
+        engine.resetHandler = { [weak self] in
             Task { @MainActor in
-                self?.engine = nil
-                self?.engineControllerID = nil
+                self?.teardownEngines()
             }
         }
-        created.stoppedHandler = { [weak self] _ in
+
+        engine.stoppedHandler = { [weak self] _ in
             Task { @MainActor in
-                self?.engine = nil
-                self?.engineControllerID = nil
+                self?.teardownEngines()
             }
         }
     }
 
-    private func softStop() {}
+    @discardableResult
+    private func play(
+        on engine: CHHapticEngine,
+        intensity: Float,
+        duration: TimeInterval
+    ) throws -> Bool {
+        guard intensity > 0.005 else { return false }
+
+        let pattern = try CHHapticPattern(
+            events: [
+                CHHapticEvent(
+                    eventType: .hapticContinuous,
+                    parameters: [
+                        CHHapticEventParameter(
+                            parameterID: .hapticIntensity,
+                            value: min(max(intensity, 0), 1)
+                        ),
+                        CHHapticEventParameter(
+                            parameterID: .hapticSharpness,
+                            value: 0.35
+                        )
+                    ],
+                    relativeTime: 0,
+                    duration: duration
+                )
+            ],
+            parameters: []
+        )
+
+        let player = try engine.makeAdvancedPlayer(with: pattern)
+        try player.start(atTime: 0)
+        return true
+    }
+
+    private func playCombinedFallback(
+        weak: Float,
+        strong: Float,
+        duration: TimeInterval
+    ) throws {
+        let engine = leftEngine ?? rightEngine
+        guard let engine else { return }
+
+        let intensity = min(max(max(weak, strong), 0), 1)
+        _ = try play(on: engine, intensity: intensity, duration: duration)
+    }
+
+    private func scheduleStop(after duration: TimeInterval) {
+        stopWorkItem?.cancel()
+
+        let item = DispatchWorkItem { [weak self] in
+            Task { @MainActor in
+                self?.stopWorkItem = nil
+            }
+        }
+
+        stopWorkItem = item
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + duration + 0.05,
+            execute: item
+        )
+    }
+
+    private func teardownEngines() {
+        stopWorkItem?.cancel()
+        stopWorkItem = nil
+
+        leftEngine?.stop(completionHandler: nil)
+        rightEngine?.stop(completionHandler: nil)
+
+        leftEngine = nil
+        rightEngine = nil
+        leftSupported = false
+        rightSupported = false
+        controllerID = nil
+    }
+
+    private enum RumbleError: Error {
+        case noController
+        case noHaptics
+        case unsupportedLocality
+    }
 }
