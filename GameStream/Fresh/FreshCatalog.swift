@@ -50,7 +50,7 @@ final class FreshCatalogStore: ObservableObject {
 
         do {
             let ids = try await fetchIDs()
-            let hydrated = try await hydrate(ids: Array(ids.prefix(120)))
+            let hydrated = try await hydrate(ids: ids)
             let unique = Self.dedupe(hydrated)
             guard !unique.isEmpty else { throw URLError(.cannotParseResponse) }
 
@@ -89,8 +89,8 @@ final class FreshCatalogStore: ObservableObject {
         var output: [FreshGame] = []
         output.reserveCapacity(ids.count)
 
-        for start in stride(from: 0, to: ids.count, by: 20) {
-            let end = min(start + 20, ids.count)
+        for start in stride(from: 0, to: ids.count, by: 40) {
+            let end = min(start + 40, ids.count)
             let page = Array(ids[start..<end])
             guard !page.isEmpty else { continue }
 
@@ -99,7 +99,8 @@ final class FreshCatalogStore: ObservableObject {
                 URLQueryItem(name: "bigIds", value: page.joined(separator: ",")),
                 URLQueryItem(name: "market", value: "US"),
                 URLQueryItem(name: "languages", value: "en-us"),
-                URLQueryItem(name: "MS-CV", value: "GS.2")
+                URLQueryItem(name: "MS-CV", value: "DGU1mcuYo0WMMp+F.1"),
+                URLQueryItem(name: "fieldsTemplate", value: "Details")
             ]
 
             guard let url = components.url else { continue }
