@@ -199,18 +199,6 @@ struct GameDetailView: View {
                 }
             }
 
-            Button {
-                session.openCatalogGame(game)
-                onClose()
-            } label: {
-                Text("Open on Xbox Cloud")
-                    .font(.subheadline.weight(.medium))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-            }
-            .buttonStyle(.glass)
             .accessibilityLabel("Open \(game.title) on Xbox Cloud")
         }
     }
