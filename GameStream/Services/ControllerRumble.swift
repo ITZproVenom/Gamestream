@@ -3,13 +3,7 @@ import GameController
 import CoreHaptics
 import os
 
-/// Drives physical controller rumble motors via GCDeviceHaptics.
-///
-/// Engines are created once per connected pad and kept alive for the whole
-/// play session so rapid Xbox Cloud packets (Call of Duty gunfire, explosions)
-/// are not lost to engine restarts. Pattern players are retained until their
-/// duration elapses — Core Haptics on GCDeviceHaptics will otherwise deallocate
-/// the player immediately and the motors never spin.
+/// Drives physical controller rumble using a persistent Core Haptics playback loop.
 @MainActor
 final class ControllerRumble {
     static let shared = ControllerRumble()
@@ -19,27 +13,87 @@ final class ControllerRumble {
         static let intensity = "GameStream.controllerRumbleIntensity"
     }
 
-    private final class Motor {
-        let locality: GCHapticsLocality
-        let engine: CHHapticEngine
-        var players: [any CHHapticPatternPlayer] = []
-        var started = false
+    private struct RumbleProfile: Equatable {
+        let intensity: Float
+        let sharpnessControl: Float
 
-        init(locality: GCHapticsLocality, engine: CHHapticEngine, started: Bool) {
-            self.locality = locality
+        init(leftMagnitude: Float, rightMagnitude: Float) {
+            let left = min(max(leftMagnitude, 0), 1)
+            let right = min(max(rightMagnitude, 0), 1)
+            intensity = min(max((right * 0.78) + (left * 0.48), 0), 1)
+            let sharpness = min(max((left * 0.75) + (right * 0.25), 0), 1)
+            sharpnessControl = (sharpness * 2) - 1
+        }
+
+        var isStopped: Bool { intensity <= 0.001 }
+
+        func materiallyDiffers(from other: RumbleProfile) -> Bool {
+            abs(intensity - other.intensity) >= 0.04
+                || abs(sharpnessControl - other.sharpnessControl) >= 0.08
+        }
+    }
+
+    private final class HapticPlayback {
+        static let loopDuration: TimeInterval = 1
+
+        let engine: CHHapticEngine
+        let player: CHHapticAdvancedPatternPlayer
+        let controllerIdentifier: ObjectIdentifier
+
+        var isPlaying = false
+        var lastProfile: RumbleProfile?
+        var lastUpdateAt: TimeInterval = 0
+
+        init(engine: CHHapticEngine, controllerIdentifier: ObjectIdentifier) throws {
             self.engine = engine
-            self.started = started
+            self.controllerIdentifier = controllerIdentifier
+
+            let event = CHHapticEvent(
+                eventType: .hapticContinuous,
+                parameters: [
+                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 1),
+                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5)
+                ],
+                relativeTime: 0,
+                duration: Self.loopDuration
+            )
+            let pattern = try CHHapticPattern(events: [event], parameters: [])
+            player = try engine.makeAdvancedPlayer(with: pattern)
+            player.loopEnabled = true
+            player.loopEnd = Self.loopDuration
+        }
+
+        func stopPlayer() {
+            if isPlaying {
+                try? player.stop(atTime: CHHapticTimeImmediate)
+            }
+            isPlaying = false
+            lastProfile = nil
+            lastUpdateAt = 0
+        }
+
+        func shutdown() {
+            stopPlayer()
+            engine.stop(completionHandler: nil)
+        }
+
+        func markEngineStopped() {
+            isPlaying = false
+            lastProfile = nil
+            lastUpdateAt = 0
         }
     }
 
     private let logger = Logger(subsystem: "com.gamestream.app", category: "Rumble")
-    private var motors: [GCHapticsLocality: Motor] = [:]
+    private static let hapticUpdateInterval: TimeInterval = 0.035
+
+    private var playback: HapticPlayback?
     private var controllerID: ObjectIdentifier?
-    private var lastLoggedControllerName: String?
-    private var lastPacketLogAt: TimeInterval = 0
     private var observers: [NSObjectProtocol] = []
     private var didStart = false
     private var generation = 0
+    private var lastLoggedControllerName: String?
+    private var lastPacketLogAt: TimeInterval = 0
 
     private init() {}
 
@@ -52,30 +106,44 @@ final class ControllerRumble {
         return UserDefaults.standard.bool(forKey: Defaults.enabled)
     }
 
-    var connectedControllerName: String? { activeController()?.vendorName }
+    var connectedControllerName: String? {
+        activeController()?.vendorName
+    }
 
-    var supportsRumble: Bool { activeController()?.haptics != nil }
+    var supportsRumble: Bool {
+        activeController()?.haptics != nil
+    }
 
-    /// Call once at launch so connect/disconnect is observed before the first stream.
     func start() {
         guard !didStart else { return }
         didStart = true
+
         let center = NotificationCenter.default
-        observers.append(center.addObserver(forName: .GCControllerDidConnect, object: nil, queue: .main) { [weak self] note in
+        observers.append(center.addObserver(
+            forName: .GCControllerDidConnect,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
             Task { @MainActor in
                 self?.handleConnect(note.object as? GCController)
             }
         })
-        observers.append(center.addObserver(forName: .GCControllerDidDisconnect, object: nil, queue: .main) { [weak self] note in
+
+        observers.append(center.addObserver(
+            forName: .GCControllerDidDisconnect,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
             Task { @MainActor in
                 self?.handleDisconnect(note.object as? GCController)
             }
         })
+
         GCController.startWirelessControllerDiscovery(completionHandler: nil)
         attach(reason: "start")
     }
 
-    /// Xbox Cloud FourMotorRumble packet. Percents may be 0...1 or 0...100.
+    /// Xbox Cloud FourMotorRumble packet.
     func play(
         leftMotorPercent: Float,
         rightMotorPercent: Float,
@@ -85,57 +153,43 @@ final class ControllerRumble {
         force: Bool = false
     ) {
         guard force || isEnabled else { return }
+
         let left = scale(normalize(leftMotorPercent))
         let right = scale(normalize(rightMotorPercent))
         let leftTrigger = scale(normalize(leftTriggerMotorPercent))
         let rightTrigger = scale(normalize(rightTriggerMotorPercent))
-        let duration = min(max(durationMs / 1000, 0), 4)
 
-        logPacket(left: left, right: right, leftTrigger: leftTrigger, rightTrigger: rightTrigger, durationMs: durationMs)
+        logPacket(
+            left: left,
+            right: right,
+            leftTrigger: leftTrigger,
+            rightTrigger: rightTrigger,
+            durationMs: durationMs
+        )
 
-        let anyMotor = left > 0 || right > 0 || leftTrigger > 0 || rightTrigger > 0
-        if !anyMotor {
-            stopMotors()
+        let profile = RumbleProfile(
+            leftMagnitude: max(left, leftTrigger),
+            rightMagnitude: max(right, rightTrigger)
+        )
+
+        if profile.isStopped {
+            stopRumble()
             return
         }
+
         guard attach(reason: "play") else { return }
-        let playDuration = duration > 0 ? duration : 0.05
 
         do {
-            var played = false
-            if left > 0 {
-                played = try pulse(.leftHandle, intensity: left, sharpness: 0.12, duration: playDuration) || played
-            }
-            if right > 0 {
-                played = try pulse(.rightHandle, intensity: right, sharpness: 0.82, duration: playDuration) || played
-            }
-            if leftTrigger > 0 {
-                played = try pulse(.leftTrigger, intensity: leftTrigger, sharpness: 0.95, duration: playDuration) || played
-            }
-            if rightTrigger > 0 {
-                played = try pulse(.rightTrigger, intensity: rightTrigger, sharpness: 0.95, duration: playDuration) || played
-            }
-            if !played {
-                let intensity = max(left, right, leftTrigger, rightTrigger)
-                let sharpness: Float = right >= left ? 0.7 : 0.2
-                if try pulse(.handles, intensity: intensity, sharpness: sharpness, duration: playDuration) {
-                    played = true
-                } else if try pulse(.default, intensity: intensity, sharpness: sharpness, duration: playDuration) {
-                    played = true
-                }
-            }
-            if played {
-                logger.debug("native rumble dispatched L=\(left, format: .fixed(precision: 2)) R=\(right, format: .fixed(precision: 2)) d=\(durationMs, format: .fixed(precision: 0))ms")
-            } else {
-                logger.error("haptic engine failure: no locality accepted the pulse")
-            }
+            try updatePlayback(profile)
+            logger.debug(
+                "native rumble dispatched L=\(left, format: .fixed(precision: 2)) R=\(right, format: .fixed(precision: 2)) d=\(durationMs, format: .fixed(precision: 0))ms"
+            )
         } catch {
             logger.error("haptic engine failure: \(error.localizedDescription, privacy: .public)")
-            invalidateEngines()
+            invalidatePlayback()
         }
     }
 
-    /// Back-compat wrapper used by older call sites (weak = left, strong = right).
     func play(weak: Float, strong: Float, durationMs: Double, force: Bool = false) {
         play(
             leftMotorPercent: weak,
@@ -146,41 +200,11 @@ final class ControllerRumble {
     }
 
     func testLeft() {
-        guard attach(reason: "testLeft") else {
-            logger.error("test Left: no haptics-capable controller")
-            return
-        }
-        do {
-            if motors[.leftHandle] != nil {
-                _ = try pulse(.leftHandle, intensity: scale(1), sharpness: 0.12, duration: 0.45)
-            } else {
-                logger.debug("test Left: .leftHandle missing, using aggregate handles")
-                if !(try pulse(.handles, intensity: scale(1), sharpness: 0.12, duration: 0.45)) {
-                    _ = try pulse(.default, intensity: scale(1), sharpness: 0.12, duration: 0.45)
-                }
-            }
-        } catch {
-            logger.error("test Left failed: \(error.localizedDescription, privacy: .public)")
-        }
+        play(leftMotorPercent: 1, rightMotorPercent: 0, durationMs: 450, force: true)
     }
 
     func testRight() {
-        guard attach(reason: "testRight") else {
-            logger.error("test Right: no haptics-capable controller")
-            return
-        }
-        do {
-            if motors[.rightHandle] != nil {
-                _ = try pulse(.rightHandle, intensity: scale(1), sharpness: 0.82, duration: 0.45)
-            } else {
-                logger.debug("test Right: .rightHandle missing, using aggregate handles")
-                if !(try pulse(.handles, intensity: scale(1), sharpness: 0.82, duration: 0.45)) {
-                    _ = try pulse(.default, intensity: scale(1), sharpness: 0.82, duration: 0.45)
-                }
-            }
-        } catch {
-            logger.error("test Right failed: \(error.localizedDescription, privacy: .public)")
-        }
+        play(leftMotorPercent: 0, rightMotorPercent: 1, durationMs: 450, force: true)
     }
 
     func playTest() {
@@ -201,7 +225,7 @@ final class ControllerRumble {
     }
 
     func teardown() {
-        invalidateEngines()
+        invalidatePlayback()
     }
 
     func noteNativeLog(_ event: String, details: String) {
@@ -228,198 +252,193 @@ final class ControllerRumble {
             if reason != "play" {
                 logger.debug("no controller connected (\(reason, privacy: .public))")
             }
-            invalidateEngines()
+            invalidatePlayback()
             return false
         }
+
         guard let haptics = controller.haptics else {
             let name = controller.vendorName ?? "unknown"
             if lastLoggedControllerName != name {
                 lastLoggedControllerName = name
-                logger.error("controller discovered '\(name, privacy: .public)' but haptics unsupported (GCDeviceHaptics is nil). Public GameController API cannot drive this pad's motors.")
+                logger.error(
+                    "controller discovered '\(name, privacy: .public)' but haptics unsupported"
+                )
             }
-            invalidateEngines()
+            invalidatePlayback()
             return false
         }
 
         let id = ObjectIdentifier(controller)
-        if controllerID == id, !motors.isEmpty {
-            restartStoppedEngines()
+        if controllerID == id, playback != nil {
+            restartStoppedPlayback()
             return true
         }
 
-        invalidateEngines()
+        invalidatePlayback()
         controllerID = id
-        let localities = haptics.supportedLocalities
-        let names = localities.map { localityName($0) }.sorted().joined(separator: ",")
-        logger.info("controller discovered '\(controller.vendorName ?? "unknown", privacy: .public)' haptics supported localities=[\(names, privacy: .public)]")
 
-        let wanted: [GCHapticsLocality] = [
-            .leftHandle, .rightHandle, .handles, .default, .leftTrigger, .rightTrigger
-        ]
-        for locality in wanted where localities.contains(locality) {
-            guard let engine = haptics.createEngine(withLocality: locality) else { continue }
-            do {
-                try configure(engine, locality: locality)
-                motors[locality] = Motor(locality: locality, engine: engine, started: true)
-            } catch {
-                logger.error("haptic engine failure starting \(self.localityName(locality), privacy: .public): \(error.localizedDescription, privacy: .public)")
-            }
-        }
-
-        if motors.isEmpty {
-            logger.error("haptics supported but every createEngine(withLocality:) failed")
+        guard let engine = haptics.createEngine(withLocality: .default) else {
+            logger.error("haptic engine creation failed for default locality")
             return false
         }
-        return true
-    }
 
-    private func configure(_ engine: CHHapticEngine, locality: GCHapticsLocality) throws {
-        engine.playsHapticsOnly = true
-        engine.isAutoShutdownEnabled = false
-        let g = generation
-        let name = localityName(locality)
-        engine.resetHandler = { [weak self] in
-            Task { @MainActor in
-                guard let self, self.generation == g else { return }
-                self.logger.debug("haptic engine reset \(name, privacy: .public) — restarting")
-                self.restart(locality)
-            }
-        }
-        engine.stoppedHandler = { [weak self] reason in
-            Task { @MainActor in
-                guard let self, self.generation == g else { return }
-                self.logger.debug("haptic engine stopped \(name, privacy: .public) reason=\(String(describing: reason), privacy: .public)")
-                if reason == .gameControllerDisconnect {
-                    self.invalidateEngines()
-                } else {
-                    self.restart(locality)
-                }
-            }
-        }
-        try engine.start()
-    }
-
-    private func restart(_ locality: GCHapticsLocality) {
-        guard let motor = motors[locality] else { return }
-        motor.players.removeAll()
         do {
-            try motor.engine.start()
-            motor.started = true
+            engine.playsHapticsOnly = true
+            engine.isAutoShutdownEnabled = false
+
+            let next = try HapticPlayback(
+                engine: engine,
+                controllerIdentifier: id
+            )
+            installCallbacks(next)
+            playback = next
+
+            let localities = haptics.supportedLocalities.map(localityName).sorted().joined(separator: ",")
+            logger.info(
+                "controller haptics ready '\(controller.vendorName ?? "unknown", privacy: .public)' localities=[\(localities, privacy: .public)]"
+            )
+            return true
         } catch {
-            logger.error("haptic engine failure restarting \(self.localityName(locality), privacy: .public): \(error.localizedDescription, privacy: .public)")
-            motor.started = false
+            engine.stop(completionHandler: nil)
+            controllerID = nil
+            logger.error("haptic playback creation failed: \(error.localizedDescription, privacy: .public)")
+            return false
         }
     }
 
-    private func restartStoppedEngines() {
-        for (locality, motor) in motors where !motor.started {
-            restart(locality)
+    private func updatePlayback(_ profile: RumbleProfile) throws {
+        guard let playback else {
+            throw NSError(domain: "GameStream.ControllerRumble", code: 1)
         }
+
+        let now = ProcessInfo.processInfo.systemUptime
+        if playback.isPlaying,
+           now - playback.lastUpdateAt < Self.hapticUpdateInterval,
+           let previous = playback.lastProfile,
+           !profile.materiallyDiffers(from: previous) {
+            return
+        }
+
+        let parameters = [
+            CHHapticDynamicParameter(
+                parameterID: .hapticIntensityControl,
+                value: profile.intensity,
+                relativeTime: 0
+            ),
+            CHHapticDynamicParameter(
+                parameterID: .hapticSharpnessControl,
+                value: profile.sharpnessControl,
+                relativeTime: 0
+            )
+        ]
+
+        if playback.isPlaying {
+            try playback.player.sendParameters(
+                parameters,
+                atTime: CHHapticTimeImmediate
+            )
+        } else {
+            try playback.engine.start()
+            playback.player.isMuted = true
+            try playback.player.start(atTime: CHHapticTimeImmediate)
+            try playback.player.sendParameters(
+                parameters,
+                atTime: CHHapticTimeImmediate
+            )
+            playback.player.isMuted = false
+            playback.isPlaying = true
+        }
+
+        playback.lastProfile = profile
+        playback.lastUpdateAt = now
     }
 
-    @discardableResult
-    private func pulse(
-        _ locality: GCHapticsLocality,
-        intensity: Float,
-        sharpness: Float,
-        duration: TimeInterval
-    ) throws -> Bool {
-        guard intensity > 0.005 else { return false }
-        guard let motor = motors[locality] else { return false }
-        if !motor.started {
-            try motor.engine.start()
-            motor.started = true
-        }
-        let clampedDuration = min(max(duration, 0.02), 4)
-        let event = CHHapticEvent(
-            eventType: .hapticContinuous,
-            parameters: [
-                CHHapticEventParameter(parameterID: .hapticIntensity, value: min(max(intensity, 0), 1)),
-                CHHapticEventParameter(parameterID: .hapticSharpness, value: min(max(sharpness, 0), 1))
-            ],
-            relativeTime: 0,
-            duration: clampedDuration
-        )
-        let pattern = try CHHapticPattern(events: [event], parameters: [])
-        let player = try motor.engine.makePlayer(with: pattern)
-        motor.players.append(player)
-        if motor.players.count > 32 {
-            motor.players.removeFirst(motor.players.count - 32)
-        }
-        try player.start(atTime: 0)
-
-        let token = ObjectIdentifier(player as AnyObject)
-        DispatchQueue.main.asyncAfter(deadline: .now() + clampedDuration + 0.08) { [weak self] in
+    private func installCallbacks(_ playback: HapticPlayback) {
+        let generation = self.generation
+        let invalidate = { [weak self, weak playback] in
             Task { @MainActor in
-                self?.releasePlayer(locality: locality, token: token)
+                guard let self, let playback, self.playback === playback else { return }
+                playback.markEngineStopped()
+                self.playback = nil
+                self.controllerID = nil
             }
         }
-        return true
-    }
 
-    private func releasePlayer(locality: GCHapticsLocality, token: ObjectIdentifier) {
-        guard let motor = motors[locality] else { return }
-        motor.players.removeAll { ObjectIdentifier($0 as AnyObject) == token }
-    }
-
-    private func stopMotors() {
-        for motor in motors.values {
-            for player in motor.players {
-                try? player.stop(atTime: 0)
-            }
-            motor.players.removeAll()
+        playback.engine.stoppedHandler = { _ in
+            invalidate()
         }
+
+        playback.engine.resetHandler = {
+            invalidate()
+        }
+
+        _ = generation
+    }
+
+    private func restartStoppedPlayback() {
+        guard let playback, !playback.isPlaying else { return }
+        do {
+            try playback.engine.start()
+            playback.isPlaying = false
+        } catch {
+            logger.error("haptic engine restart failed: \(error.localizedDescription, privacy: .public)")
+            invalidatePlayback()
+        }
+    }
+
+    private func stopRumble() {
+        playback?.stopPlayer()
     }
 
     private func handleConnect(_ controller: GCController?) {
-        let name = controller?.vendorName ?? "unknown"
-        let haptics = controller?.haptics != nil
-        logger.info("controller connected '\(name, privacy: .public)' haptics=\(haptics, privacy: .public)")
+        logger.info(
+            "controller connected '\(controller?.vendorName ?? "unknown", privacy: .public)' haptics=\(controller?.haptics != nil, privacy: .public)"
+        )
         attach(reason: "connect")
     }
 
     private func handleDisconnect(_ controller: GCController?) {
-        let name = controller?.vendorName ?? "unknown"
-        logger.info("controller disconnected '\(name, privacy: .public)'")
+        logger.info("controller disconnected '\(controller?.vendorName ?? "unknown", privacy: .public)'")
         if let controller, controllerID == ObjectIdentifier(controller) {
-            invalidateEngines()
+            invalidatePlayback()
         }
         attach(reason: "disconnect")
     }
 
     private func activeController() -> GCController? {
         let connected = GCController.controllers()
+
         if let current = GCController.current, current.haptics != nil {
             return current
         }
+
         if let haptic = connected.first(where: { $0.haptics != nil }) {
             return haptic
         }
+
         return connected.first(where: { $0.extendedGamepad != nil }) ?? connected.first
     }
 
     private func normalize(_ value: Float) -> Float {
-        if value > 1 { return min(max(value / 100, 0), 1) }
+        if value > 1 {
+            return min(max(value / 100, 0), 1)
+        }
         return min(max(value, 0), 1)
     }
 
     private func scale(_ value: Float) -> Float {
         let raw = min(max(value, 0), 1)
         guard raw > 0.005 else { return 0 }
+
         let stored = UserDefaults.standard.object(forKey: Defaults.intensity) as? Double
         let intensity = min(max(Float(stored ?? 1.6), 0.5), 3)
         return min(max(raw * intensity, 0.05), 1)
     }
 
-    private func invalidateEngines() {
+    private func invalidatePlayback() {
         generation &+= 1
-        for motor in motors.values {
-            for player in motor.players {
-                try? player.stop(atTime: 0)
-            }
-            motor.engine.stop(completionHandler: nil)
-        }
-        motors.removeAll()
+        playback?.shutdown()
+        playback = nil
         controllerID = nil
     }
 
@@ -436,10 +455,18 @@ final class ControllerRumble {
         }
     }
 
-    private func logPacket(left: Float, right: Float, leftTrigger: Float, rightTrigger: Float, durationMs: Double) {
+    private func logPacket(
+        left: Float,
+        right: Float,
+        leftTrigger: Float,
+        rightTrigger: Float,
+        durationMs: Double
+    ) {
         let now = ProcessInfo.processInfo.systemUptime
         if now - lastPacketLogAt < 1 { return }
         lastPacketLogAt = now
-        logger.debug("parsed motor values L=\(left, format: .fixed(precision: 2)) R=\(right, format: .fixed(precision: 2)) LT=\(leftTrigger, format: .fixed(precision: 2)) RT=\(rightTrigger, format: .fixed(precision: 2)) d=\(durationMs, format: .fixed(precision: 0))ms")
+        logger.debug(
+            "parsed motor values L=\(left, format: .fixed(precision: 2)) R=\(right, format: .fixed(precision: 2)) LT=\(leftTrigger, format: .fixed(precision: 2)) RT=\(rightTrigger, format: .fixed(precision: 2)) d=\(durationMs, format: .fixed(precision: 0))ms"
+        )
     }
 }
