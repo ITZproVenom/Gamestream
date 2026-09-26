@@ -325,7 +325,45 @@ struct SettingsView: View {
                     }
                 }
 
-                settingsSection("About") {
+                settingsSection("Diagnostics & Analytics") {
+                    Toggle(isOn: Binding(
+                        get: { DiagnosticsStore.shared.isOptedIn },
+                        set: { DiagnosticsStore.shared.isOptedIn = $0 }
+                    )) {
+                        Label("Share diagnostics", systemImage: "chart.bar.xaxis")
+                    }
+                    Text("Opt-in only. Events are sanitized, stored locally, and uploaded asynchronously. Sensitive fields such as passwords, cookies, tokens, search text, and account identifiers are excluded.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    if DiagnosticsStore.shared.isOptedIn {
+                        HStack {
+                            Text("Pending: \(DiagnosticsStore.shared.pendingCount)")
+                            Spacer()
+                            Text(DiagnosticsStore.shared.lastUploadStatus)
+                                .foregroundStyle(.secondary)
+                        }
+                        .font(.caption)
+
+                        Button {
+                            DiagnosticsStore.shared.flushNow()
+                        } label: {
+                            Label("Upload now", systemImage: "arrow.up.circle")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.glass)
+
+                        Button(role: .destructive) {
+                            DiagnosticsStore.shared.clearQueue()
+                        } label: {
+                            Label("Clear local queue", systemImage: "trash")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.glass)
+                    }
+                }
+
+                settingsSection("About")
                     settingRow(icon: "info.circle", title: "Version") {
                         Text(appVersion)
                             .foregroundStyle(.secondary)
