@@ -84,7 +84,7 @@ struct GameDetailView: View {
     private var hero: some View {
         ZStack(alignment: .bottomLeading) {
             GameArtView(url: artwork.url(for: game.id), accent: game.accent, title: game.title)
-                .frame(height: 210)
+                .aspectRatio(16 / 9, contentMode: .fit)
                 .frame(maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.75)], startPoint: .top, endPoint: .bottom)
