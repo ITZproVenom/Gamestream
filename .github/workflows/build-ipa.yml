@@ -7,7 +7,7 @@ on:
         description: "Inject bundled resources/icons into the .app (default 'none' == last-working 2a31e1f packaging; 'full' reproduces the crash-era d31852d packaging for diagnosis)"
         type: choice
         options: ["full", "none"]
-        default: "none"
+        default: "full"
   push:
     branches: [main]
     tags: ["v*"]
@@ -81,7 +81,7 @@ jobs:
           PY
 
       - name: Bundle Better xCloud (no sound pack)
-        if: ${{ github.event.inputs.bundle_injection == 'full' }}
+        if: ${{ github.event.inputs.bundle_injection == 'full' || github.event_name == 'push' }}
         run: |
           set -euo pipefail
           mkdir -p GameStream/Resources
@@ -97,7 +97,7 @@ jobs:
           echo "Sound pack generation disabled for crash isolation"
 
       - name: Verify Resources on disk
-        if: ${{ github.event.inputs.bundle_injection == 'full' }}
+        if: ${{ github.event.inputs.bundle_injection == 'full' || github.event_name == 'push' }}
         run: |
           set -euo pipefail
           echo "Resources tree:"
@@ -197,7 +197,7 @@ jobs:
 
       - name: Package IPA
         env:
-          BUNDLE_INJECTION: ${{ github.event.inputs.bundle_injection || 'none' }}
+          BUNDLE_INJECTION: ${{ github.event.inputs.bundle_injection || 'full' }}
         run: |
           set -euo pipefail
           APP="build/GameStream.xcarchive/Products/Applications/GameStream.app"
