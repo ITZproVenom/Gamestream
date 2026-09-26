@@ -286,8 +286,8 @@ jobs:
           RUN="${{ github.run_number }}"
           SUBJECT="$(git log -1 --pretty=%s)"
           if printf '%s' "$SUBJECT" | grep -Eqi 'experimental.*controller|controller.*experimental|experimental.*rumble|rumble.*experimental'; then
-            echo "tag=ios-experimental-rumble-${STAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-            echo "name=Experimental iOS Rumble · GameStream #${RUN} (${SHORT_SHA})" >> "$GITHUB_OUTPUT"
+            echo "tag=ios-beta-${STAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "name=🧪 iOS Beta · GameStream #${RUN} (${SHORT_SHA})" >> "$GITHUB_OUTPUT"
             echo "experimental=true" >> "$GITHUB_OUTPUT"
           else
             echo "tag=ios-build-${STAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
@@ -418,7 +418,7 @@ jobs:
             --notes "$(cat release_notes.md)" \
             --prerelease
 
-      - name: Publish experimental iOS pointer
+      - name: Publish iOS beta pointer
         if: >-
           steps.meta.outputs.should_release == 'true' &&
           steps.meta.outputs.experimental == 'true' &&
@@ -427,9 +427,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh release delete latest-ios-experimental-rumble --yes --cleanup-tag 2>/dev/null || true
-          gh release create latest-ios-experimental-rumble \
+          gh release delete latest-ios-beta --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest-ios-beta \
             build/GameStream-unsigned.ipa \
-            --title "GameStream Experimental Rumble" \
+            --title "🧪 iOS Beta · Latest IPA" \
             --notes "$(cat release_notes.md)" \
             --prerelease
