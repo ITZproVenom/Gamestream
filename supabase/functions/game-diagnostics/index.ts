@@ -128,13 +128,13 @@ Deno.serve(async (req: Request) => {
       .filter((event): event is Record<string, unknown> => !!event && typeof event === "object" && !Array.isArray(event))
       .map((event) => normalizeEvent(event, payloadBody));
     if (events.length === 0) throw new Error("empty_events");
-    const response = await fetch(`${supabaseUrl}/rest/v1/diagnostics`, {
+    const response = await fetch(`${supabaseUrl}/rest/v1/diagnostics?on_conflict=event_id`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         apikey: serviceRoleKey,
         Authorization: `Bearer ${serviceRoleKey}`,
-        Prefer: "return=minimal",
+        Prefer: "resolution=ignore-duplicates,return=minimal",
       },
       body: JSON.stringify(events),
     });
@@ -149,8 +149,10 @@ Deno.serve(async (req: Request) => {
     });
   } catch (error) {
     console.error("diagnostics error", error);
-    return new Response(JSON.stringify({ error: "invalid_or_failed_request" }), {
-      status: 400,
+    const message = error instanceof Error ? error.message : "invalid_or_failed_request";
+    const isDatabaseFailure = message === "database_insert_failed";
+    return new Response(JSON.stringify({ error: isDatabaseFailure ? "database_insert_failed" : "invalid_or_failed_request" }), {
+      status: isDatabaseFailure ? 500 : 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
