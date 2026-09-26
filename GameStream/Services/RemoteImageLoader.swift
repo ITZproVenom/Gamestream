@@ -54,7 +54,7 @@ final class RemoteImageLoader: ObservableObject {
 
             if image == nil {
                 image = await Self.image(for: url)
-                if let image {
+                if generation == self.cacheGeneration, let image {
                     await Self.saveDiskImage(image, url: url, directory: diskDirectory)
                 }
             }
