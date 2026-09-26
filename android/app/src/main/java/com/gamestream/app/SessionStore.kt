@@ -3,6 +3,7 @@ package com.gamestream.app
 import android.app.Application
 import android.content.Context
 import android.webkit.CookieManager
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -113,7 +114,12 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         if (didConsumeLaunchResume) return
         didConsumeLaunchResume = true
         if (!resumeLastOnOpen || !isSignedIn || isStreaming) return
-        resumeLastStream()
+        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main.immediate) {
+            delay(1200)
+            if (resumeLastOnOpen && isSignedIn && !isStreaming) {
+                resumeLastStream()
+            }
+        }
     }
     fun returnToHub() {
         playActivity.end()
