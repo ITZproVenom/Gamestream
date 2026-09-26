@@ -68,6 +68,7 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
         )
     }
     var introCompleted by remember { mutableStateOf(OnboardingPrefs.isIntroDone(context)) }
+    var showOpening by remember { mutableStateOf(true) }
     val bgColor = MaterialTheme.colorScheme.background
 
     LaunchedEffect(Unit) {
@@ -93,6 +94,11 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
             tabPrefs.edit().putString("selectedTab", next.name).apply()
         }
         session.requestedTab = null
+    }
+
+    if (showOpening) {
+        OpeningIntroOverlay { showOpening = false }
+        return
     }
 
     if (!introCompleted) {
