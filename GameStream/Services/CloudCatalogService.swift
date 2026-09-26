@@ -13,10 +13,13 @@ enum CloudCatalogService {
                 GameCatalog.installLiveCatalog(cached)
             }
         }
-        Task.detached(priority: .utility) {
+        Task { @MainActor in
             do {
                 try await fetchRemoteProgressive()
             } catch {
+                // A transient catalog failure must not permanently disable
+                // refreshes for the lifetime of the process.
+                started = false
             }
         }
     }
@@ -30,7 +33,7 @@ enum CloudCatalogService {
             throw URLError(.badServerResponse)
         }
         let ids = parseIds(from: data)
-        guard ids.count >= 20 else { return }
+        guard ids.count >= 20 else { throw URLError(.cannotParseResponse) }
 
         var collected: [CatalogGame] = []
         collected.reserveCapacity(ids.count)
@@ -55,7 +58,7 @@ enum CloudCatalogService {
             }
         }
         let unique = dedupe(collected)
-        guard unique.count >= 20 else { return }
+        guard unique.count >= 20 else { throw URLError(.cannotParseResponse) }
         saveCache(unique)
         await MainActor.run {
             GameCatalog.installLiveCatalog(unique)
