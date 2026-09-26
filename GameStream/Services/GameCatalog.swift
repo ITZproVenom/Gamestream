@@ -236,7 +236,13 @@ final class ArtworkStore: ObservableObject {
             return
         }
         do {
-            let (data, _) = try await URLSession.shared.data(from: endpoint)
+            var request = URLRequest(url: endpoint)
+            request.timeoutInterval = 10
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                throw URLError(.badServerResponse)
+            }
             let parsed = Self.parseAllPosters(from: data)
             for (id, url) in parsed where urls[id] != url {
                 urls[id] = url
@@ -256,7 +262,13 @@ final class ArtworkStore: ObservableObject {
             return nil
         }
         do {
-            let (data, _) = try await URLSession.shared.data(from: endpoint)
+            var request = URLRequest(url: endpoint)
+            request.timeoutInterval = 10
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                return nil
+            }
             return Self.parsePoster(from: data)
         } catch {
             return nil
