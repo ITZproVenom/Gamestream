@@ -12,14 +12,6 @@ struct IntroView: View {
         Array(GameCatalog.games.compactMap(\.posterURL).prefix(12))
     }
 
-    private var physicalWidth: CGFloat {
-        UIScreen.main.bounds.width
-    }
-
-    private var contentWidth: CGFloat {
-        min(max(physicalWidth - 40, 280), 420)
-    }
-
     var body: some View {
         ZStack(alignment: .topLeading) {
             background
@@ -34,14 +26,16 @@ struct IntroView: View {
 
                     Spacer(minLength: 18)
 
-                    heroCard
+                    let width = min(max(proxy.size.width - 40, 280), 420)
+
+                    heroCard(width: width)
 
                     Spacer(minLength: 18)
 
-                    actionArea
+                    actionArea(width: width)
                         .padding(.bottom, max(proxy.safeAreaInsets.bottom, 8))
                 }
-                .frame(width: physicalWidth, height: proxy.size.height, alignment: .top)
+                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -103,7 +97,7 @@ struct IntroView: View {
         .padding(.horizontal, 20)
     }
 
-    private var heroCard: some View {
+    private func heroCard(width: CGFloat) -> some View {
         VStack(spacing: 18) {
             ZStack {
                 Circle()
@@ -142,13 +136,13 @@ struct IntroView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 22)
-        .frame(width: contentWidth)
+        .frame(width: width)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
         .opacity(appeared ? 1 : 0)
         .offset(y: appeared ? 0 : 14)
     }
 
-    private var actionArea: some View {
+    private func actionArea(width: CGFloat) -> some View {
         VStack(spacing: 12) {
             Button(action: finish) {
                 HStack(spacing: 10) {
