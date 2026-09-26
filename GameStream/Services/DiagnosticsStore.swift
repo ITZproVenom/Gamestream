@@ -14,6 +14,8 @@ final class DiagnosticsStore: ObservableObject {
         didSet {
             UserDefaults.standard.set(isOptedIn, forKey: Keys.optIn)
             if isOptedIn {
+                // Seed so the queue is never stuck empty after enabling share.
+                record(event: "opt_in", properties: ["source": "settings"])
                 scheduleFlush()
             }
         }
@@ -62,7 +64,15 @@ final class DiagnosticsStore: ObservableObject {
     }
 
     func flushNow() {
-        guard isOptedIn else { return }
+        guard isOptedIn else {
+            lastUploadStatus = "opt-in required"
+            return
+        }
+        // If the queue is empty, record a heartbeat so Upload always has work
+        // (avoids a silent no-op that looked like a broken button).
+        if loadQueue().isEmpty {
+            record(event: "manual_upload", properties: ["source": "settings"])
+        }
         Task { await performUpload() }
     }
 
@@ -114,7 +124,14 @@ final class DiagnosticsStore: ObservableObject {
 
     private func performUpload() async {
         let queue = loadQueue()
-        guard !queue.isEmpty, isOptedIn else { return }
+        guard isOptedIn else {
+            lastUploadStatus = "opt-in required"
+            return
+        }
+        guard !queue.isEmpty else {
+            lastUploadStatus = "nothing pending"
+            return
+        }
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
@@ -123,28 +140,38 @@ final class DiagnosticsStore: ObservableObject {
         request.setValue("Bearer \(supabasePublishableKey)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 15
 
+        // Edge Function contract: top-level event_type MUST be "diagnostic".
+        // Anything else returns HTTP 400 {"error":"invalid_event_type"}.
         let body: [String: Any] = [
+            "event_type": "diagnostic",
+            "message": "batch",
+            "platform": "ios",
+            "app": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown",
             "events": queue,
             "device": [
                 "model": UIDevice.current.model,
                 "system": UIDevice.current.systemVersion
             ]
         ]
-        guard let httpBody = try? JSONSerialization.data(withJSONObject: body) else { return }
+        guard let httpBody = try? JSONSerialization.data(withJSONObject: body) else {
+            lastUploadStatus = "encode failed"
+            return
+        }
         request.httpBody = httpBody
 
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
             if let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) {
                 saveQueue([])
                 pendingCount = 0
                 lastUploadStatus = "ok \(http.statusCode)"
             } else {
                 let code = (response as? HTTPURLResponse)?.statusCode ?? -1
-                lastUploadStatus = "http \(code)"
+                let detail = String(data: data, encoding: .utf8).map { String($0.prefix(80)) } ?? ""
+                lastUploadStatus = detail.isEmpty ? "http \(code)" : "http \(code) \(detail)"
             }
         } catch {
-            lastUploadStatus = "error"
+            lastUploadStatus = "error \(error.localizedDescription.prefix(60))"
         }
     }
 }
