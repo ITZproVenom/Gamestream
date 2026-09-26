@@ -28,6 +28,13 @@ struct IntroView: View {
                 )
                 .ignoresSafeArea()
 
+                // Some sideload/container hosts can report a wider SwiftUI scene than
+                // the physical screen. Keep foreground controls anchored to the
+                // actual display so Liquid Glass cannot render off the right edge.
+                let displayWidth = min(geo.size.width, UIScreen.main.bounds.width)
+                let displayOffsetX = (displayWidth - geo.size.width) / 2
+                let contentWidth = min(max(0, displayWidth - 40), 520)
+
                 VStack(spacing: 0) {
                     HStack {
                         Button("Skip") { finish() }
@@ -43,8 +50,6 @@ struct IntroView: View {
                     .padding(.top, max(geo.safeAreaInsets.top + 8, 12))
 
                     Spacer(minLength: 12)
-
-                    let contentWidth = min(max(0, geo.size.width - 40), 520)
 
                     VStack(spacing: 10) {
                         VStack(spacing: 12) {
@@ -93,6 +98,7 @@ struct IntroView: View {
                     Spacer(minLength: 12)
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
+                .offset(x: displayOffsetX)
             }
         }
         .ignoresSafeArea(edges: .bottom)
