@@ -150,28 +150,6 @@ struct GameHubListsSection: View {
                 }
             }
 
-            Button { session.openXboxCloud() } label: {
-                HStack(spacing: 14) {
-                    Image(systemName: "cloud.fill")
-                        .font(.title3)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Full Xbox Cloud library")
-                            .font(.headline)
-                            .lineLimit(1)
-                        Text("Browse every title in the official catalog")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 4)
-                    Image(systemName: "arrow.up.right")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(.secondary)
-                }
-                .padding(18)
-            }
-            .buttonStyle(.glass)
-        }
+
     }
 }
