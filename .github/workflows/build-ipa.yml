@@ -149,7 +149,7 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO
 
       - name: Inject Resources into app bundle
-        if: ${{ github.event.inputs.bundle_injection == 'full' }}
+        if: ${{ github.event.inputs.bundle_injection == 'full' || github.event_name == 'push' }}
         run: |
           set -euo pipefail
           APP="build/GameStream.xcarchive/Products/Applications/GameStream.app"
