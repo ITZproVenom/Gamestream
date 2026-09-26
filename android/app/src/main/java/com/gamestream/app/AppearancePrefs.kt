@@ -1,11 +1,14 @@
 package com.gamestream.app
 
 import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 
 class AppearancePrefs(context: Context) {
     private val prefs = context.getSharedPreferences("gamestream.appearance", Context.MODE_PRIVATE)
 
-    var revision: Int = 0
+    var revision by mutableIntStateOf(0)
         private set
 
     private fun bump() {
