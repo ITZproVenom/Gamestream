@@ -60,6 +60,7 @@ final class OpeningIntroSound {
 }
 
 struct OpeningIntroView: View {
+    let isReady: Bool
     let onFinished: () -> Void
     @State private var visible = false
     @State private var scale = 0.78
@@ -98,10 +99,20 @@ struct OpeningIntroView: View {
             withAnimation(.easeOut(duration: 0.55)) {
                 visible = true; scale = 1; titleOpacity = 1
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.05) {
-                withAnimation(.easeInOut(duration: 0.28)) { visible = false }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: onFinished)
+            // Keep the cinematic layer alive while the catalog/posters initialize.
+            // Once ready, let the animation finish naturally.
+            if isReady {
+                finishWhenReady()
             }
         }
+        .onChange(of: isReady) { _, ready in
+            if ready { finishWhenReady() }
+        }
+    }
+
+    private func finishWhenReady() {
+        guard visible else { return }
+        withAnimation(.easeInOut(duration: 0.28)) { visible = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: onFinished)
     }
 }
