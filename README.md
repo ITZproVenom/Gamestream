@@ -20,7 +20,7 @@
 
 ## Download
 
-Builds are **separate by platform**. Pick iOS or Android — do not mix tags.
+Builds are **separate by platform and channel**. Stable iOS, iOS Beta, and Android releases have their own download pointers.
 
 ### Current builds
 
@@ -30,11 +30,12 @@ Builds are **separate by platform**. Pick iOS or Android — do not mix tags.
 | **Android** | [🤖 Latest Android build](https://github.com/ITZproVenom/Gamestream/releases) | See the latest Android release |
 | **iOS Beta** | [🧪 Latest iOS beta](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios-beta) | `GameStream-unsigned.ipa` |
 
-> **iOS Beta:** Experimental and in-development iOS changes are shipped through this beta channel. They do not replace the normal `latest-ios` release.
+> **iOS Beta:** Experimental and in-development iOS changes are shipped through this beta channel. Beta builds do not replace or modify the normal `latest-ios` release.
 
 ### All builds
 
-- **iOS only:** [filter `ios-build`](https://github.com/ITZproVenom/Gamestream/releases?q=ios-build&expanded=true)
+- **iOS stable:** [Latest iOS release](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios)
+- **iOS historical builds:** [filter `ios-build`](https://github.com/ITZproVenom/Gamestream/releases?q=ios-build&expanded=true)
 - **iOS beta:** [Latest iOS beta](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios-beta)
 - **Android only:** [filter `android-build`](https://github.com/ITZproVenom/Gamestream/releases?q=android-build&expanded=true)
 - **All releases:** [Releases](https://github.com/ITZproVenom/Gamestream/releases)
@@ -43,7 +44,7 @@ Builds are **separate by platform**. Pick iOS or Android — do not mix tags.
 - **iOS:** AltStore / Sideloadly / TrollStore-compatible workflows (unsigned IPA; signing is required before installation where applicable)
 - **Android:** allow unknown sources; the release APK is signed
 
-> Releases are published separately per platform. Titles start with **📱 iOS** or **🤖 Android** so the two platforms are easy to distinguish.
+> Stable iOS releases use **📱 iOS**, beta iOS releases use **🧪 iOS Beta**, and Android releases use **🤖 Android**.
 
 ---
 
