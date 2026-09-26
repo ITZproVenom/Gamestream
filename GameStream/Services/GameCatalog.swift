@@ -250,12 +250,17 @@ final class ArtworkStore: ObservableObject {
             guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
                 throw URLError(.badServerResponse)
             }
+            guard generation == fetchGeneration else { return }
             let parsed = Self.parseAllPosters(from: data)
             for (id, url) in parsed where urls[id] != url {
                 urls[id] = url
             }
             for id in ids where urls[id] == nil {
-                if let single = await fetchOne(id) { urls[id] = single }
+                guard generation == fetchGeneration else { return }
+                if let single = await fetchOne(id) {
+                    guard generation == fetchGeneration else { return }
+                    urls[id] = single
+                }
             }
         } catch {
             for id in ids where urls[id] == nil {
