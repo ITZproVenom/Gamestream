@@ -17,6 +17,7 @@ targets:
       - path: GameStream/Services/MicrosoftAuth.swift
       - path: GameStream/Services/BetterXCloudInjector.swift
       - path: GameStream/Services/ControllerRumble.swift
+      - path: GameStream/Services/ExperimentalControllerInput.swift
       - path: GameStream/Services/HapticManager.swift
       - path: GameStream/Services/SoundManager.swift
       - path: GameStream/Services/EmbeddedSounds.swift
