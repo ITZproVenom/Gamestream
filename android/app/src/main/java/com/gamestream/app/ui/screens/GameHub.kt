@@ -446,7 +446,7 @@ private fun PosterCard(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(4.dp)
-                    .size(32.dp)
+                    .size(48.dp)
             ) {
                 Icon(
                     if (favorite) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
@@ -460,7 +460,7 @@ private fun PosterCard(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .background(Color.Black.copy(alpha = 0.45f))
-                     .clickable(onClick = onPlay)
+                    .clickable(onClick = onPlay)
                     .height(48.dp),
                 contentAlignment = Alignment.Center
             ) {
