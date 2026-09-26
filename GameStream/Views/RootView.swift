@@ -209,41 +209,88 @@ struct RootView: View {
 
     private var glassNavigation: some View {
         GeometryReader { geo in
-            let width = geo.size.width
-            let slot = width / tabCount
+            let width = max(geo.size.width, 1)
+            let horizontalInset: CGFloat = 6
+            let trackWidth = max(width - (horizontalInset * 2), 1)
+            let stopSpacing = trackWidth / max(tabCount - 1, 1)
+            let thumbWidth = max(min(trackWidth / tabCount, 116), 92)
+            let selectedX = horizontalInset + (stopSpacing * CGFloat(selectedTab.index))
 
-            GlassEffectContainer(spacing: 8) {
+            ZStack(alignment: .leading) {
+                // A single native Liquid Glass track. The control is a slider,
+                // not three independent buttons.
+                Capsule()
+                    .fill(.clear)
+                    .glassEffect(.regular, in: Capsule())
+
                 HStack(spacing: 0) {
                     ForEach(Tab.allCases, id: \.self) { tab in
-                        Button {
-                            selectTab(tab)
-                        } label: {
-                            tabLabel(tab)
-                                .frame(width: slot - 8, height: 52)
+                        VStack(spacing: 3) {
+                            Image(systemName: tab.icon)
+                                .font(.system(size: 17, weight: .semibold))
+                                .symbolRenderingMode(.hierarchical)
+                            Text(tab.rawValue)
+                                .font(.system(size: 10, weight: .semibold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
                         }
-                        .buttonStyle(.plain)
-                        .glassEffect(
-                            selectedTab == tab
-                                ? .regular.tint(Color.accentColor.opacity(0.22)).interactive()
-                                : .clear,
-                            in: Capsule()
-                        )
-                        .glassEffectID(
-                            selectedTab == tab ? "selected-tab" : nil,
-                            in: tabGlassNamespace
-                        )
-                        .contentShape(Capsule())
-                        .accessibilityLabel(tab.rawValue)
-                        .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
+                        .foregroundStyle(selectedTab == tab ? .primary : .secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Rectangle())
                     }
                 }
-                .padding(5)
-                .glassEffect(.regular, in: Capsule())
+                .padding(.horizontal, 4)
+
+                Capsule()
+                    .fill(.clear)
+                    .frame(width: thumbWidth, height: 52)
+                    .glassEffect(.regular.tint(Color.accentColor.opacity(0.24)).interactive(), in: Capsule())
+                    .glassEffectID("selected-tab", in: tabGlassNamespace)
+                    .overlay {
+                        Capsule()
+                            .strokeBorder(.white.opacity(0.16), lineWidth: 0.5)
+                    }
+                    .position(x: selectedX, y: 31)
+                    .allowsHitTesting(false)
             }
+            .frame(width: width, height: 62)
             .contentShape(Capsule())
-            .gesture(tabDragGesture(slotWidth: slot))
+            .gesture(tabSliderGesture(trackWidth: trackWidth, thumbWidth: thumbWidth))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Navigation")
+            .accessibilityValue(selectedTab.rawValue)
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment:
+                    advanceTab(1)
+                case .decrement:
+                    advanceTab(-1)
+                @unknown default:
+                    break
+                }
+            }
         }
         .frame(height: 62)
+    }
+
+    private func tabSliderGesture(trackWidth: CGFloat, thumbWidth: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .local)
+            .onChanged { value in
+                let usable = max(trackWidth - thumbWidth, 1)
+                let clamped = min(max(value.location.x - (thumbWidth / 2), 0), usable)
+                tabDragOffset = clamped
+            }
+            .onEnded { value in
+                let usable = max(trackWidth - thumbWidth, 1)
+                let clamped = min(max(value.location.x - (thumbWidth / 2), 0), usable)
+                let fraction = clamped / usable
+                let index = Int((fraction * CGFloat(Tab.allCases.count - 1)).rounded())
+                tabDragOffset = 0
+                let next = Tab.allCases[min(max(index, 0), Tab.allCases.count - 1)]
+                if next != selectedTab {
+                    selectTab(next)
+                }
+            }
     }
 
     private func tabLabel(_ tab: Tab) -> some View {
