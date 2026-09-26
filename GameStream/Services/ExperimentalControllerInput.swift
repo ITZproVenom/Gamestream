@@ -1,5 +1,7 @@
 import Foundation
 
+// Beta channel entry point for experimental controller input changes.
+
 /// A controller-rumble event emitted by the streaming layer.
 ///
 /// This deliberately separates stream/protocol handling from the physical
