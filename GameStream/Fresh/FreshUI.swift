@@ -630,10 +630,31 @@ struct FreshSettingsView: View {
                             in: 0.5...3.0
                         )
 
-                        Button("Test haptics") {
-                            ControllerRumble.shared.playTest()
+                        HStack(spacing: 10) {
+                            Button {
+                                ControllerRumble.shared.testLeft()
+                            } label: {
+                                Label("Left", systemImage: "arrow.left.circle.fill")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+
+                            Button {
+                                ControllerRumble.shared.testRight()
+                            } label: {
+                                Label("Right", systemImage: "arrow.right.circle.fill")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
                         }
-                        .buttonStyle(.bordered)
+
+                        Button {
+                            ControllerRumble.shared.playTest()
+                        } label: {
+                            Label("Test both", systemImage: "gamecontroller.fill")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
                 }
 
