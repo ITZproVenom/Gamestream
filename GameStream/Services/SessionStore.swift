@@ -11,12 +11,12 @@ struct TrackedGame: Codable, Identifiable, Hashable, Equatable {
 
     var catalogURL: URL? {
         let safeSlug = slug.isEmpty ? id.lowercased() : slug
-        return URL(string: "https://www.xbox.com/play/games/\\(safeSlug)/\\(id)")
+        return URL(string: "https://www.xbox.com/play/games/\(safeSlug)/\(id)")
     }
 
     var launchURL: URL? {
         let safeSlug = slug.isEmpty ? id.lowercased() : slug
-        return URL(string: "https://www.xbox.com/play/launch/\\(safeSlug)/\\(id)")
+        return URL(string: "https://www.xbox.com/play/launch/\(safeSlug)/\(id)")
     }
 }
 
@@ -268,7 +268,7 @@ final class SessionStore: ObservableObject {
             let safeValue = value
                 .replacingOccurrences(of: "\\", with: "\\\\")
                 .replacingOccurrences(of: "'", with: "\\'")
-            return "data['\\(safeKey)']='\\(safeValue)'; try { localStorage.setItem('BetterXcloud.\\(safeKey)', '\\(safeValue)'); } catch (e) {}"
+            return "data['\(safeKey)']='\(safeValue)'; try { localStorage.setItem('BetterXcloud.\(safeKey)', '\(safeValue)'); } catch (e) {}"
         }
         let body = pairs.joined(separator: "\n")
         let reload = reloadIfXbox ? "if (/xbox\\.com/i.test(location.host)) { setTimeout(function(){ location.reload(); }, 80); }" : ""
@@ -279,9 +279,9 @@ final class SessionStore: ObservableObject {
                 var storageKey = 'BetterXcloud';
                 var data = {};
                 try { data = JSON.parse(localStorage.getItem(storageKey) || '{}') || {}; } catch (e) { data = {}; }
-                \\(body)
+                \(body)
                 localStorage.setItem(storageKey, JSON.stringify(data));
-                \\(reload)
+                \(reload)
             } catch (e) {}
         })();
         """
