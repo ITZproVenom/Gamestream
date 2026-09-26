@@ -64,10 +64,10 @@ final class SessionStore: ObservableObject {
         let stored = UserDefaults.standard.bool(forKey: Key.signedIn)
         isSignedIn = stored && proof == MicrosoftAuth.proofVersion
         accountLabel = UserDefaults.standard.string(forKey: Key.account)
-        favorites = Self.load([TrackedGame].self, key: Key.favorites)
-        recents = Self.load([TrackedGame].self, key: Key.recents)
-        queue = Self.load([TrackedGame].self, key: Key.queue)
-        playRecords = Self.load([PlayRecord].self, key: Key.playRecords)
+        favorites = Self.load([TrackedGame].self, key: Key.favorites) ?? []
+        recents = Self.load([TrackedGame].self, key: Key.recents) ?? []
+        queue = Self.load([TrackedGame].self, key: Key.queue) ?? []
+        playRecords = Self.load([PlayRecord].self, key: Key.playRecords) ?? []
         webURL = MicrosoftAuth.playURL
         rehydrateFlags()
     }
@@ -331,11 +331,9 @@ final class SessionStore: ObservableObject {
         }
     }
 
-    private static func load<T: Decodable>(_ type: T.Type, key: String) -> T {
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let value = try? JSONDecoder().decode(type, from: data) else {
-            return T.self == [TrackedGame].self ? ([] as! T) : T.self == [PlayRecord].self ? ([] as! T) : fatalError("Unsupported decode type")
-        }
+    private static func load<T: Decodable>(_ type: T.Type, key: String) -> T? {
+        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(type, from: data)
     }
 
     private func persist<T: Encodable>(_ value: T, key: String) {
