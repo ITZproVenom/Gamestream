@@ -1092,7 +1092,7 @@ struct FreshSearchStart: View {
                     columns: [GridItem(.flexible()), GridItem(.flexible())],
                     spacing: 12
                 ) {
-                    ForEach(Array(Set(games.map(\\.genre)).sorted().prefix(12)), id: \.self) { genre in
+                    ForEach(Array(Set(games.map { $0.genre }).sorted().prefix(12)), id: \.self) { genre in
                         Button {
                             select(genre)
                         } label: {
