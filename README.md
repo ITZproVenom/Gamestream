@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Xbox Cloud Gaming client for iOS & Android</strong><br>
-  Better xCloud · Native shells · Sideload builds
+  Better xCloud · Native GameHub · Sideload builds
 </p>
 
 <p align="center">
@@ -26,8 +26,8 @@ Builds are **separate by platform**. Pick iOS or Android — do not mix tags.
 
 | Platform | Download this release | File |
 |----------|----------------------|------|
-| **iOS** | [📱 iOS build (rumble + intensity)](https://github.com/ITZproVenom/Gamestream/releases/tag/ios-build-20260919-1051-64a6bb3) | `GameStream-unsigned.ipa` |
-| **Android** | [🤖 Android build (rumble + settings)](https://github.com/ITZproVenom/Gamestream/releases/tag/android-build-20260919-1056-b2bf297) | `GameStream-release.apk` |
+| **iOS** | [📱 Latest iOS build](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios) | `GameStream-unsigned.ipa` |
+| **Android** | [🤖 Latest Android build](https://github.com/ITZproVenom/Gamestream/releases/tag/android-build-20260926-0907-8986306) | `GameStream-release.apk` |
 
 ### All builds
 
@@ -36,10 +36,10 @@ Builds are **separate by platform**. Pick iOS or Android — do not mix tags.
 - **All releases:** [Releases](https://github.com/ITZproVenom/Gamestream/releases)
 
 **Install**
-- **iOS:** AltStore / Sideloadly / TrollStore (unsigned IPA)
-- **Android:** allow unknown sources; APK is signed so it updates over previous official builds
+- **iOS:** AltStore / Sideloadly / TrollStore-compatible workflows (unsigned IPA; signing is required before installation where applicable)
+- **Android:** allow unknown sources; the release APK is signed
 
-> New releases only publish when that platform’s **app code** changes. Titles start with **📱 iOS** or **🤖 Android** so they’re easy to spot.
+> Releases are published separately per platform. Titles start with **📱 iOS** or **🤖 Android** so the two platforms are easy to distinguish.
 
 ---
 
