@@ -113,7 +113,11 @@ struct GamePosterCard: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
-                    Spacer(minLength: 0)
+                        .truncationMode(.tail)
+                        .layoutPriority(0)
+
+                    Spacer(minLength: 4)
+
                     Button {
                         SoundManager.playTap()
                         onPlay()
@@ -121,10 +125,12 @@ struct GamePosterCard: View {
                         Text("Play")
                             .font(.caption.weight(.semibold))
                             .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                     }
                     .buttonStyle(.glassProminent)
+                    .fixedSize(horizontal: true, vertical: false)
                 }
             }
         }
