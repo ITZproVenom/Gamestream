@@ -128,20 +128,22 @@ final class RemoteImageLoader: ObservableObject {
 
         for url in urls {
             guard let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]),
-                  let size = values.fileSize.map(UInt64.init),
+                  let size = values.fileSize,
+                  size >= 0,
                   let date = values.contentModificationDate else {
                 continue
             }
             entries.append((url, size, date))
         }
 
-        var total = entries.reduce(UInt64(0)) { $0 + $1.size }
+        var total = entries.reduce(UInt64(0)) { $0 + UInt64($1.size) }
         var sorted = entries.sorted { $0.date < $1.date }
 
         while (total > maxDiskBytes || sorted.count > maxDiskFiles), !sorted.isEmpty {
             let victim = sorted.removeFirst()
             try? fm.removeItem(at: victim.url)
-            total = total > victim.size ? total - victim.size : 0
+            let victimSize = UInt64(victim.size)
+            total = total > victimSize ? total - victimSize : 0
         }
     }
 
