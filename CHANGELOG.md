@@ -4,6 +4,12 @@ All notable changes to GameStream are documented here.
 
 ## 2026-09-26
 
+### Latest Build
+
+- **Build #588** completed successfully.
+- Archive and IPA packaging completed successfully.
+- Latest release candidate commit: `a75552d2ef098d194ad53658f5f82522728a19e9`.
+
 ### UI Redesign
 
 - **Library** (`bad2224`)
@@ -18,7 +24,7 @@ All notable changes to GameStream are documented here.
   - Added compact recent/pinned content and ranked popular searches.
   - Added restrained genre navigation and favorites presentation.
   - Added responsive poster results and a cloud-search action.
-  - Fixed list identity keys for SwiftUI compatibility.
+  - Fixed SwiftUI list identity keys that were blocking the build.
 
 - **Settings** (`09363b7`)
   - Rebuilt settings as a native iOS grouped control center.
@@ -44,7 +50,8 @@ All notable changes to GameStream are documented here.
 - **Settings safe area** (`da99e85`) kept settings content within safe areas.
 - **Header compression** (`541a994`) refined compact header behavior.
 
-### Build
+### Build / Stability
 
-- Build **#588** completed successfully after the UI redesign and Search SwiftUI identity-key correction.
-- Latest main commit at the time of this changelog: `a75552d2ef098d194ad53658f5f82522728a19e9`.
+- Corrected SwiftUI `ForEach` identity handling in SearchHubView.
+- Kept the redesign changes isolated from the existing Xbox Cloud WebKit/auth flow.
+- Preserved controller navigation and existing streaming functionality while rebuilding the surrounding UI.
