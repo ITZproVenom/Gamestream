@@ -21,7 +21,7 @@ struct TrackedGame: Codable, Identifiable, Equatable, Hashable {
 enum GameURLParser {
     /// Parses xbox.com/play/games/{slug}/{productId} and /play/launch/{slug}/{productId}.
     static func parse(_ raw: String) -> (slug: String, productId: String)? {
-        guard let url = URL(string: raw), let host = url.host?.lowercased(), host.contains("xbox.com") else {
+        guard let url = URL(string: raw), let host = url.host?.lowercased(), host == "xbox.com" || host.hasSuffix(".xbox.com") else {
             return nil
         }
         let parts = url.path.split(separator: "/").map(String.init)
