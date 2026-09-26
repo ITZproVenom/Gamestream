@@ -84,113 +84,160 @@ struct XboxCloudWebView: UIViewRepresentable {
     /// Forwards Web Gamepad / Better xCloud vibration calls to native GCDeviceHaptics.
     static let rumbleBridgeJS = """
     (function() {
-        if (window.__gsRumbleBridge) return;
-        window.__gsRumbleBridge = true;
+        if (window.__gsRumbleBridgeV2) return;
+        window.__gsRumbleBridgeV2 = true;
 
-        function postRumble(weak, strong, duration) {
+        function send(weak, strong, duration, index) {
             try {
-                var w = Number(weak) || 0;
-                var s = Number(strong) || 0;
-                var d = Number(duration) || 0;
-                if (w < 0) w = 0; if (w > 1) w = 1;
-                if (s < 0) s = 0; if (s > 1) s = 1;
-                if (d < 0) d = 0; if (d > 2500) d = 2500;
-                if (w < 0.01 && s < 0.01) return;
+                var w = Math.max(0, Math.min(1, Number(weak) || 0));
+                var s = Math.max(0, Math.min(1, Number(strong) || 0));
+                var d = Math.max(0, Math.min(2500, Number(duration) || 0));
+                if (w === 0 && s === 0) return;
                 window.webkit.messageHandlers.gamestreamBridge.postMessage({
-                    type: 'rumble',
+                    type: "rumble",
                     weak: w,
                     strong: s,
-                    duration: d || 80
+                    duration: d || 80,
+                    gamepadIndex: Number(index) || 0
                 });
             } catch (e) {}
         }
 
-        function wrapActuator(actuator) {
-            if (!actuator || actuator.__gsWrapped) return actuator;
+        // Xbox Cloud sends vibration commands on its WebRTC input data channel.
+        // Better xCloud parses those packets in DeviceVibrationManager. WKWebView
+        // on iOS does not expose Gamepad vibrationActuator, so intercept the
+        // input channel directly before Better xCloud consumes the message.
+        function parseVibration(buffer) {
             try {
-                var original = actuator.playEffect && actuator.playEffect.bind(actuator);
-                if (!original) return actuator;
-                actuator.playEffect = function(type, params) {
-                    try {
-                        params = params || {};
-                        var weak = params.weakMagnitude != null ? params.weakMagnitude : (params.magnitude || 0);
-                        var strong = params.strongMagnitude != null ? params.strongMagnitude : (params.magnitude || 0);
-                        var start = params.startDelay || 0;
-                        var duration = params.duration || 100;
-                        setTimeout(function() {
-                            postRumble(weak, strong, duration);
-                        }, start);
-                    } catch (e) {}
-                    try { return original(type, params); } catch (e2) {
-                        return Promise.resolve({ playEffect: 'complete' });
-                    }
-                };
-                actuator.__gsWrapped = true;
+                if (!(buffer instanceof ArrayBuffer)) return;
+                var view = new DataView(buffer);
+                var offset = 0;
+                var messageType;
+                if (view.byteLength === 13) {
+                    if (view.byteLength < 2) return;
+                    messageType = view.getUint16(0, true);
+                    offset = 2;
+                } else {
+                    if (view.byteLength < 1) return;
+                    messageType = view.getUint8(0);
+                    offset = 1;
+                }
+                if (!(messageType & 128) || view.byteLength < offset + 8) return;
+
+                var vibrationType = view.getUint8(offset);
+                offset += 1;
+                if (vibrationType !== 0) return;
+
+                var gamepadIndex = view.getUint8(offset); offset += 1;
+                var left = view.getUint8(offset) / 100; offset += 1;
+                var right = view.getUint8(offset) / 100; offset += 1;
+                offset += 1; // left trigger motor
+                offset += 1; // right trigger motor
+                if (offset + 2 > view.byteLength) return;
+                var duration = view.getUint16(offset, true);
+                send(left, right, duration, gamepadIndex);
             } catch (e) {}
-            return actuator;
         }
 
-        function scanGamepads() {
+        function inspectMessageEvent(event) {
             try {
-                var pads = navigator.getGamepads ? navigator.getGamepads() : [];
-                for (var i = 0; i < pads.length; i++) {
-                    var p = pads[i];
-                    if (!p) continue;
-                    if (p.vibrationActuator) wrapActuator(p.vibrationActuator);
-                    if (p.hapticActuators && p.hapticActuators.length) {
-                        for (var j = 0; j < p.hapticActuators.length; j++) {
-                            wrapActuator(p.hapticActuators[j]);
-                        }
-                    }
+                if (!event) return;
+                if (event.data instanceof ArrayBuffer) {
+                    parseVibration(event.data);
+                } else if (typeof Blob !== "undefined" && event.data instanceof Blob) {
+                    event.data.arrayBuffer().then(parseVibration).catch(function() {});
                 }
             } catch (e) {}
         }
 
-        // Patch getGamepads so newly enumerated pads are wrapped.
+        // Patch addEventListener so DeviceVibrationManager receives the normal
+        // event while the native bridge gets a copy of the exact packet.
         try {
-            var originalGet = navigator.getGamepads && navigator.getGamepads.bind(navigator);
-            if (originalGet) {
-                navigator.getGamepads = function() {
-                    var pads = originalGet();
-                    try {
-                        for (var i = 0; i < pads.length; i++) {
-                            var p = pads[i];
-                            if (!p) continue;
-                            if (p.vibrationActuator) wrapActuator(p.vibrationActuator);
-                            if (p.hapticActuators) {
-                                for (var j = 0; j < p.hapticActuators.length; j++) {
-                                    wrapActuator(p.hapticActuators[j]);
-                                }
-                            }
+            var proto = window.RTCDataChannel && window.RTCDataChannel.prototype;
+            if (proto && proto.addEventListener) {
+                var originalAdd = proto.addEventListener;
+                var originalRemove = proto.removeEventListener;
+                var wrappers = new WeakMap();
+
+                proto.addEventListener = function(type, listener, options) {
+                    if (type !== "message" || typeof listener !== "function") {
+                        return originalAdd.call(this, type, listener, options);
+                    }
+                    var channel = this;
+                    var wrapped = wrappers.get(listener);
+                    if (!wrapped) {
+                        wrapped = function(event) {
+                            try {
+                                if (channel && channel.label === "input") inspectMessageEvent(event);
+                            } catch (e) {}
+                            return listener.call(this, event);
+                        };
+                        wrappers.set(listener, wrapped);
+                    }
+                    return originalAdd.call(this, type, wrapped, options);
+                };
+
+                if (originalRemove) {
+                    proto.removeEventListener = function(type, listener, options) {
+                        if (type === "message" && typeof listener === "function") {
+                            var wrapped = wrappers.get(listener);
+                            if (wrapped) return originalRemove.call(this, type, wrapped, options);
                         }
-                    } catch (e) {}
-                    return pads;
-                };
+                        return originalRemove.call(this, type, listener, options);
+                    };
+                }
             }
         } catch (e) {}
 
-        window.addEventListener('gamepadconnected', function() { setTimeout(scanGamepads, 50); });
-        scanGamepads();
-        setInterval(scanGamepads, 2000);
-
-        // Better xCloud / xCloud sometimes expose vibration helpers on window.
+        // Also support code that assigns channel.onmessage directly.
         try {
-            var _pulse = window.navigator && window.navigator.vibrate;
-            if (typeof _pulse === 'function') {
-                window.navigator.vibrate = function(pattern) {
+            var channelProto = window.RTCDataChannel && window.RTCDataChannel.prototype;
+            if (channelProto) {
+                var descriptor = Object.getOwnPropertyDescriptor(channelProto, "onmessage");
+                if (descriptor && descriptor.set && descriptor.get) {
+                    var nativeSet = descriptor.set;
+                    var nativeGet = descriptor.get;
+                    var handlerMap = new WeakMap();
+                    Object.defineProperty(channelProto, "onmessage", {
+                        configurable: descriptor.configurable,
+                        enumerable: descriptor.enumerable,
+                        get: function() { return nativeGet.call(this); },
+                        set: function(handler) {
+                            if (typeof handler !== "function") return nativeSet.call(this, handler);
+                            var wrapped = handlerMap.get(handler);
+                            if (!wrapped) {
+                                wrapped = function(event) {
+                                    try { if (this.label === "input") inspectMessageEvent(event); } catch (e) {}
+                                    return handler.call(this, event);
+                                };
+                                handlerMap.set(handler, wrapped);
+                            }
+                            return nativeSet.call(this, wrapped);
+                        }
+                    });
+                }
+            }
+        } catch (e) {}
+
+        // Fallback: Better xCloud also exposes these vibration calls when WebKit
+        // supports device vibration. Redirect them to the controller instead of
+        // vibrating the phone.
+        try {
+            var vibrate = navigator.vibrate && navigator.vibrate.bind(navigator);
+            if (vibrate) {
+                navigator.vibrate = function(pattern) {
+                    var duration = 80;
                     try {
-                        var ms = 80, mag = 0.6;
-                        if (typeof pattern === 'number') { ms = pattern; }
-                        else if (pattern && pattern.length) { ms = pattern[0] || 80; }
-                        postRumble(mag * 0.7, mag, ms);
+                        if (typeof pattern === "number") duration = pattern;
+                        else if (pattern && pattern.length) duration = Number(pattern[0]) || 80;
                     } catch (e) {}
-                    try { return _pulse.apply(this, arguments); } catch (e2) { return false; }
+                    send(0.65, 0.85, duration, 0);
+                    return true;
                 };
             }
         } catch (e) {}
 
-        // Public hook for BX / injected scripts.
-        window.__gsNativeRumble = postRumble;
+        window.__gsNativeRumble = send;
     })();
     """
 
@@ -213,6 +260,15 @@ struct XboxCloudWebView: UIViewRepresentable {
 
         let contentController = config.userContentController
 
+        // Install the rumble/data-channel bridge before Better xCloud starts so its
+        // input-channel listener is wrapped before the first streaming message.
+        contentController.add(context.coordinator, name: "gamestreamBridge")
+        contentController.addUserScript(WKUserScript(
+            source: Self.rumbleBridgeJS,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: false
+        ))
+
         contentController.addUserScript(WKUserScript(
             source: BetterXCloudInjector.bootstrapJS + "\n" + BetterXCloudInjector.modernUIOverridesJS,
             injectionTime: .atDocumentStart,
@@ -226,6 +282,13 @@ struct XboxCloudWebView: UIViewRepresentable {
         }
         if bxPrefs["native-mfi-controller.vibration"] == nil {
             bxPrefs["native-mfi-controller.vibration"] = "true"
+        }
+        // Better xCloud's device-vibration manager reads the Xbox input
+        // WebRTC data channel. Force that feature on; the bridge above redirects
+        // its output to the physical controller instead of the phone vibrator.
+        bxPrefs["deviceVibration.mode"] = "on"
+        if bxPrefs["deviceVibration.intensity"] == nil {
+            bxPrefs["deviceVibration.intensity"] = "100"
         }
         let prefsJS = SessionStore.betterXCloudPrefsJS(bxPrefs, reloadIfXbox: false)
         contentController.addUserScript(WKUserScript(
@@ -242,7 +305,6 @@ struct XboxCloudWebView: UIViewRepresentable {
             ))
         }
 
-        contentController.add(context.coordinator, name: "gamestreamBridge")
 
         let bridgeJS = """
         (function() {
@@ -280,10 +342,12 @@ struct XboxCloudWebView: UIViewRepresentable {
             injectionTime: .atDocumentEnd,
             forMainFrameOnly: true
         ))
+        // Re-run once after the page is constructed in case WebKit replaced
+        // a prototype while the page booted. The bridge is idempotent.
         contentController.addUserScript(WKUserScript(
             source: Self.rumbleBridgeJS,
             injectionTime: .atDocumentEnd,
-            forMainFrameOnly: true
+            forMainFrameOnly: false
         ))
         contentController.addUserScript(WKUserScript(
             source: BetterXCloudInjector.streamIsolationJS,
