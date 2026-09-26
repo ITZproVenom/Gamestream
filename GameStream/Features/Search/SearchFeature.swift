@@ -14,6 +14,7 @@ struct SearchFeature: View {
     }
 
     private var recentSearches: [String] { SessionStore.recentSearches }
+    private var pinnedSearches: [String] { SearchHistory.pinned }
 
     var body: some View {
         GeometryReader { geo in
@@ -39,6 +40,7 @@ struct SearchFeature: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Clear search")
                     }
                 }
                 .padding(14)
@@ -50,7 +52,7 @@ struct SearchFeature: View {
                     VStack(alignment: .leading, spacing: 18) {
                         if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             Button {
-                                session.openCloudSearch(query: query)
+                                rememberAndSearchCloud()
                             } label: {
                                 Label("Search Xbox Cloud", systemImage: "cloud.fill")
                                     .font(.subheadline.weight(.semibold))
@@ -72,6 +74,14 @@ struct SearchFeature: View {
                                 }
                             }
                         } else {
+                            if !pinnedSearches.isEmpty {
+                                Text("Pinned searches")
+                                    .font(.title3.weight(.bold))
+                                ForEach(pinnedSearches, id: \.self) { term in
+                                    searchChip(term, icon: "pin.fill")
+                                }
+                            }
+
                             if !recentSearches.isEmpty {
                                 HStack {
                                     Text("Recent searches")
@@ -84,23 +94,7 @@ struct SearchFeature: View {
                                     .font(.caption.weight(.semibold))
                                 }
                                 ForEach(recentSearches, id: \.self) { term in
-                                    Button {
-                                        query = term
-                                        focused = true
-                                    } label: {
-                                        HStack {
-                                            Image(systemName: "clock")
-                                                .foregroundStyle(.secondary)
-                                            Text(term)
-                                                .font(.subheadline)
-                                                .lineLimit(1)
-                                                .minimumScaleFactor(0.85)
-                                            Spacer()
-                                        }
-                                        .padding(12)
-                                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                    }
-                                    .buttonStyle(.plain)
+                                    searchChip(term, icon: "clock")
                                 }
                             }
 
@@ -130,6 +124,28 @@ struct SearchFeature: View {
         }
     }
 
+    private func searchChip(_ term: String, icon: String) -> some View {
+        Button {
+            query = term
+            focused = true
+            SessionStore.rememberSearch(term)
+            session.objectWillChange.send()
+        } label: {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundStyle(.secondary)
+                Text(term)
+                    .font(.subheadline)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                Spacer()
+            }
+            .padding(12)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
     private func poster(_ game: CatalogGame) -> some View {
         PosterCard(
             game: game,
@@ -143,8 +159,14 @@ struct SearchFeature: View {
     }
 
     private func runCloudIfNeeded() {
+        rememberAndSearchCloud()
+    }
+
+    private func rememberAndSearchCloud() {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        SessionStore.rememberSearch(trimmed)
+        session.objectWillChange.send()
         session.openCloudSearch(query: trimmed)
     }
 }
