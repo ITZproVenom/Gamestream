@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       bundle_injection:
-        description: "Inject bundled resources/icons into the .app (default 'none' == last-working 2a31e1f packaging; 'full' reproduces the crash-era d31852d packaging for diagnosis)"
+        description: "Bundle Better xCloud and resources into the iOS app"
         type: choice
         options: ["full", "none"]
-        default: "none"
+        default: "full"
   push:
     branches: [main]
     tags: ["v*"]
@@ -81,7 +81,7 @@ jobs:
           PY
 
       - name: Bundle Better xCloud (no sound pack)
-        if: ${{ github.event.inputs.bundle_injection == 'full' }}
+        if: ${{ github.event_name == 'push' || github.event.inputs.bundle_injection == 'full' }}
         run: |
           set -euo pipefail
           mkdir -p GameStream/Resources
@@ -197,7 +197,7 @@ jobs:
 
       - name: Package IPA
         env:
-          BUNDLE_INJECTION: ${{ github.event.inputs.bundle_injection || 'none' }}
+          BUNDLE_INJECTION: ${{ github.event_name == 'push' && 'full' || github.event.inputs.bundle_injection || 'none' }}
         run: |
           set -euo pipefail
           APP="build/GameStream.xcarchive/Products/Applications/GameStream.app"
