@@ -77,8 +77,8 @@ struct RootView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .ignoresSafeArea(edges: .bottom)
-
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             if !hideTabBar {
                 glassNavigation
                     .padding(.horizontal, 24)
