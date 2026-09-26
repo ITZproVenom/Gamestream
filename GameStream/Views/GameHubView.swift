@@ -33,7 +33,6 @@ struct GameHubView: View {
     @State private var detailGame: CatalogGame?
     @State private var showingLists = false
     @State private var gridFocus: Int?
-    @State private var scrollProxy: ScrollViewProxy?
 
     private var gridColumns: [GridItem] {
         let gap = appearance.density.carouselSpacing
@@ -113,13 +112,6 @@ struct GameHubView: View {
         }
         .onChange(of: filter) { _, _ in gridFocus = nil }
         .onChange(of: query) { _, _ in gridFocus = nil }
-        .onChange(of: gridFocus) { _, _ in
-            let games = activeGridGames
-            guard let gridFocus, gridFocus < games.count else { return }
-            withAnimation(.easeInOut(duration: 0.25)) {
-                scrollProxy?.scrollTo(games[gridFocus].id, anchor: .center)
-            }
-        }
         .sheet(item: $detailGame) { game in
             GameDetailView(game: game) { detailGame = nil }
                 .environmentObject(session)
@@ -199,7 +191,12 @@ struct GameHubView: View {
                             poster(game, isFocused: gridFocus == index).id(game.id)
                         }
                     }
-                    .onAppear { scrollProxy = proxy }
+                    .onChange(of: gridFocus) { _, newFocus in
+                        guard let newFocus, newFocus < catalogHits.count else { return }
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            proxy.scrollTo(catalogHits[newFocus].id, anchor: .center)
+                        }
+                    }
                 }
             }
             Button { session.openSearch(query: query) } label: {
@@ -426,7 +423,12 @@ struct GameHubView: View {
                             poster(game, isFocused: gridFocus == index).id(game.id)
                         }
                     }
-                    .onAppear { scrollProxy = proxy }
+                    .onChange(of: gridFocus) { _, newFocus in
+                        guard let newFocus, newFocus < filteredGames.count else { return }
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            proxy.scrollTo(filteredGames[newFocus].id, anchor: .center)
+                        }
+                    }
                 }
             }
         }
