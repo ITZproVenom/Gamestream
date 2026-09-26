@@ -381,7 +381,7 @@ private fun HeroCard(
                 IconButton(
                     onClick = onFav,
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(48.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(Color.White.copy(alpha = 0.15f))
                 ) {
@@ -460,8 +460,8 @@ private fun PosterCard(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .background(Color.Black.copy(alpha = 0.45f))
-                    .clickable(onClick = onPlay)
-                    .padding(vertical = 6.dp),
+                     .clickable(onClick = onPlay)
+                    .height(48.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = Color.White, modifier = Modifier.size(20.dp))
@@ -535,7 +535,7 @@ private fun GameDetailDialog(
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)
                         .clickable(onClick = onDismiss)
-                        .padding(8.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                 )
             }
         }
