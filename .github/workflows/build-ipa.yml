@@ -339,8 +339,18 @@ jobs:
               items.append(f"- {subject} ({sha})")
 
           items = items[:20]
-          workflow_changed = any(p == ".github/workflows/build-ipa.yml" for p in [line.strip() for line in raw.splitlines() if line.strip()])
-          should = event == "workflow_dispatch" or bool(items) or workflow_changed
+          latest_subject = subprocess.check_output(["git", "log", "-1", "--pretty=%s"], text=True).strip().lower()
+          latest_files = subprocess.check_output(
+              ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+              text=True,
+          )
+          is_beta = (
+              "experimental" in latest_subject
+              or "rumble" in latest_subject
+              or "ExperimentalControllerInput.swift" in latest_files
+              or "ControllerRumble.swift" in latest_files
+          )
+          should = event == "workflow_dispatch" or bool(items)
           Path("should_release.txt").write_text("true" if should else "false")
 
           if not items:
@@ -351,7 +361,7 @@ jobs:
               "## 📱 iOS build",
               "",
               f"**Platform:** iOS only · **Build:** `{short}` · **{date}**",
-              ("**BETA BUILD:** Experimental and in-development iOS changes are distributed through the iOS Beta channel and do not replace the stable iOS release." if "experimental" in subprocess.check_output(["git","log","-1","--pretty=%s"], text=True).strip().lower() or "ExperimentalControllerInput.swift" in subprocess.check_output(["git","diff-tree","--no-commit-id","--name-only","-r","HEAD"], text=True) else ""),
+              ("**BETA BUILD:** Experimental and in-development iOS changes are distributed through the iOS Beta channel and do not replace the stable iOS release." if is_beta else ""),
               f"**Android builds:** use tag [`latest-android`](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-android) — not this release.{since}",
               "",
               "### What's changed (iOS)",
@@ -363,7 +373,7 @@ jobs:
               "### Install",
               "Download **GameStream-unsigned.ipa** (AltStore / Sideloadly / TrollStore).",
               "",
-              ("Beta channel: [`latest-ios-beta`](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios-beta)" if "BETA BUILD:" in body else "Stable channel: [`latest-ios`](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios)"),
+              ("Beta channel: [`latest-ios-beta`](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios-beta)" if is_beta else "Stable channel: [`latest-ios`](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios)"),
               "",
               "_Unsigned - not App Store signed._",
               "",
