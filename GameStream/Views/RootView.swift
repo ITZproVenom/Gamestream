@@ -243,7 +243,7 @@ struct RootView: View {
                 HStack(spacing: 0) {
                     ForEach(Tab.allCases, id: \.self) { tab in
                         if tab != visibleTab {
-                            sliderLabel(tab)
+                            sliderLabel(tab, active: tab == visibleTab)
                                 .frame(maxWidth: .infinity)
                         } else {
                             Color.clear
