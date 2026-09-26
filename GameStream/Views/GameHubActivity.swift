@@ -45,7 +45,7 @@ struct GameHubActivityBanner: View {
                             .font(.subheadline.weight(.semibold))
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
-                        Text("Most played · \(PlayActivityStore.format(top.weekSeconds + (activity.activeTitle == top.title ? activity.liveSeconds : 0)))")
+                        Text("Most played · \(PlayActivityStore.format(top.weekSeconds))")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
