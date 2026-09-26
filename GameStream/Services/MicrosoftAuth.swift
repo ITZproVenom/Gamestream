@@ -16,20 +16,24 @@ enum MicrosoftAuth {
     static let proofKey = "GameStream.microsoftAuthProof.v2"
 
     static func isLoginHost(_ raw: String) -> Bool {
-        let href = raw.lowercased()
-        return href.contains("login.live.com")
-            || href.contains("login.microsoftonline.com")
-            || href.contains("login.microsoft.com")
-            || href.contains("sisu.xboxlive.com")
-            || href.contains("account.live.com")
-            || href.contains("account.microsoft.com")
+        guard let host = URL(string: raw)?.host?.lowercased() else { return false }
+        let exactHosts: Set<String> = [
+            "login.live.com",
+            "login.microsoftonline.com",
+            "login.microsoft.com",
+            "sisu.xboxlive.com",
+            "account.live.com",
+            "account.microsoft.com"
+        ]
+        return exactHosts.contains(host)
     }
 
     static func isXboxDestination(_ raw: String) -> Bool {
-        let href = raw.lowercased()
-        if isLoginHost(href) { return false }
-        if href.contains("edgesuite.net") || href.contains("access denied") { return false }
-        return href.contains("xbox.com") || href.contains("xboxlive.com")
+        guard let host = URL(string: raw)?.host?.lowercased() else { return false }
+        if isLoginHost(raw) { return false }
+        if host == "edgesuite.net" || host.hasSuffix(".edgesuite.net") { return false }
+        return host == "xbox.com" || host.hasSuffix(".xbox.com")
+            || host == "xboxlive.com" || host.hasSuffix(".xboxlive.com")
     }
 
     static func isAkamaiDenied(_ raw: String) -> Bool {
