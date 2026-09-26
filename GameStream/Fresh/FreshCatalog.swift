@@ -170,7 +170,7 @@ final class FreshCatalogStore: ObservableObject {
     }
 
     var genres: [String] {
-        Array(Set(games.map(\\.genre))).sorted()
+        Array(Set(games.map { $0.genre })).sorted()
     }
 
     var featured: [FreshGame] {
