@@ -138,6 +138,7 @@ struct GameHubView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("GameStream")
                     .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Text("Xbox Cloud Gaming")
