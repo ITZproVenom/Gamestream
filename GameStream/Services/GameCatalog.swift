@@ -263,8 +263,13 @@ final class ArtworkStore: ObservableObject {
                 }
             }
         } catch {
+            guard generation == fetchGeneration else { return }
             for id in ids where urls[id] == nil {
-                if let single = await fetchOne(id) { urls[id] = single }
+                guard generation == fetchGeneration else { return }
+                if let single = await fetchOne(id) {
+                    guard generation == fetchGeneration else { return }
+                    urls[id] = single
+                }
             }
         }
     }
