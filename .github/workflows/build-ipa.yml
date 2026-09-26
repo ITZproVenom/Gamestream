@@ -111,29 +111,38 @@ jobs:
         run: |
           set -euo pipefail
           RUN="${{ github.run_number }}"
-          python3 - "$RUN" <<'PY'
+          SUBJECT="$(git log -1 --pretty=%s)"
+          BETA=false
+          if printf '%s' "$SUBJECT" | grep -Eqi 'experimental.*controller|controller.*experimental|experimental.*rumble|rumble.*experimental|beta'; then
+            BETA=true
+          elif git diff-tree --no-commit-id --name-only -r HEAD | grep -Eq '(^GameStream/Services/ExperimentalControllerInput\\.swift$|^GameStream/Services/ControllerRumble\\.swift$|^GameStream/Views/StreamPlayerView\\.swift$)'; then
+            BETA=true
+          fi
+          python3 - "$RUN" "$BETA" <<'PY'
           import re, sys
           from pathlib import Path
-          run = sys.argv[1]
+          run, beta = sys.argv[1], sys.argv[2] == "true"
           p = Path("project.yml")
           text = p.read_text()
+          build_number = f"{2 if beta else 1}.{run}"
+          short_version = "2.0" if beta else "1.0"
           text = re.sub(
               r'CFBundleShortVersionString: "[^"]*"',
-              f'CFBundleShortVersionString: "{run}"',
+              f'CFBundleShortVersionString: "{short_version}"',
               text, count=1,
           )
           text = re.sub(
               r'CFBundleVersion: "[^"]*"',
-              f'CFBundleVersion: "{run}"',
+              f'CFBundleVersion: "{build_number}"',
               text, count=1,
           )
           p.write_text(text)
-          print(f"Stamped app version {run} (CFBundleShortVersionString + CFBundleVersion {run})")
+          print(f"Stamped {'BETA' if beta else 'STABLE'} build: version={short_version} build_id={build_number}")
           PY
           xcodegen generate
           SUBJECT="$(git log -1 --pretty=%s)"
           # Keep experimental rumble release metadata isolated from normal iOS releases.
-          if printf '%s' "$SUBJECT" | grep -Eqi 'experimental.*controller|controller.*experimental|experimental.*rumble|rumble.*experimental'; then
+          if printf '%s' "$SUBJECT" | grep -Eqi 'experimental.*controller|controller.*experimental|experimental.*rumble|rumble.*experimental|beta'; then
             python3 - <<'PY'
           from pathlib import Path
           p = Path("project.yml")
@@ -360,8 +369,8 @@ jobs:
           body = "\n".join([
               "## 📱 iOS build",
               "",
-              f"**Platform:** iOS only · **Build:** `{short}` · **{date}**",
-              ("**BETA BUILD:** Experimental and in-development iOS changes are distributed through the iOS Beta channel and do not replace the stable iOS release." if is_beta else ""),
+              f"**Platform:** iOS only · **Build ID:** `{"BETA-" if is_beta else "STABLE-"}{short}` · **{date}**",
+              (f"**BETA BUILD:** Beta build ID `BETA-{short}`. Experimental and in-development, and does not replace the stable iOS release." if is_beta else f"**STABLE BUILD:** Build ID `STABLE-{short}`. This is still an experimental project release and may contain significant bugs, crashes, broken features, or regressions. Stable means the release channel, not production-ready software."),
               f"**Android builds:** use tag [`latest-android`](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-android) — not this release.{since}",
               "",
               "### What's changed (iOS)",
