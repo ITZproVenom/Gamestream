@@ -702,7 +702,7 @@ struct FreshSettingsView: View {
 struct FreshGameDetail: View {
     @EnvironmentObject private var session: SessionStore
     @EnvironmentObject private var catalog: FreshCatalogStore
-    @Environment(\\.dismiss) private var dismiss
+    @Environment(\.dismiss) private var dismiss
     let game: FreshGame
     @State private var showingLists = false
     @State private var relatedGame: FreshGame?
@@ -1205,7 +1205,7 @@ struct FreshActivityView: View {
 struct FreshListsView: View {
     @EnvironmentObject private var lists: FreshListsStore
     @EnvironmentObject private var catalog: FreshCatalogStore
-    @Environment(\\.dismiss) private var dismiss
+    @Environment(\.dismiss) private var dismiss
     @State private var showingCreate = false
     @State private var newName = ""
 
@@ -1326,7 +1326,7 @@ struct FreshListDetail: View {
 
 struct FreshListsPicker: View {
     @EnvironmentObject private var lists: FreshListsStore
-    @Environment(\\.dismiss) private var dismiss
+    @Environment(\.dismiss) private var dismiss
     let game: FreshGame
 
     var body: some View {
@@ -1368,7 +1368,7 @@ struct FreshListsPicker: View {
 }
 
 struct FreshAboutView: View {
-    @Environment(\\.dismiss) private var dismiss
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
@@ -1468,7 +1468,7 @@ struct FreshErrorBlock: View {
 
 struct FreshCloudBrowser: View {
     @EnvironmentObject private var session: SessionStore
-    @Environment(\\.dismiss) private var dismiss
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
