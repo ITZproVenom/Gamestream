@@ -12,113 +12,182 @@ struct IntroView: View {
         Array(GameCatalog.games.compactMap(\.posterURL).prefix(12))
     }
 
+    private var physicalWidth: CGFloat {
+        UIScreen.main.bounds.width
+    }
+
+    private var contentWidth: CGFloat {
+        min(max(physicalWidth - 40, 280), 420)
+    }
+
     var body: some View {
-        GeometryReader { geo in
+        ZStack(alignment: .topLeading) {
+            background
+
+            // Keep the entire foreground in a physical-screen-sized canvas.
+            // This deliberately avoids GeometryReader's scene width so a sideload
+            // or container host cannot make the glass controls drift off-screen.
+            VStack(spacing: 0) {
+                topBar
+
+                Spacer(minLength: 24)
+
+                heroCard
+
+                Spacer(minLength: 24)
+
+                actionArea
+            }
+            .frame(width: physicalWidth, maxHeight: .infinity, alignment: .top)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .ignoresSafeArea()
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.7)) {
+                appeared = true
+            }
+            withAnimation(.easeInOut(duration: 20).repeatForever(autoreverses: true)) {
+                kenBurns = 1.08
+                artShift = 24
+            }
+        }
+    }
+
+    private var background: some View {
+        GeometryReader { proxy in
             ZStack {
-                posterWall(size: geo.size)
-                Color.black.opacity(0.28).ignoresSafeArea()
+                Color.black
+                posterWall(size: proxy.size)
                 LinearGradient(
                     colors: [
-                        .black.opacity(0.15),
-                        .black.opacity(0.42),
-                        .black.opacity(0.92)
+                        .black.opacity(0.16),
+                        .black.opacity(0.32),
+                        .black.opacity(0.78),
+                        .black.opacity(0.96)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
                 .ignoresSafeArea()
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
 
-                // Some sideload/container hosts can report a wider SwiftUI scene than
-                // the physical screen. Keep foreground controls anchored to the
-                // actual display so Liquid Glass cannot render off the right edge.
-                let displayWidth = min(geo.size.width, UIScreen.main.bounds.width)
-                let displayOffsetX = (displayWidth - geo.size.width) / 2
-                let contentWidth = min(max(0, displayWidth - 40), 520)
+    private var topBar: some View {
+        HStack {
+            HStack(spacing: 7) {
+                Image(systemName: "gamecontroller.fill")
+                    .font(.system(size: 13, weight: .bold))
+                Text("GAMESTREAM")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .tracking(1.2)
+            }
+            .foregroundStyle(.white.opacity(0.72))
 
-                VStack(spacing: 0) {
-                    HStack {
-                        Button("Skip") { finish() }
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.92))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .glassEffect(.regular.interactive(), in: Capsule())
-                            .accessibilityLabel("Skip intro")
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, max(geo.safeAreaInsets.top + 8, 12))
+            Spacer(minLength: 12)
 
-                    Spacer(minLength: 12)
+            Button("Skip", action: finish)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 17)
+                .frame(height: 44)
+                .glassEffect(.regular.interactive(), in: Capsule())
+                .accessibilityLabel("Skip intro")
+        }
+        .padding(.horizontal, 20)
+        .safeAreaPadding(.top, 8)
+    }
 
-                    VStack(spacing: 10) {
-                        VStack(spacing: 12) {
-                            Image(systemName: "gamecontroller.fill")
-                                .font(.system(size: 42, weight: .semibold))
-                                .symbolRenderingMode(.hierarchical)
-                                .foregroundStyle(.white)
-                                .scaleEffect(appeared ? 1 : 0.86)
-                                .opacity(appeared ? 1 : 0)
-                                .accessibilityHidden(true)
+    private var heroCard: some View {
+        VStack(spacing: 18) {
+            ZStack {
+                Circle()
+                    .fill(.white.opacity(0.10))
+                    .frame(width: 76, height: 76)
+                    .glassEffect(.regular, in: Circle())
 
-                            Text("GameStream")
-                                .font(.system(size: 40, weight: .bold, design: .rounded))
-                                .foregroundStyle(.white)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.7)
-                                .accessibilityAddTraits(.isHeader)
+                Image(systemName: "gamecontroller.fill")
+                    .font(.system(size: 34, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .symbolRenderingMode(.hierarchical)
+            }
+            .scaleEffect(appeared ? 1 : 0.84)
+            .opacity(appeared ? 1 : 0)
 
-                            Text("Xbox Cloud Gaming with Better xCloud and a native GameHub — play instantly.")
-                                .font(.subheadline)
-                                .multilineTextAlignment(.center)
-                                .foregroundStyle(.white.opacity(0.84))
-                                .fixedSize(horizontal: false, vertical: true)
-                                .padding(.horizontal, 4)
-                                .frame(maxWidth: 340)
-                                .opacity(appeared ? 1 : 0)
-                        }
-                        .padding(.horizontal, 22)
-                        .padding(.vertical, 14)
-                        .frame(width: contentWidth)
-                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+            VStack(spacing: 8) {
+                Text("GameStream")
+                    .font(.system(size: 42, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                    .accessibilityAddTraits(.isHeader)
 
-                        Button(action: finish) {
-                            Text("Get Started")
-                                .font(.headline)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.85)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                        }
-                        .buttonStyle(.glassProminent)
-                        .frame(width: contentWidth)
-                        .accessibilityLabel("Get Started")
-                    }
+                Text("Xbox Cloud Gaming, Better xCloud, and your native GameHub in one place.")
+                    .font(.body)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.white.opacity(0.78))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 310)
+            }
 
-                    Spacer(minLength: 12)
+            HStack(spacing: 8) {
+                featurePill("Cloud Gaming", systemImage: "cloud.fill")
+                featurePill("GameHub", systemImage: "square.grid.2x2.fill")
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 26)
+        .frame(width: contentWidth)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 32, style: .continuous))
+        .opacity(appeared ? 1 : 0)
+        .offset(y: appeared ? 0 : 14)
+    }
+
+    private var actionArea: some View {
+        VStack(spacing: 12) {
+            Button(action: finish) {
+                HStack(spacing: 10) {
+                    Text("Get Started")
+                    Image(systemName: "arrow.right")
+                        .font(.headline.weight(.semibold))
                 }
-                .frame(width: geo.size.width, height: geo.size.height)
-                .offset(x: displayOffsetX)
+                .font(.headline.weight(.semibold))
+                .frame(maxWidth: .infinity)
+                .frame(height: 58)
             }
+            .buttonStyle(.glassProminent)
+            .accessibilityLabel("Get Started")
+
+            Text("Your games. One hub. Ready when you are.")
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.58))
+                .multilineTextAlignment(.center)
         }
-        .ignoresSafeArea(edges: .bottom)
-        .onAppear {
-            withAnimation(.easeOut(duration: 0.9)) { appeared = true }
-            withAnimation(.easeInOut(duration: 22).repeatForever(autoreverses: true)) {
-                kenBurns = 1.12
-                artShift = 36
-            }
-        }
+        .frame(width: contentWidth)
+        .safeAreaPadding(.bottom, 18)
+        .opacity(appeared ? 1 : 0)
+        .offset(y: appeared ? 0 : 10)
+    }
+
+    private func featurePill(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.white.opacity(0.82))
+            .padding(.horizontal, 11)
+            .frame(height: 32)
+            .glassEffect(.regular, in: Capsule())
     }
 
     private func posterWall(size: CGSize) -> some View {
         let columnCount = size.width > 700 ? 5 : 3
         let tileWidth = max(110, size.width / CGFloat(columnCount) + 18)
         let tileHeight = tileWidth * 1.42
+
         return ZStack {
-            Color.black
             VStack(spacing: 10) {
-                ForEach(0..<4, id: \.self) { row in
+                ForEach(0..<5, id: \.self) { row in
                     HStack(spacing: 10) {
                         ForEach(0..<columnCount, id: \.self) { col in
                             let index = (row * columnCount + col) % max(posters.count, 1)
@@ -129,11 +198,10 @@ struct IntroView: View {
                 }
             }
             .scaleEffect(kenBurns)
-            .frame(width: size.width + 80, height: size.height + 120)
+            .frame(width: size.width + 80, height: size.height + 160)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
     }
 
     @ViewBuilder
@@ -154,11 +222,11 @@ struct IntroView: View {
         }
         .frame(width: width, height: height)
         .clipped()
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(.white.opacity(0.08), lineWidth: 1)
-        )
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(.white.opacity(0.07), lineWidth: 1)
+        }
     }
 
     private var fallbackPoster: some View {
