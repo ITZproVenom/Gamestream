@@ -25,8 +25,9 @@ object CloudCatalogService {
         loadCache(context)?.takeIf { it.size >= 20 }?.let {
             GameCatalog.installLiveCatalog(it)
             onReady?.invoke()
+            return
         }
-        refreshJob = CoroutineScope(Dispatchers.IO).launch {
+        CoroutineScope(Dispatchers.IO).launch {
             try {
                 val remote = fetchRemoteProgressive(context)
                 if (remote.size >= 20) {
@@ -35,7 +36,7 @@ object CloudCatalogService {
                         GameCatalog.installLiveCatalog(remote)
                         onReady?.invoke()
                     }
-                } else if (loadCache(context).isNullOrEmpty()) {
+                } else {
                     withContext(Dispatchers.Main) { onReady?.invoke() }
                 }
             } catch (_: Exception) {
@@ -52,11 +53,9 @@ object CloudCatalogService {
                 saveCache(context, remote)
                 withContext(Dispatchers.Main) {
                     GameCatalog.installLiveCatalog(remote)
-                    onReady?.invoke()
                 }
             }
         } catch (_: Exception) {
-            withContext(Dispatchers.Main) { onReady?.invoke() }
         }
     }
 
