@@ -84,7 +84,7 @@ private object OpeningIntroSound {
 }
 
 @Composable
-fun OpeningIntroOverlay(onFinished: () -> Unit) {
+fun OpeningIntroOverlay(isReady: Boolean, onFinished: () -> Unit) {
     var visible by remember { mutableStateOf(false) }
     val scale = remember { Animatable(0.78f) }
 
@@ -92,7 +92,7 @@ fun OpeningIntroOverlay(onFinished: () -> Unit) {
         OpeningIntroSound.play()
         visible = true
         scale.animateTo(1f, tween(550))
-        delay(1500)
+        while (!isReady) delay(100)
         visible = false
         delay(300)
         onFinished()
