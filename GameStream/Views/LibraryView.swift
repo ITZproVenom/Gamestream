@@ -26,11 +26,11 @@ struct LibraryView: View {
 
                     if session.isStreaming && !isLoading {
                         streamExitChrome
-                            .padding(.top, 8)
+                            .safeAreaPadding(.top, 8)
                             .transition(.move(edge: .top).combined(with: .opacity))
                     } else if !session.isStreaming && !isLoading {
                         libraryChrome
-                            .padding(.top, 8)
+                            .safeAreaPadding(.top, 8)
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
