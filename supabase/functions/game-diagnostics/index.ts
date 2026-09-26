@@ -1,8 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 /**
- * game-diagnostics — analytics-capable Edge Function (v4)
- * Accepts iOS DiagnosticsStore batches with session_id, duration_ms, game_id, error_category.
+ * game-diagnostics — production-aligned Edge Function (v2)
+ *
+ * Project: fswswvhpszebuxnloysy
+ * Table: public.diagnostics (uuid PK, device columns, jsonb payload)
+ * Auth: verify_jwt=true; service_role used only server-side for inserts.
+ * Client: GameStream iOS DiagnosticsStore (anon JWT only).
  */
 
 const corsHeaders = {
@@ -14,60 +18,19 @@ const corsHeaders = {
 const allowedEvents = new Set([
   "layout_warning",
   "webview_error",
-  "webview_failed",
-  "webview_loaded",
-  "webview_created",
-  "webview_reload",
   "play_error",
   "search_error",
-  "search_started",
-  "search_success",
-  "search_failed",
-  "navigation",
   "navigation_error",
   "network_error",
-  "connection_lost",
-  "connection_restored",
   "performance",
   "memory_warning",
   "diagnostic",
   "opt_in",
   "manual_upload",
-  "app_launch",
-  "app_background",
-  "app_foreground",
-  "app_session_start",
-  "app_session_end",
-  "login_started",
-  "login_success",
-  "login_failed",
-  "logout",
-  "game_launch",
-  "game_launch_failed",
-  "game_start",
-  "game_exit",
-  "streaming_started",
-  "streaming_failed",
-  "streaming_ended",
-  "session_expired",
-  "launch_duration",
-  "webview_load_duration",
-  "game_start_duration",
 ]);
 
 function cleanString(value: unknown, max: number): string | null {
-  if (value === null || value === undefined) return null;
-  const s = String(value).trim();
-  return s ? s.slice(0, max) : null;
-}
-
-function numOrNull(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim() !== "") {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : null;
-  }
-  return null;
+  return value ? String(value).slice(0, max) : null;
 }
 
 function normalizeEvent(event: Record<string, unknown>, body: Record<string, unknown>) {
@@ -75,26 +38,15 @@ function normalizeEvent(event: Record<string, unknown>, body: Record<string, unk
   const eventType = String(rawType);
   const safeType = allowedEvents.has(eventType) ? eventType : "diagnostic";
 
-  const props =
-    event.props && typeof event.props === "object"
-      ? (event.props as Record<string, unknown>)
-      : event.properties && typeof event.properties === "object"
-        ? (event.properties as Record<string, unknown>)
-        : {};
-
+  // iOS sends `props`; older clients may send `properties` or embed payload.
   const payload =
-    event.props || event.properties
-      ? {
-          ts: event.ts ?? null,
-          event: event.event ?? safeType,
-          event_id: event.event_id ?? null,
-          session_id: event.session_id ?? null,
-          props,
-          app: event.app ?? body.app ?? null,
-          build: event.build ?? body.build_number ?? null,
-          platform: event.platform ?? body.platform ?? "ios",
-          feature: event.feature ?? null,
-        }
+    event.properties && typeof event.properties === "object"
+      ? event.properties
+      : event.props && typeof event.props === "object"
+        ? {
+            ...(event as Record<string, unknown>),
+            // Keep structured fields the iOS client already puts on the event.
+          }
       : event.payload && typeof event.payload === "object"
         ? event.payload
         : event;
@@ -104,24 +56,15 @@ function normalizeEvent(event: Record<string, unknown>, body: Record<string, unk
       ? (body.device as Record<string, unknown>)
       : {};
 
-  const sessionId = cleanString(event.session_id ?? props.session_id, 64);
-  const gameId = cleanString(event.game_id ?? props.game_id, 64);
-  const errorCategory = cleanString(event.error_category ?? props.error_category, 64);
-  const durationMs = numOrNull(event.duration_ms ?? props.duration_ms);
-
   return {
-    app_version: cleanString(event.app ?? body.app ?? body.app_version, 64),
-    build_number: cleanString(event.build ?? body.build_number, 32),
+    app_version: cleanString(body.app ?? body.app_version, 64),
+    build_number: cleanString(body.build_number, 32),
     ios_version: cleanString(body.ios_version ?? device.system, 32),
     device_model: cleanString(body.device_model ?? device.model, 64),
-    screen_width: numOrNull(event.screen_width ?? body.screen_width),
-    screen_height: numOrNull(event.screen_height ?? body.screen_height),
+    screen_width: typeof body.screen_width === "number" ? body.screen_width : null,
+    screen_height: typeof body.screen_height === "number" ? body.screen_height : null,
     event_type: safeType,
     feature: cleanString(event.feature ?? body.feature, 128),
-    session_id: sessionId,
-    duration_ms: durationMs,
-    game_id: gameId,
-    error_category: errorCategory,
     payload,
   };
 }
@@ -140,12 +83,19 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    if (!body || typeof body !== "object") throw new Error("invalid_payload");
+
+    if (!body || typeof body !== "object") {
+      throw new Error("invalid_payload");
+    }
+
     const payloadBody = body as Record<string, unknown>;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !serviceRoleKey) throw new Error("server_not_configured");
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new Error("server_not_configured");
+    }
 
     const rawEvents = Array.isArray(payloadBody.events)
       ? payloadBody.events
@@ -158,7 +108,9 @@ Deno.serve(async (req: Request) => {
       )
       .map((event) => normalizeEvent(event, payloadBody));
 
-    if (events.length === 0) throw new Error("empty_events");
+    if (events.length === 0) {
+      throw new Error("empty_events");
+    }
 
     const response = await fetch(`${supabaseUrl}/rest/v1/diagnostics`, {
       method: "POST",
