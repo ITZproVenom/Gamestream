@@ -26,9 +26,11 @@ final class ControllerRumble {
 
     private var leftEngine: CHHapticEngine?
     private var rightEngine: CHHapticEngine?
+    private var defaultEngine: CHHapticEngine?
     private var controllerID: ObjectIdentifier?
     private var leftSupported = false
     private var rightSupported = false
+    private var defaultSupported = false
     private var stopWorkItem: DispatchWorkItem?
 
     private init() {}
@@ -147,11 +149,10 @@ final class ControllerRumble {
         // advertises haptics. This avoids accidentally attaching rumble to a
         // stale/snapshot controller.
         guard let controller =
-            GCController.current ??
-            controllers.first(where: { $0.haptics != nil }) ??
-            controllers.first
+            (GCController.current?.haptics != nil ? GCController.current : nil) ??
+            controllers.first(where: { $0.haptics != nil })
         else {
-            throw RumbleError.noController
+            throw RumbleError.noHaptics
         }
 
         let id = ObjectIdentifier(controller)
@@ -186,19 +187,30 @@ final class ControllerRumble {
             installHandlers(on: engine)
         }
 
-        // A number of controllers expose only the aggregate handles locality.
-        // Keep a combined engine as a fallback in that case.
+        // Prefer an aggregate handle engine when independent handles are
+        // unavailable. Apple's default locality is also a valid controller
+        // haptics path and normally maps to the controller handle actuators.
         if !leftSupported && !rightSupported,
            localities.contains(.handles),
            let engine = haptics.createEngine(withLocality: .handles) {
             configure(engine)
             try engine.start()
-            leftEngine = engine
-            leftSupported = true
+            defaultEngine = engine
+            defaultSupported = true
             installHandlers(on: engine)
         }
 
-        guard leftSupported || rightSupported else {
+        if !leftSupported && !rightSupported && !defaultSupported,
+           localities.contains(.default),
+           let engine = haptics.createEngine(withLocality: .default) {
+            configure(engine)
+            try engine.start()
+            defaultEngine = engine
+            defaultSupported = true
+            installHandlers(on: engine)
+        }
+
+        guard leftSupported || rightSupported || defaultSupported else {
             throw RumbleError.unsupportedLocality
         }
 
@@ -263,7 +275,7 @@ final class ControllerRumble {
         strong: Float,
         duration: TimeInterval
     ) throws {
-        let engine = leftEngine ?? rightEngine
+        let engine = defaultEngine ?? leftEngine ?? rightEngine
         guard let engine else { return }
 
         let intensity = min(max(max(weak, strong), 0), 1)
@@ -292,11 +304,14 @@ final class ControllerRumble {
 
         leftEngine?.stop(completionHandler: nil)
         rightEngine?.stop(completionHandler: nil)
+        defaultEngine?.stop(completionHandler: nil)
 
         leftEngine = nil
         rightEngine = nil
+        defaultEngine = nil
         leftSupported = false
         rightSupported = false
+        defaultSupported = false
         controllerID = nil
     }
 
