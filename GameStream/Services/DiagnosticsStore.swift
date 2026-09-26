@@ -6,6 +6,9 @@ import UIKit
 /// Queues sanitized events locally and uploads asynchronously to the controlled
 /// Supabase Edge Function. Never logs passwords, cookies, auth tokens,
 /// page HTML, or search query text.
+///
+/// Security: only the publishable/anon JWT is used. The service_role key must
+/// never ship in the app — inserts go through `game-diagnostics` only.
 @MainActor
 final class DiagnosticsStore: ObservableObject {
     static let shared = DiagnosticsStore()
@@ -29,9 +32,9 @@ final class DiagnosticsStore: ObservableObject {
         static let queue = "GameStream.diagnostics.queue.v1"
     }
 
-    // Controlled upload path — Supabase Edge Function (already deployed & verified)
+    // Controlled upload path — Supabase Edge Function (JWT-verified; service_role stays server-side)
     private let endpoint = URL(string: "https://fswswvhpszebuxnloysy.supabase.co/functions/v1/game-diagnostics")!
-    // Supabase publishable key + verified legacy anon JWT for diagnostics Edge Function
+    // Publishable / anon JWT only — NOT service_role
     private let supabasePublishableKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZzd3N3dmhwc3plYnV4bmxveXN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxNDk3ODcsImV4cCI6MjEwNTcyNTc4N30.AY761m_RqpQ7qFP-_FBvO2T2lrsbTn3oQ1-lOAB-Sfg"
     private let maxQueue = 40
     private var flushTask: Task<Void, Never>?
@@ -140,8 +143,10 @@ final class DiagnosticsStore: ObservableObject {
         request.setValue("Bearer \(supabasePublishableKey)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 15
 
-        // Edge Function contract: top-level event_type MUST be "diagnostic".
-        // Anything else returns HTTP 400 {"error":"invalid_event_type"}.
+        // Edge Function contract (deployed v2):
+        // - JWT required (anon publishable key)
+        // - Prefer event_type "diagnostic"
+        // - events[] → one DB row each; returns { ok: true, inserted: N }
         let body: [String: Any] = [
             "event_type": "diagnostic",
             "message": "batch",
@@ -159,15 +164,31 @@ final class DiagnosticsStore: ObservableObject {
         }
         request.httpBody = httpBody
 
+        let expected = queue.count
+
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            if let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+            let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            let ok = (json?["ok"] as? Bool) == true
+            let inserted = (json?["inserted"] as? Int)
+                ?? (json?["inserted"] as? NSNumber)?.intValue
+
+            if (200...299).contains(code), ok {
+                // Only drop the local queue after a confirmed successful insert.
                 saveQueue([])
                 pendingCount = 0
-                lastUploadStatus = "ok \(http.statusCode)"
+                if let inserted {
+                    lastUploadStatus = "ok \(code) · inserted \(inserted)"
+                } else {
+                    lastUploadStatus = "ok \(code)"
+                }
+                // Soft warning if server inserted fewer than we sent (should not happen).
+                if let inserted, inserted < expected {
+                    lastUploadStatus = "ok \(code) · inserted \(inserted)/\(expected)"
+                }
             } else {
-                let code = (response as? HTTPURLResponse)?.statusCode ?? -1
-                let detail = String(data: data, encoding: .utf8).map { String($0.prefix(80)) } ?? ""
+                let detail = String(data: data, encoding: .utf8).map { String($0.prefix(100)) } ?? ""
                 lastUploadStatus = detail.isEmpty ? "http \(code)" : "http \(code) \(detail)"
             }
         } catch {
