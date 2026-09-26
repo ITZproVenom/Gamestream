@@ -9,6 +9,7 @@ struct AppShell: View {
     @State private var selectedTab: AppTab = AppShell.restoredTab()
     @State private var tabDragOffset: CGFloat = 0
     @State private var detailGame: CatalogGame?
+    @State private var streamStartedAt: Date?
 
     private static let tabStorageKey = "GameStream.appSelectedTab"
 
@@ -44,7 +45,6 @@ struct AppShell: View {
                     selected: $selectedTab,
                     dragOffset: $tabDragOffset
                 )
-                // iPhone 13: slightly tighter horizontal inset so 4 tabs fit cleanly
                 .padding(.horizontal, 12)
                 .padding(.top, 4)
                 .padding(.bottom, 4)
@@ -59,6 +59,11 @@ struct AppShell: View {
         }
         .onChange(of: selectedTab) { _, tab in
             UserDefaults.standard.set(tab.rawValue, forKey: Self.tabStorageKey)
+            DiagnosticsStore.shared.record(
+                event: "navigation",
+                feature: "tabs",
+                properties: ["tab": tab.rawValue]
+            )
             if tab == .home && !session.isStreaming {
                 session.returnToHub()
                 session.refreshXboxPlayHistory()
@@ -76,6 +81,14 @@ struct AppShell: View {
             UIApplication.shared.isIdleTimerDisabled = streaming || session.keepScreenAwake
             if streaming {
                 hub.showNativeHub = false
+                streamStartedAt = Date()
+                let game = session.currentGame
+                DiagnosticsStore.shared.record(
+                    event: "streaming_started",
+                    feature: "stream",
+                    gameId: game?.id,
+                    gameTitle: game?.title
+                )
                 if selectedTab != .home {
                     withAnimation(.easeInOut(duration: 0.18)) {
                         selectedTab = .home
@@ -83,6 +96,16 @@ struct AppShell: View {
                 }
             } else {
                 hub.showNativeHub = true
+                let duration: Double? = streamStartedAt.map { Date().timeIntervalSince($0) * 1000 }
+                streamStartedAt = nil
+                let game = session.currentGame
+                DiagnosticsStore.shared.record(
+                    event: "streaming_ended",
+                    feature: "stream",
+                    durationMs: duration,
+                    gameId: game?.id,
+                    gameTitle: game?.title
+                )
                 session.refreshXboxPlayHistory(force: true)
             }
         }

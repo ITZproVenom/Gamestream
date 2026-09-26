@@ -31,8 +31,20 @@ extension SessionStore {
         guard !trimmed.isEmpty else { return }
         updateSearchDraft(trimmed)
         SessionStore.rememberSearch(trimmed)
+        // Analytics: never include the raw query text.
+        DiagnosticsStore.shared.record(
+            event: "search_started",
+            feature: "search",
+            properties: ["channel": "xbox_cloud", "query_len": String(trimmed.count)]
+        )
         let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? trimmed
         guard let url = URL(string: "https://www.xbox.com/play/search/\(encoded)") else {
+            DiagnosticsStore.shared.record(
+                event: "search_failed",
+                feature: "search",
+                properties: ["reason": "bad_url"],
+                errorCategory: "bad_url"
+            )
             requestedTab = .search
             return
         }
@@ -43,6 +55,11 @@ extension SessionStore {
         isStreaming = true
         webURL = url
         requestedTab = .home
+        DiagnosticsStore.shared.record(
+            event: "search_success",
+            feature: "search",
+            properties: ["channel": "xbox_cloud"]
+        )
     }
 
     func returnToHub() {

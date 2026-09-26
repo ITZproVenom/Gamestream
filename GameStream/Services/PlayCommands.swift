@@ -3,7 +3,23 @@ import Foundation
 extension SessionStore {
     /// Single Play path: load the game's launch URL directly into the player.
     func playGame(_ game: TrackedGame) {
-        guard let url = game.launchURL else { return }
+        guard let url = game.launchURL else {
+            DiagnosticsStore.shared.record(
+                event: "game_launch_failed",
+                feature: "play",
+                properties: ["reason": "missing_launch_url"],
+                gameId: game.id,
+                gameTitle: game.title,
+                errorCategory: "missing_url"
+            )
+            return
+        }
+        DiagnosticsStore.shared.record(
+            event: "game_launch",
+            feature: "play",
+            gameId: game.id,
+            gameTitle: game.title
+        )
         SoundManager.playLaunch()
         pendingJavaScript = nil
         HubState.shared.showNativeHub = false

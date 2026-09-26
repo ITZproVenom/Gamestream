@@ -21,6 +21,7 @@ struct AppRoot: View {
                 }
             } else {
                 OnboardingWelcomeView {
+                    DiagnosticsStore.shared.record(event: "login_started", feature: "auth")
                     showingMicrosoftLogin = true
                 }
             }
@@ -35,7 +36,15 @@ struct AppRoot: View {
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button("Close") { showingMicrosoftLogin = false }
+                            Button("Close") {
+                                DiagnosticsStore.shared.record(
+                                    event: "login_failed",
+                                    feature: "auth",
+                                    properties: ["reason": "dismissed"],
+                                    errorCategory: "user_dismissed"
+                                )
+                                showingMicrosoftLogin = false
+                            }
                         }
                     }
             }
@@ -45,7 +54,9 @@ struct AppRoot: View {
         }
         .onAppear { bootstrapOnce() }
         .onChange(of: session.isSignedIn) { _, signedIn in
-            if signedIn { showingMicrosoftLogin = false }
+            if signedIn {
+                showingMicrosoftLogin = false
+            }
         }
         .animation(.easeInOut(duration: 0.35), value: session.isSignedIn)
         .animation(.easeInOut(duration: 0.35), value: showIntro)
@@ -54,6 +65,7 @@ struct AppRoot: View {
     private func bootstrapOnce() {
         guard !didBootstrap else { return }
         didBootstrap = true
+        DiagnosticsStore.shared.noteAppLaunch()
         if session.isStreaming {
             session.exitStreamToHub()
         }
