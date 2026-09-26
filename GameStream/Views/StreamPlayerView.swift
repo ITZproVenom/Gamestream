@@ -15,6 +15,7 @@ struct StreamPlayerView: View {
     @State private var errorMessage: String?
     @State private var showChrome = false
     @State private var chromeHideTask: Task<Void, Never>?
+    @State private var didRecordWebViewCreated = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -36,6 +37,12 @@ struct StreamPlayerView: View {
             if let loading = note.object as? Bool {
                 if isLoading && !loading {
                     SoundManager.playReady()
+                    DiagnosticsStore.shared.record(
+                        event: "webview_loaded",
+                        feature: "stream",
+                        gameId: session.currentGame?.id,
+                        gameTitle: session.currentGame?.title
+                    )
                 }
                 withAnimation(.easeOut(duration: 0.35)) {
                     isLoading = loading
@@ -51,6 +58,30 @@ struct StreamPlayerView: View {
         .onReceive(NotificationCenter.default.publisher(for: .webViewDidFail)) { note in
             errorMessage = note.object as? String
             isLoading = false
+            DiagnosticsStore.shared.record(
+                event: "webview_failed",
+                feature: "stream",
+                gameId: session.currentGame?.id,
+                gameTitle: session.currentGame?.title,
+                errorCategory: "webview",
+                errorCode: "nav_fail"
+            )
+            if session.isStreaming {
+                DiagnosticsStore.shared.record(
+                    event: "streaming_failed",
+                    feature: "stream",
+                    gameId: session.currentGame?.id,
+                    gameTitle: session.currentGame?.title,
+                    errorCategory: "webview",
+                    errorCode: "nav_fail"
+                )
+            }
+        }
+        .onAppear {
+            if !didRecordWebViewCreated {
+                didRecordWebViewCreated = true
+                DiagnosticsStore.shared.record(event: "webview_created", feature: "stream")
+            }
         }
         .onDisappear {
             chromeHideTask?.cancel()
