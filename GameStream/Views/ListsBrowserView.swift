@@ -90,7 +90,7 @@ struct ListsBrowserView: View {
                 }
                 .padding(16)
             }
-            .background(AnimatedBackground().ignoresSafeArea())
+            .background(AnimatedBackground(forceStatic: true).ignoresSafeArea())
             .navigationTitle("Lists")
             .navigationBarTitleDisplayMode(.inline)
         }
