@@ -32,6 +32,8 @@ struct SettingsView: View {
     }
 
     var body: some View {
+        let hasCustomPhoto = appearance.customBackgroundImage != nil
+
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text("Settings")
@@ -154,7 +156,7 @@ struct SettingsView: View {
                             }
                             PhotosPicker(selection: $photoItem, matching: .images) {
                                 Label(
-                                    appearance.customBackgroundImage == nil ? "Choose photo" : "Change photo",
+                                    hasCustomPhoto ? "Change photo" : "Choose photo",
                                     systemImage: "photo"
                                 )
                                 .font(.subheadline.weight(.semibold))
