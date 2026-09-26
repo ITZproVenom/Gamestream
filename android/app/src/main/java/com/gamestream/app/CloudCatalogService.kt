@@ -153,6 +153,11 @@ object CloudCatalogService {
         }
     }
 
+    fun clearCache(context: Context) {
+        started = false
+        runCatching { cacheFile(context).delete() }
+    }
+
     private fun cacheFile(context: Context) = File(context.cacheDir, CACHE)
 
     private fun saveCache(context: Context, games: List<CatalogGame>) {
