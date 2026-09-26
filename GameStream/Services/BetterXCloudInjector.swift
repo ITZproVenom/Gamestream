@@ -218,13 +218,17 @@ final class BetterXCloudInjector {
 
     private init() {
         if let bundled = Self.loadBundledScript(), !bundled.isEmpty {
+            lock.lock()
             cachedScript = bundled
+            lock.unlock()
         }
         if let cached = UserDefaults.standard.string(forKey: cacheKey) {
             let stripped = Self.stripUserScriptHeader(cached)
+            lock.lock()
             if stripped.count > (cachedScript?.count ?? 0) {
                 cachedScript = stripped
             }
+            lock.unlock()
         }
     }
 
@@ -246,14 +250,23 @@ final class BetterXCloudInjector {
     }
 
     func preload() {
-        if cachedScript == nil || cachedScript?.isEmpty == true {
+        let hasCachedScript: Bool = {
+            lock.lock()
+            defer { lock.unlock() }
+            return !(cachedScript?.isEmpty ?? true)
+        }()
+        if !hasCachedScript {
             fetchScript { _ in }
         } else {
             refreshIfNeeded()
         }
     }
 
-    func currentScriptSource() -> String? { cachedScript }
+    func currentScriptSource() -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return cachedScript
+    }
 
     func invalidateCache() {
         lock.lock()
@@ -301,8 +314,9 @@ final class BetterXCloudInjector {
     private func fetchScript(completion: @escaping (String?) -> Void) {
         lock.lock()
         if isFetching {
+            let snapshot = cachedScript
             lock.unlock()
-            completion(cachedScript)
+            DispatchQueue.main.async { completion(snapshot) }
             return
         }
         isFetching = true
@@ -310,6 +324,7 @@ final class BetterXCloudInjector {
 
         var request = URLRequest(url: scriptURL)
         request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 15
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             defer {
                 self?.lock.lock()
@@ -329,7 +344,9 @@ final class BetterXCloudInjector {
             }
 
             source = Self.stripUserScriptHeader(source)
+            self.lock.lock()
             self.cachedScript = source
+            self.lock.unlock()
             UserDefaults.standard.set(source, forKey: self.cacheKey)
             UserDefaults.standard.set(Date(), forKey: self.cacheDateKey)
 
