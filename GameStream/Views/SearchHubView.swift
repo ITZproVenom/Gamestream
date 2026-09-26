@@ -229,7 +229,7 @@ struct SearchHubView: View {
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text("In GameHub").font(.title3.weight(.semibold)).lineLimit(1)
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 16) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 16) {
                     ForEach(catalogHits.prefix(8)) { game in
                         GamePosterCard(
                             game: game,
