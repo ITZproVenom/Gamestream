@@ -213,6 +213,16 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun clearCache(context: Context) {
+        CloudCatalogService.clearCache(context)
+        BetterXCloudInjector.invalidate(context)
+        runCatching {
+            context.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
+        }
+        runCatching { context.cacheDir.mkdirs() }
+        bxRefreshToken++
+    }
+
     fun betterXCloudPrefsJs(reloadIfXbox: Boolean): String {
         val map = storedBxPrefs()
         val assignments = map.entries.joinToString("\n") { (k, v) ->
