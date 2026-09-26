@@ -1,4 +1,5 @@
 import CryptoKit
+// Poster cache: memory + persistent disk
 import SwiftUI
 import UIKit
 
