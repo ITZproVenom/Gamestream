@@ -355,8 +355,10 @@ struct SettingsView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 130)
+            .padding(.bottom, 24)
         }
+        .safeAreaPadding(.top, 12)
+        .safeAreaPadding(.bottom, 92)
         .scrollIndicators(.hidden)
         .onAppear {
             keepAwake = session.keepScreenAwake
@@ -382,9 +384,9 @@ struct SettingsView: View {
                 .lineLimit(1)
             content()
         }
-        .padding(16)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private func labeledChips(_ label: String, _ options: [String], _ selected: String, onSelect: @escaping (String) -> Void) -> some View {
