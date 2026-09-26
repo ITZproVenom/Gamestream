@@ -121,9 +121,12 @@ final class DiagnosticsStore: ObservableObject {
         if let errorCategory, !errorCategory.isEmpty { props["error_category"] = String(errorCategory.prefix(64)) }
         if let errorCode, !errorCode.isEmpty { props["error_code"] = String(errorCode.prefix(64)) }
 
+        let now = Date()
+        let iso = ISO8601DateFormatter().string(from: now)
         let screen = UIScreen.main.bounds
         let entry: [String: Any] = [
-            "ts": ISO8601DateFormatter().string(from: Date()),
+            "ts": iso,
+            "event_at": iso,
             "event": event,
             "event_id": UUID().uuidString.lowercased(),
             "session_id": sessionId,
@@ -134,6 +137,7 @@ final class DiagnosticsStore: ObservableObject {
             "platform": "ios",
             "duration_ms": durationMs as Any,
             "game_id": gameId as Any,
+            "game_title": gameTitle.map { String($0.prefix(80)) } as Any,
             "error_category": errorCategory as Any,
             "error_code": errorCode as Any,
             "screen_width": Double(screen.width),
@@ -162,7 +166,7 @@ final class DiagnosticsStore: ObservableObject {
         if loadQueue().isEmpty {
             record(event: "manual_upload", feature: "settings", properties: ["source": "settings"])
         }
-        Task { await performUpload() }
+        Task { await performUpload(attempt: 0) }
     }
 
     func clearQueue() {
@@ -208,11 +212,11 @@ final class DiagnosticsStore: ObservableObject {
         flushTask?.cancel()
         flushTask = Task {
             try? await Task.sleep(nanoseconds: 2_500_000_000)
-            await performUpload()
+            await performUpload(attempt: 0)
         }
     }
 
-    private func performUpload() async {
+    private func performUpload(attempt: Int) async {
         let queue = loadQueue()
         guard isOptedIn else {
             lastUploadStatus = "opt-in required"
@@ -272,11 +276,20 @@ final class DiagnosticsStore: ObservableObject {
                     lastUploadStatus = "ok \(code)"
                 }
             } else {
+                // Keep queue; retry once on transient HTTP errors.
                 let detail = String(data: data, encoding: .utf8).map { String($0.prefix(100)) } ?? ""
                 lastUploadStatus = detail.isEmpty ? "http \(code)" : "http \(code) \(detail)"
+                if attempt < 1, code == 429 || code >= 500 || code < 0 {
+                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    await performUpload(attempt: attempt + 1)
+                }
             }
         } catch {
             lastUploadStatus = "error \(error.localizedDescription.prefix(60))"
+            if attempt < 1 {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                await performUpload(attempt: attempt + 1)
+            }
         }
     }
 
