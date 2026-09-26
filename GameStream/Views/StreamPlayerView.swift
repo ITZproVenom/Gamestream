@@ -71,6 +71,9 @@ struct StreamPlayerView: View {
             errorMessage = note.object as? String
             isLoading = false
         }
+        .onAppear {
+            ControllerRumble.shared.start()
+        }
         .onDisappear {
             ControllerRumble.shared.teardown()
         }
@@ -81,65 +84,106 @@ struct XboxCloudWebView: UIViewRepresentable {
     @Binding var url: URL
     @EnvironmentObject var session: SessionStore
 
-    /// Forwards Web Gamepad / Better xCloud vibration calls to native GCDeviceHaptics.
-    static let rumbleBridgeJS = """
+    /// Forwards Xbox Cloud FourMotorRumble packets from the WebRTC "input"
+    /// RTCDataChannel to native GCDeviceHaptics. Packet layout matches Better
+    /// xCloud DeviceVibrationManager exactly. Must run at document-start so
+    /// createDataChannel is wrapped before xCloud/Better xCloud open the stream.
+    static let rumbleBridgeJS = #"""
     (function() {
-        if (window.__gsRumbleBridgeV2) return;
-        window.__gsRumbleBridgeV2 = true;
+        if (window.__gsRumbleBridgeV3) return;
+        window.__gsRumbleBridgeV3 = true;
 
-        var lastPacketRumbleAt = 0;
+        var lastPacketAt = 0;
+        var lastLogAt = 0;
+        var hooked = typeof WeakSet !== 'undefined' ? new WeakSet() : null;
+        var inputFound = false;
 
-        function send(weak, strong, duration, index) {
+        function post(payload) {
+            try { window.webkit.messageHandlers.gamestreamBridge.postMessage(payload); } catch (e) {}
+        }
+
+        function log(event, extra) {
             try {
-                var w = Math.max(0, Math.min(1, Number(weak) || 0));
-                var s = Math.max(0, Math.min(1, Number(strong) || 0));
-                var d = Math.max(0, Math.min(2500, Number(duration) || 0));
-                if (w === 0 && s === 0) return;
-                lastPacketRumbleAt = performance.now();
-                window.webkit.messageHandlers.gamestreamBridge.postMessage({
-                    type: "rumble",
-                    weak: w,
-                    strong: s,
-                    duration: d || 80,
-                    gamepadIndex: Number(index) || 0
-                });
+                var now = Date.now();
+                if (event === 'packet' && now - lastLogAt < 1000) return;
+                if (event === 'packet') lastLogAt = now;
+                extra = extra || {};
+                extra.type = 'rumbleLog';
+                extra.event = event;
+                post(extra);
             } catch (e) {}
         }
 
-        // Xbox Cloud sends vibration commands on its WebRTC input data channel.
-        // Better xCloud parses those packets in DeviceVibrationManager. WKWebView
-        // on iOS does not expose Gamepad vibrationActuator, so intercept the
-        // input channel directly before Better xCloud consumes the message.
+        function sendMotors(data) {
+            var left = Number(data.leftMotorPercent) || 0;
+            var right = Number(data.rightMotorPercent) || 0;
+            var lt = Number(data.leftTriggerMotorPercent) || 0;
+            var rt = Number(data.rightTriggerMotorPercent) || 0;
+            var duration = Number(data.durationMs) || 0;
+            var index = Number(data.gamepadIndex) || 0;
+            lastPacketAt = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+            log('packet', {
+                leftMotorPercent: left,
+                rightMotorPercent: right,
+                leftTriggerMotorPercent: lt,
+                rightTriggerMotorPercent: rt,
+                durationMs: duration
+            });
+            post({
+                type: 'rumble',
+                leftMotorPercent: left,
+                rightMotorPercent: right,
+                leftTriggerMotorPercent: lt,
+                rightTriggerMotorPercent: rt,
+                durationMs: duration,
+                gamepadIndex: index
+            });
+        }
+
+        // Copied from better-xcloud DeviceVibrationManager.onMessage.
         function parseVibration(buffer) {
             try {
                 if (!(buffer instanceof ArrayBuffer)) return;
-                var view = new DataView(buffer);
+                var dataView = new DataView(buffer);
                 var offset = 0;
                 var messageType;
-                if (view.byteLength === 13) {
-                    if (view.byteLength < 2) return;
-                    messageType = view.getUint16(0, true);
-                    offset = 2;
+                if (dataView.byteLength === 13) {
+                    messageType = dataView.getUint16(offset, true);
+                    offset += 2;
                 } else {
-                    if (view.byteLength < 1) return;
-                    messageType = view.getUint8(0);
-                    offset = 1;
+                    messageType = dataView.getUint8(offset);
+                    offset += 1;
                 }
-                if (!(messageType & 128) || view.byteLength < offset + 8) return;
-
-                var vibrationType = view.getUint8(offset);
+                if (!(messageType & 128)) return;
+                var vibrationType = dataView.getUint8(offset);
                 offset += 1;
                 if (vibrationType !== 0) return;
 
-                var gamepadIndex = view.getUint8(offset); offset += 1;
-                var left = view.getUint8(offset) / 100; offset += 1;
-                var right = view.getUint8(offset) / 100; offset += 1;
-                offset += 1; // left trigger motor
-                offset += 1; // right trigger motor
-                if (offset + 2 > view.byteLength) return;
-                var duration = view.getUint16(offset, true);
-                send(left, right, duration, gamepadIndex);
-            } catch (e) {}
+                var data = {};
+                var keys = [
+                    ['gamepadIndex', 8],
+                    ['leftMotorPercent', 8],
+                    ['rightMotorPercent', 8],
+                    ['leftTriggerMotorPercent', 8],
+                    ['rightTriggerMotorPercent', 8],
+                    ['durationMs', 16]
+                ];
+                for (var i = 0; i < keys.length; i++) {
+                    var bits = keys[i][1];
+                    if (bits === 16) {
+                        if (offset + 2 > dataView.byteLength) return;
+                        data[keys[i][0]] = dataView.getUint16(offset, true);
+                        offset += 2;
+                    } else {
+                        if (offset + 1 > dataView.byteLength) return;
+                        data[keys[i][0]] = dataView.getUint8(offset);
+                        offset += 1;
+                    }
+                }
+                sendMotors(data);
+            } catch (e) {
+                log('parseError', { message: String(e) });
+            }
         }
 
         function inspectMessageEvent(event) {
@@ -147,108 +191,117 @@ struct XboxCloudWebView: UIViewRepresentable {
                 if (!event) return;
                 if (event.data instanceof ArrayBuffer) {
                     parseVibration(event.data);
-                } else if (typeof Blob !== "undefined" && event.data instanceof Blob) {
+                } else if (typeof Blob !== 'undefined' && event.data instanceof Blob) {
                     event.data.arrayBuffer().then(parseVibration).catch(function() {});
                 }
             } catch (e) {}
         }
 
-        // Patch addEventListener so DeviceVibrationManager receives the normal
-        // event while the native bridge gets a copy of the exact packet.
-        try {
-            var proto = window.RTCDataChannel && window.RTCDataChannel.prototype;
-            if (proto && proto.addEventListener) {
-                var originalAdd = proto.addEventListener;
-                var originalRemove = proto.removeEventListener;
-                var wrappers = new WeakMap();
+        function hookInputChannel(channel, source) {
+            try {
+                if (!channel || channel.label !== 'input') return;
+                if (hooked) {
+                    if (hooked.has(channel)) return;
+                    hooked.add(channel);
+                }
+                if (!inputFound) {
+                    inputFound = true;
+                    log('inputChannel', { source: source || 'unknown', label: String(channel.label || '') });
+                }
+                channel.addEventListener('message', inspectMessageEvent);
+            } catch (e) {
+                log('hookError', { message: String(e) });
+            }
+        }
 
-                proto.addEventListener = function(type, listener, options) {
-                    if (type !== "message" || typeof listener !== "function") {
-                        return originalAdd.call(this, type, listener, options);
-                    }
-                    var channel = this;
-                    var wrapped = wrappers.get(listener);
-                    if (!wrapped) {
-                        wrapped = function(event) {
-                            try {
-                                if (channel && channel.label === "input") inspectMessageEvent(event);
-                            } catch (e) {}
-                            return listener.call(this, event);
+        try {
+            if (window.RTCPeerConnection && RTCPeerConnection.prototype.createDataChannel) {
+                var nativeCreate = RTCPeerConnection.prototype.createDataChannel;
+                RTCPeerConnection.prototype.createDataChannel = function() {
+                    var channel = nativeCreate.apply(this, arguments);
+                    try { hookInputChannel(channel, 'createDataChannel'); } catch (e) {}
+                    return channel;
+                };
+            }
+        } catch (e) {}
+
+        try {
+            var pcProto = window.RTCPeerConnection && RTCPeerConnection.prototype;
+            if (pcProto && pcProto.addEventListener) {
+                var nativeAdd = pcProto.addEventListener;
+                pcProto.addEventListener = function(type, listener, options) {
+                    if (type === 'datachannel' && typeof listener === 'function') {
+                        var wrapped = function(ev) {
+                            try { if (ev && ev.channel) hookInputChannel(ev.channel, 'datachannel'); } catch (e) {}
+                            return listener.apply(this, arguments);
                         };
-                        wrappers.set(listener, wrapped);
+                        return nativeAdd.call(this, type, wrapped, options);
                     }
-                    return originalAdd.call(this, type, wrapped, options);
+                    return nativeAdd.call(this, type, listener, options);
                 };
-
-                if (originalRemove) {
-                    proto.removeEventListener = function(type, listener, options) {
-                        if (type === "message" && typeof listener === "function") {
-                            var wrapped = wrappers.get(listener);
-                            if (wrapped) return originalRemove.call(this, type, wrapped, options);
-                        }
-                        return originalRemove.call(this, type, listener, options);
-                    };
-                }
             }
         } catch (e) {}
 
-        // Also support code that assigns channel.onmessage directly.
         try {
-            var channelProto = window.RTCDataChannel && window.RTCDataChannel.prototype;
-            if (channelProto) {
-                var descriptor = Object.getOwnPropertyDescriptor(channelProto, "onmessage");
-                if (descriptor && descriptor.set && descriptor.get) {
-                    var nativeSet = descriptor.set;
-                    var nativeGet = descriptor.get;
-                    var handlerMap = new WeakMap();
-                    Object.defineProperty(channelProto, "onmessage", {
-                        configurable: descriptor.configurable,
-                        enumerable: descriptor.enumerable,
-                        get: function() { return nativeGet.call(this); },
-                        set: function(handler) {
-                            if (typeof handler !== "function") return nativeSet.call(this, handler);
-                            var wrapped = handlerMap.get(handler);
-                            if (!wrapped) {
-                                wrapped = function(event) {
-                                    try { if (this.label === "input") inspectMessageEvent(event); } catch (e) {}
-                                    return handler.call(this, event);
-                                };
-                                handlerMap.set(handler, wrapped);
-                            }
-                            return nativeSet.call(this, wrapped);
-                        }
-                    });
-                }
-            }
-        } catch (e) {}
-
-        // Fallback: Better xCloud also exposes these vibration calls when WebKit
-        // supports device vibration. Redirect them to the controller instead of
-        // vibrating the phone.
-        try {
-            var vibrate = navigator.vibrate && navigator.vibrate.bind(navigator);
-            if (vibrate) {
-                navigator.vibrate = function(pattern) {
-                    var duration = 80;
+            var nativeFetch = window.fetch && window.fetch.bind(window);
+            if (nativeFetch) {
+                window.fetch = function(resource, init) {
+                    var url = '';
                     try {
-                        if (typeof pattern === "number") duration = pattern;
-                        else if (pattern && pattern.length) duration = Number(pattern[0]) || 80;
+                        if (typeof resource === 'string') url = resource;
+                        else if (resource && resource.url) url = resource.url;
                     } catch (e) {}
-                    // DeviceVibrationManager calls navigator.vibrate immediately
-                    // after parsing the same WebRTC packet. Suppress that duplicate
-                    // path when the packet bridge already delivered exact motor data.
-                    if (performance.now() - lastPacketRumbleAt < 500) {
-                        return true;
-                    }
-                    send(0.65, 0.85, duration, 0);
-                    return true;
+                    var pending = nativeFetch(resource, init);
+                    if (!url || !/\/configuration(\?|$)/.test(url)) return pending;
+                    return pending.then(function(response) {
+                        return response.clone().text().then(function(text) {
+                            try {
+                                if (!text) return response;
+                                var obj = JSON.parse(text);
+                                var overrides = {};
+                                try { overrides = JSON.parse(obj.clientStreamingConfigOverrides || '{}') || {}; } catch (err) { overrides = {}; }
+                                overrides.inputConfiguration = overrides.inputConfiguration || {};
+                                overrides.inputConfiguration.enableVibration = true;
+                                obj.clientStreamingConfigOverrides = JSON.stringify(overrides);
+                                return new Response(JSON.stringify(obj), {
+                                    status: response.status,
+                                    statusText: response.statusText,
+                                    headers: response.headers
+                                });
+                            } catch (err) {
+                                return response;
+                            }
+                        }).catch(function() { return response; });
+                    });
                 };
             }
         } catch (e) {}
 
-        window.__gsNativeRumble = send;
+        try {
+            var originalVibrate = navigator.vibrate ? navigator.vibrate.bind(navigator) : function() { return true; };
+            navigator.vibrate = function(pattern) {
+                var now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+                if (now - lastPacketAt < 400) return true;
+                var duration = 80;
+                try {
+                    if (typeof pattern === 'number') duration = pattern;
+                    else if (pattern && pattern.length) duration = Number(pattern[0]) || 80;
+                } catch (e) {}
+                if (!duration) {
+                    sendMotors({ leftMotorPercent: 0, rightMotorPercent: 0, leftTriggerMotorPercent: 0, rightTriggerMotorPercent: 0, durationMs: 0, gamepadIndex: 0 });
+                    return true;
+                }
+                try { originalVibrate(pattern); } catch (e) {}
+                return true;
+            };
+        } catch (e) {}
+
+        log('bridgeReady', {
+            hasRTC: !!window.RTCPeerConnection,
+            hasVibrate: typeof navigator.vibrate === 'function'
+        });
     })();
-    """
+    """#
 
     func makeCoordinator() -> Coordinator {
         Coordinator(session: session)
@@ -269,8 +322,8 @@ struct XboxCloudWebView: UIViewRepresentable {
 
         let contentController = config.userContentController
 
-        // Install the rumble/data-channel bridge before Better xCloud starts so its
-        // input-channel listener is wrapped before the first streaming message.
+        // Install the rumble bridge before Better xCloud so createDataChannel
+        // is wrapped before the Xbox Cloud WebRTC "input" channel exists.
         contentController.add(context.coordinator, name: "gamestreamBridge")
         contentController.addUserScript(WKUserScript(
             source: Self.rumbleBridgeJS,
@@ -445,15 +498,24 @@ struct XboxCloudWebView: UIViewRepresentable {
                     }
                 }
             case "rumble":
-                let weakMag = floatValue(body["weak"])
-                let strongMag = floatValue(body["strong"])
-                let duration = doubleValue(body["duration"], fallback: 80)
+                let left = firstFloat(body["leftMotorPercent"], body["weak"])
+                let right = firstFloat(body["rightMotorPercent"], body["strong"])
+                let leftTrigger = floatValue(body["leftTriggerMotorPercent"])
+                let rightTrigger = floatValue(body["rightTriggerMotorPercent"])
+                let duration = firstDouble(body["durationMs"], body["duration"], fallback: 80)
                 Task { @MainActor in
                     ControllerRumble.shared.play(
-                        weak: weakMag,
-                        strong: strongMag,
+                        leftMotorPercent: left,
+                        rightMotorPercent: right,
+                        leftTriggerMotorPercent: leftTrigger,
+                        rightTriggerMotorPercent: rightTrigger,
                         durationMs: duration
                     )
+                }
+            case "rumbleLog":
+                let event = body["event"] as? String ?? "unknown"
+                Task { @MainActor in
+                    ControllerRumble.shared.noteNativeLog(event, details: stringify(body))
                 }
             default:
                 break
@@ -464,14 +526,34 @@ struct XboxCloudWebView: UIViewRepresentable {
             if let f = any as? Float { return f }
             if let d = any as? Double { return Float(d) }
             if let n = any as? NSNumber { return n.floatValue }
+            if let s = any as? String { return Float(s) ?? 0 }
             return 0
+        }
+
+        private func firstFloat(_ primary: Any?, _ fallback: Any?) -> Float {
+            if primary != nil { return floatValue(primary) }
+            return floatValue(fallback)
         }
 
         private func doubleValue(_ any: Any?, fallback: Double) -> Double {
             if let d = any as? Double { return d }
             if let f = any as? Float { return Double(f) }
             if let n = any as? NSNumber { return n.doubleValue }
+            if let s = any as? String, let d = Double(s) { return d }
             return fallback
+        }
+
+        private func firstDouble(_ a: Any?, _ b: Any?, fallback: Double) -> Double {
+            if a != nil { return doubleValue(a, fallback: fallback) }
+            return doubleValue(b, fallback: fallback)
+        }
+
+        private func stringify(_ body: [String: Any]) -> String {
+            let keys = body.keys.sorted()
+            return keys.compactMap { key in
+                if key == "type" || key == "event" { return nil }
+                return "\(key)=\(body[key] ?? "")"
+            }.joined(separator: " ")
         }
 
         func runPendingJS(_ js: String, in webView: WKWebView) {

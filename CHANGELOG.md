@@ -4,6 +4,17 @@ All notable changes to GameStream are documented here.
 
 ## 2026-09-26
 
+### Controller rumble rewrite
+
+Xbox Cloud rumble now follows the real Better xCloud FourMotorRumble path instead of `navigator.vibrate()` / Gamepad `vibrationActuator` shims.
+
+- JS bridge hooks `RTCPeerConnection.createDataChannel` (the same discovery Better xCloud uses) and attaches its own listener to the WebRTC `"input"` channel.
+- Packets are parsed with Better xCloud's DeviceVibrationManager layout: gamepadIndex, left/right motor %, left/right trigger %, durationMs.
+- `inputConfiguration.enableVibration` is forced on so the Xbox server actually sends vibration packets (WKWebView has no `vibrationActuator`).
+- Native side keeps one `CHHapticEngine` per locality (`leftHandle` / `rightHandle` / `handles` / `default` / triggers) alive for the session and retains pattern players so COD gunfire is not dropped.
+- Settings Left / Right / Both buttons drive the matching physical handles, with aggregate-handle fallback.
+- Diagnostic logs cover controller discovery, localities, input-channel capture, parsed motors, dispatch, and engine failure.
+
 ### iOS Full Rebuild
 
 The native iOS application layer has been rebuilt from scratch.

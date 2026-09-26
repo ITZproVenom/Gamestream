@@ -50,6 +50,10 @@ targets:
         NSCameraUsageDescription: "Not used."
         NSMicrophoneUsageDescription: "Used for in-session voice chat."
         NSLocalNetworkUsageDescription: "Used to discover and connect to streaming sessions."
+        UIApplicationSupportsIndirectInputEvents: true
+        GCSupportsControllerUserInteraction: true
+        GCSupportedGameControllers:
+          - ProfileName: ExtendedGamepad
         UIRequiredDeviceCapabilities:
           - arm64
     settings:
