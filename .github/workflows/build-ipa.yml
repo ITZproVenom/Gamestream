@@ -132,6 +132,7 @@ jobs:
           PY
           xcodegen generate
           SUBJECT="$(git log -1 --pretty=%s)"
+          # Keep experimental rumble release metadata isolated from normal iOS releases.
           if printf '%s' "$SUBJECT" | grep -Eqi 'experimental.*controller|controller.*experimental|experimental.*rumble|rumble.*experimental'; then
             python3 - <<'PY'
           from pathlib import Path
