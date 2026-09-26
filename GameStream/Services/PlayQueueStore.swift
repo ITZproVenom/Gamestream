@@ -22,7 +22,7 @@ final class PlayQueueStore: ObservableObject {
         var item = game
         item.lastSeen = Date()
         games.append(item)
-        if games.count > 16 { games = Array(games.prefix(16)) }
+        if games.count > 16 { games = Array(games.suffix(16)) }
         persist()
     }
 
