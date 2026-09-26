@@ -124,7 +124,7 @@ final class SessionStore: ObservableObject {
         HubState.shared.showNativeHub = true
         isStreaming = false
         offerPlayNext = false
-        noteGame(id: game.id, slug: game.slug, title: game.title, markRecent: true)
+        noteGame(id: game.id, slug: game.slug, title: game.title, markRecent: false)
     }
 
     func goBack() {
