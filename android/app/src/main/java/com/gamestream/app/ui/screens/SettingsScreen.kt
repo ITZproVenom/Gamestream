@@ -271,6 +271,13 @@ fun SettingsScreen(session: SessionStore) {
         Category("Actions") {
             Button(onClick = { session.openHome() }, modifier = Modifier.fillMaxWidth()) { Text("Open Library") }
             Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { session.clearCache(context) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Clear cache")
+            }
+            Spacer(Modifier.height(8.dp))
             OutlinedButton(onClick = { session.refreshBetterXCloud() }, modifier = Modifier.fillMaxWidth()) {
                 Text("Refresh Better xCloud script")
             }
