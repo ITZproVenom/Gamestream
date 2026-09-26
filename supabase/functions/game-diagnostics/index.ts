@@ -1,146 +1,143 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+
 /**
- * game-diagnostics — Supabase Edge Function (v2)
+ * game-diagnostics — production-aligned Edge Function (v2)
  *
- * Contract used by GameStream iOS DiagnosticsStore:
- *   POST /functions/v1/game-diagnostics
- *   Authorization: Bearer <anon JWT>
- *   Body:
- *     {
- *       event_type?: "diagnostic",
- *       message?: string,
- *       platform?: string,
- *       app?: string,
- *       device?: { model?: string, system?: string },
- *       events?: Array<{ event?: string, props?: object, properties?: object, ts?: string, app?: string, platform?: string }>
- *     }
- *
- * Behavior:
- *   - Requires a valid JWT (gateway / function verify_jwt).
- *   - If `events` is a non-empty array → insert one public.diagnostics row per event.
- *   - If `events` is omitted / null → insert a single row from top-level fields.
- *   - If `events` is [] → 400 (nothing to insert).
- *   - Uses service_role only inside this function (never shipped to the client).
- *   - Returns { ok: true, inserted: N }.
- *
- * Table (expected):
- *   public.diagnostics (
- *     id bigint generated always as identity primary key,
- *     created_at timestamptz default now(),
- *     event_type text,
- *     payload jsonb
- *   )
- * RLS: anon cannot SELECT/INSERT directly; only this function (service role) writes.
- *
- * Deploy:
- *   supabase functions deploy game-diagnostics --project-ref fswswvhpszebuxnloysy
+ * Project: fswswvhpszebuxnloysy
+ * Table: public.diagnostics (uuid PK, device columns, jsonb payload)
+ * Auth: verify_jwt=true; service_role used only server-side for inserts.
+ * Client: GameStream iOS DiagnosticsStore (anon JWT only).
  */
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-
-const cors = {
+const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-type IncomingEvent = {
-  event?: string;
-  props?: Record<string, unknown>;
-  properties?: Record<string, unknown>;
-  ts?: string;
-  app?: string;
-  platform?: string;
-  [key: string]: unknown;
-};
+const allowedEvents = new Set([
+  "layout_warning",
+  "webview_error",
+  "play_error",
+  "search_error",
+  "navigation_error",
+  "network_error",
+  "performance",
+  "memory_warning",
+  "diagnostic",
+  "opt_in",
+  "manual_upload",
+]);
 
-type Body = {
-  event_type?: string;
-  message?: string;
-  platform?: string;
-  app?: string;
-  device?: Record<string, unknown>;
-  events?: IncomingEvent[] | null;
-};
+function cleanString(value: unknown, max: number): string | null {
+  return value ? String(value).slice(0, max) : null;
+}
 
-Deno.serve(async (req) => {
+function normalizeEvent(event: Record<string, unknown>, body: Record<string, unknown>) {
+  const rawType = event.event_type ?? event.event ?? event.type ?? "diagnostic";
+  const eventType = String(rawType);
+  const safeType = allowedEvents.has(eventType) ? eventType : "diagnostic";
+
+  // iOS sends `props`; older clients may send `properties` or embed payload.
+  const payload =
+    event.properties && typeof event.properties === "object"
+      ? event.properties
+      : event.props && typeof event.props === "object"
+        ? {
+            ...(event as Record<string, unknown>),
+            // Keep structured fields the iOS client already puts on the event.
+          }
+      : event.payload && typeof event.payload === "object"
+        ? event.payload
+        : event;
+
+  const device =
+    body.device && typeof body.device === "object"
+      ? (body.device as Record<string, unknown>)
+      : {};
+
+  return {
+    app_version: cleanString(body.app ?? body.app_version, 64),
+    build_number: cleanString(body.build_number, 32),
+    ios_version: cleanString(body.ios_version ?? device.system, 32),
+    device_model: cleanString(body.device_model ?? device.model, 64),
+    screen_width: typeof body.screen_width === "number" ? body.screen_width : null,
+    screen_height: typeof body.screen_height === "number" ? body.screen_height : null,
+    event_type: safeType,
+    feature: cleanString(event.feature ?? body.feature, 128),
+    payload,
+  };
+}
+
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: cors });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   if (req.method !== "POST") {
-    return json({ error: "method_not_allowed" }, 405);
-  }
-
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !serviceKey) {
-    return json({ error: "server_misconfigured" }, 500);
-  }
-
-  let body: Body = {};
-  try {
-    body = (await req.json()) as Body;
-  } catch {
-    body = {};
-  }
-
-  const eventType = (body.event_type || "diagnostic").toString();
-  // Keep a soft allow-list; unknown types still store under diagnostic for forward compat.
-  const normalizedType = eventType === "diagnostic" ? "diagnostic" : "diagnostic";
-
-  const rows: { event_type: string; payload: Record<string, unknown> }[] = [];
-
-  if (Array.isArray(body.events)) {
-    if (body.events.length === 0) {
-      return json({ error: "invalid_or_failed_request" }, 400);
-    }
-    for (const ev of body.events) {
-      const props = (ev.props ?? ev.properties ?? {}) as Record<string, unknown>;
-      rows.push({
-        event_type: normalizedType,
-        payload: {
-          event: ev.event ?? body.message ?? "event",
-          props,
-          ts: ev.ts ?? null,
-          app: ev.app ?? body.app ?? null,
-          platform: ev.platform ?? body.platform ?? null,
-          device: body.device ?? null,
-          message: body.message ?? null,
-        },
-      });
-    }
-  } else {
-    // Single-event / top-level shape
-    rows.push({
-      event_type: normalizedType,
-      payload: {
-        event: body.message ?? "diagnostic",
-        props: {},
-        app: body.app ?? null,
-        platform: body.platform ?? null,
-        device: body.device ?? null,
-        message: body.message ?? null,
-      },
+    return new Response(JSON.stringify({ error: "method_not_allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
-  const admin = createClient(supabaseUrl, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  try {
+    const body = await req.json();
 
-  const { data, error } = await admin.from("diagnostics").insert(rows).select("id");
+    if (!body || typeof body !== "object") {
+      throw new Error("invalid_payload");
+    }
 
-  if (error) {
-    console.error("database_insert_failed", error.message);
-    return json({ error: "database_insert_failed", detail: error.message }, 500);
+    const payloadBody = body as Record<string, unknown>;
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new Error("server_not_configured");
+    }
+
+    const rawEvents = Array.isArray(payloadBody.events)
+      ? payloadBody.events
+      : [payloadBody];
+
+    const events = rawEvents
+      .filter(
+        (event): event is Record<string, unknown> =>
+          !!event && typeof event === "object" && !Array.isArray(event),
+      )
+      .map((event) => normalizeEvent(event, payloadBody));
+
+    if (events.length === 0) {
+      throw new Error("empty_events");
+    }
+
+    const response = await fetch(`${supabaseUrl}/rest/v1/diagnostics`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify(events),
+    });
+
+    if (!response.ok) {
+      const detail = await response.text();
+      console.error("diagnostics insert failed", response.status, detail.slice(0, 500));
+      throw new Error("database_insert_failed");
+    }
+
+    return new Response(JSON.stringify({ ok: true, inserted: events.length }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    console.error("diagnostics error", error);
+    return new Response(JSON.stringify({ error: "invalid_or_failed_request" }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
-
-  const inserted = Array.isArray(data) ? data.length : rows.length;
-  return json({ ok: true, inserted }, 200);
 });
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...cors, "Content-Type": "application/json" },
-  });
-}

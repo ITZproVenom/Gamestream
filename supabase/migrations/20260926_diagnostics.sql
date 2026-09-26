@@ -1,12 +1,31 @@
--- GameStream diagnostics table + RLS (reference migration)
--- Project: fswswvhpszebuxnloysy
--- Writes ONLY via Edge Function game-diagnostics (service_role).
--- Anon/authenticated clients must NOT read or insert directly.
+-- Reference schema matching LIVE public.diagnostics (project fswswvhpszebuxnloysy)
+-- Do not assume this migration created the table; it documents production shape.
+--
+-- Live columns (verified 2026-09-26 via MCP):
+--   id uuid PK default gen_random_uuid()
+--   created_at timestamptz default now()
+--   app_version, build_number, ios_version, device_model text
+--   screen_width, screen_height float8
+--   event_type text not null
+--   feature text
+--   payload jsonb default '{}'
+--
+-- RLS: enabled, no policies → anon/authenticated denied by default.
+-- Table privileges still listed for anon/authenticated, but RLS blocks access.
+-- Writes occur only via Edge Function game-diagnostics using service_role.
 
+-- Idempotent ensure (safe if already applied):
 create table if not exists public.diagnostics (
-  id bigint generated always as identity primary key,
+  id uuid primary key default gen_random_uuid(),
   created_at timestamptz not null default now(),
-  event_type text not null default 'diagnostic',
+  app_version text,
+  build_number text,
+  ios_version text,
+  device_model text,
+  screen_width double precision,
+  screen_height double precision,
+  event_type text not null,
+  feature text,
   payload jsonb not null default '{}'::jsonb
 );
 
@@ -15,15 +34,6 @@ create index if not exists diagnostics_event_type_idx on public.diagnostics (eve
 
 alter table public.diagnostics enable row level security;
 
--- Deny direct client access (service_role bypasses RLS).
-drop policy if exists "diagnostics_no_anon_select" on public.diagnostics;
-drop policy if exists "diagnostics_no_anon_insert" on public.diagnostics;
-drop policy if exists "diagnostics_no_anon_update" on public.diagnostics;
-drop policy if exists "diagnostics_no_anon_delete" on public.diagnostics;
-
--- Explicit deny-style policies for authenticated/anon if any residual grants exist.
--- Prefer revoke privileges:
+-- Defense in depth: revoke direct client DML/SELECT if grants exist.
+-- service_role continues to bypass RLS and retain access for the Edge Function.
 revoke all on table public.diagnostics from anon, authenticated;
-grant select, insert, update, delete on table public.diagnostics to service_role;
-
--- Optional: allow service_role already has full access by default in Supabase.
