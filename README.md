@@ -27,11 +27,15 @@ Builds are **separate by platform**. Pick iOS or Android — do not mix tags.
 | Platform | Download this release | File |
 |----------|----------------------|------|
 | **iOS** | [📱 Latest iOS build](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios) | `GameStream-unsigned.ipa` |
-| **Android** | [🤖 Latest Android build](https://github.com/ITZproVenom/Gamestream/releases/tag/android-build-20260926-0907-8986306) | `GameStream-release.apk` |
+| **Android** | [🤖 Latest Android build](https://github.com/ITZproVenom/Gamestream/releases) | See the latest Android release |
+| **iOS Experimental** | [🧪 Experimental rumble build](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios-experimental-rumble) | `GameStream-unsigned.ipa` |
+
+> **Experimental iOS build:** This is a separate prerelease for testing the experimental native controller-input and rumble path. It is not the normal `latest-ios` build.
 
 ### All builds
 
 - **iOS only:** [filter `ios-build`](https://github.com/ITZproVenom/Gamestream/releases?q=ios-build&expanded=true)
+- **iOS experimental:** [Experimental rumble release](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios-experimental-rumble)
 - **Android only:** [filter `android-build`](https://github.com/ITZproVenom/Gamestream/releases?q=android-build&expanded=true)
 - **All releases:** [Releases](https://github.com/ITZproVenom/Gamestream/releases)
 
@@ -85,7 +89,7 @@ CI: `.github/workflows/build-apk.yml`
 - Native GameHub / Search / Settings (no website catalog UI)
 - WebView only for Microsoft auth + active cloud stream
 - Better xCloud quality prefs (resolution, clarity, codec, bitrate)
-- Controller rumble (intensity + test) on iOS & Android
+- Controller rumble with intensity and physical-controller tests on iOS
 - Custom backgrounds, library layouts, categorized settings
 - Favorites, recents, continue playing
 
