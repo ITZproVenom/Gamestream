@@ -101,6 +101,7 @@ struct OpeningIntroView: View {
             }
             // Keep the cinematic layer alive while the catalog/posters initialize.
             // Once ready, let the animation finish naturally.
+            try? await Task.sleep(for: .milliseconds(1200))
             if isReady {
                 finishWhenReady()
             }
