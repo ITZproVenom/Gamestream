@@ -44,6 +44,8 @@ struct IntroView: View {
 
                     Spacer(minLength: 12)
 
+                    let contentWidth = min(max(0, geo.size.width - 40), 520)
+
                     VStack(spacing: 10) {
                         VStack(spacing: 12) {
                             Image(systemName: "gamecontroller.fill")
@@ -72,9 +74,8 @@ struct IntroView: View {
                         }
                         .padding(.horizontal, 22)
                         .padding(.vertical, 14)
-                        .frame(maxWidth: 520)
+                        .frame(width: contentWidth)
                         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-                        .padding(.horizontal, 24)
 
                         Button(action: finish) {
                             Text("Get Started")
@@ -85,8 +86,7 @@ struct IntroView: View {
                                 .padding(.vertical, 16)
                         }
                         .buttonStyle(.glassProminent)
-                        .padding(.horizontal, 28)
-                        .frame(maxWidth: 520)
+                        .frame(width: contentWidth)
                         .accessibilityLabel("Get Started")
                     }
 
