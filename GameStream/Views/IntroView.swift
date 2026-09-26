@@ -12,14 +12,6 @@ struct IntroView: View {
         Array(GameCatalog.games.compactMap(\.posterURL).prefix(12))
     }
 
-    private var physicalWidth: CGFloat {
-        UIScreen.main.bounds.width
-    }
-
-    private var contentWidth: CGFloat {
-        min(max(physicalWidth - 40, 280), 420)
-    }
-
     var body: some View {
         ZStack(alignment: .topLeading) {
             background
@@ -28,20 +20,23 @@ struct IntroView: View {
             // This deliberately avoids GeometryReader's scene width so a sideload
             // or container host cannot make the glass controls drift off-screen.
             GeometryReader { proxy in
+                let width = max(proxy.size.width, 1)
+                let contentWidth = min(max(width - 40, 280), 420)
+
                 VStack(spacing: 0) {
                     topBar
                         .padding(.top, proxy.safeAreaInsets.top + 6)
 
                     Spacer(minLength: 18)
 
-                    heroCard
+                    heroCard(contentWidth: contentWidth)
 
                     Spacer(minLength: 18)
 
-                    actionArea
+                    actionArea(contentWidth: contentWidth)
                         .padding(.bottom, max(proxy.safeAreaInsets.bottom, 8))
                 }
-                .frame(width: physicalWidth, height: proxy.size.height, alignment: .top)
+                .frame(width: width, height: proxy.size.height, alignment: .top)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -103,7 +98,7 @@ struct IntroView: View {
         .padding(.horizontal, 20)
     }
 
-    private var heroCard: some View {
+    private func heroCard(contentWidth: CGFloat) -> some View {
         VStack(spacing: 18) {
             ZStack {
                 Circle()
@@ -148,7 +143,7 @@ struct IntroView: View {
         .offset(y: appeared ? 0 : 14)
     }
 
-    private var actionArea: some View {
+    private func actionArea(contentWidth: CGFloat) -> some View {
         VStack(spacing: 12) {
             Button(action: finish) {
                 HStack(spacing: 10) {
