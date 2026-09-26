@@ -103,7 +103,7 @@ struct OpeningIntroView: View {
             // Keep the cinematic layer alive while the catalog/posters initialize.
             // Once ready, let the animation finish naturally.
             try? await Task.sleep(for: .milliseconds(1200))
-            minimumDurationComplete = true
+            await MainActor.run { minimumDurationComplete = true }
             if isReady {
                 finishWhenReady()
             }
@@ -113,6 +113,7 @@ struct OpeningIntroView: View {
         }
     }
 
+    @MainActor
     private func finishWhenReady() {
         guard visible, minimumDurationComplete else { return }
         withAnimation(.easeInOut(duration: 0.28)) { visible = false }
