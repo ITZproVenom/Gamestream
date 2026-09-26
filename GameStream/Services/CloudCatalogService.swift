@@ -56,7 +56,7 @@ enum CloudCatalogService {
             }
         }
         let unique = dedupe(collected)
-        guard unique.count >= 20 else { return }
+        guard unique.count >= 20 else { throw URLError(.cannotParseResponse) }
         saveCache(unique)
         await MainActor.run {
             GameCatalog.installLiveCatalog(unique)
