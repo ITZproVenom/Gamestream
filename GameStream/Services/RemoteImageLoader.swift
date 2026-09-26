@@ -94,11 +94,13 @@ final class RemoteImageLoader: ObservableObject {
 
     nonisolated private static func loadDiskImage(url: URL, directory: URL?) async -> UIImage? {
         guard let path = diskURL(for: url, directory: directory),
-              let data = try? Data(contentsOf: path),
-              let image = UIImage(data: data) else {
+              let data = try? Data(contentsOf: path) else {
             return nil
         }
-        return image
+        // Disk thumbnails are already cached, but decoding with UIImage(data:)
+        // would expand the JPEG back to its full source dimensions. Keep the
+        // same ImageIO downsampling path used for network responses.
+        return downsample(data, maxPixel: 720)
     }
 
     nonisolated private static func saveDiskImage(_ image: UIImage, url: URL, directory: URL?) async {
