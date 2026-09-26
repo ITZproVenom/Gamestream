@@ -93,7 +93,15 @@ fun XboxWebView(
     }
 
     DisposableEffect(Unit) {
-        onDispose { rumble.stop() }
+        onDispose {
+            rumble.stop()
+            webView.stopLoading()
+            webView.onPause()
+            webView.removeJavascriptInterface("GameStreamBridge")
+            webView.webChromeClient = null
+            webView.webViewClient = null
+            webView.destroy()
+        }
     }
 
     LaunchedEffect(session.webUrl) {
