@@ -152,7 +152,74 @@ final class FreshCatalogStore: ObservableObject {
             }
         }
 
+        if output.isEmpty {
+            return try await hydrateViaGamePass(ids: ids)
+        }
+
         return output
+    }
+
+    private func hydrateViaGamePass(ids: [String]) async throws -> [FreshGame] {
+        var output: [FreshGame] = []
+        output.reserveCapacity(ids.count)
+
+        for start in stride(from: 0, to: ids.count, by: 80) {
+            let end = min(start + 80, ids.count)
+            let page = Array(ids[start..<end])
+            guard !page.isEmpty else { continue }
+
+            guard let url = URL(string: "https://catalog.gamepass.com/v3/products?market=US&language=en-US&hydration=MobileDetailsForConsole") else {
+                continue
+            }
+
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.timeoutInterval = 20
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            request.setValue("Xbox/Shell/Http", forHTTPHeaderField: "User-Agent")
+            request.httpBody = try JSONSerialization.data(withJSONObject: ["Products": page])
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse,
+                  (200...299).contains(http.statusCode),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let products = json["Products"] as? [[String: Any]] else {
+                continue
+            }
+
+            output.append(contentsOf: Self.games(from: products))
+        }
+
+        return Self.dedupe(output)
+    }
+
+    private static func games(from products: [[String: Any]]) -> [FreshGame] {
+        products.compactMap { product in
+            guard let id = (product["ProductId"] as? String) ?? (product["id"] as? String), !id.isEmpty else { return nil }
+            let localized = (product["LocalizedProperties"] as? [[String: Any]])?.first ?? [:]
+            let title = ((localized["ProductTitle"] as? String) ?? (product["title"] as? String) ?? id)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard title.count >= 2 else { return nil }
+
+            let tagline = ((localized["ShortDescription"] as? String) ?? (product["description"] as? String) ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let properties = product["Properties"] as? [String: Any] ?? [:]
+            let rawGenre = (properties["Category"] as? String)
+                ?? ((properties["Categories"] as? [String])?.first)
+                ?? "Cloud"
+            let images = localized["Images"] as? [[String: Any]] ?? []
+
+            return FreshGame(
+                id: id,
+                slug: Self.slugify(title),
+                title: title,
+                tagline: String(tagline.prefix(160)),
+                genre: Self.genre(rawGenre),
+                posterURL: Self.poster(from: images)
+            )
+        }
     }
 
     func search(_ query: String) -> [FreshGame] {
