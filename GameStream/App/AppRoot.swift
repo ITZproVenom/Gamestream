@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Clean-slate application root: onboarding → Microsoft auth (locked) → AppShell.
+/// Launch loading stays above the app while catalog data initializes.
 struct AppRoot: View {
     @ObservedObject var session: SessionStore
     @ObservedObject var appearance: AppearanceStore
