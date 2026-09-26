@@ -3,6 +3,7 @@ import SwiftUI
 struct AnimatedBackground: View {
     @ObservedObject private var appearance = AppearanceStore.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     var forceStatic: Bool = false
 
     private var shouldAnimate: Bool {
@@ -11,6 +12,7 @@ struct AnimatedBackground: View {
             && (appearance.backgroundStyle == .aurora || appearance.backgroundStyle == .mesh)
             && appearance.animationIntensity == .full
             && appearance.effectsMode != .performance
+            && scenePhase == .active
     }
 
     var body: some View {
