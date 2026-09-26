@@ -23,7 +23,7 @@ The new build replaces the previous native home, library, search, detail, lists,
 
 ### New Native Experience
 
-- New application shell with a native four-tab structure: Home, Library, Search, and Settings.
+- New application shell with a native three-tab structure: Home, Search, and Settings, with the GameHub acting as the primary native library surface.
 - New Home experience with a featured game surface, recently played games, favorites, activity summary, and genre discovery.
 - New Library with a clean responsive two-column poster grid and menu-based filters.
 - New Search with native iOS searchable navigation, recent searches, genre discovery, and result grids.
@@ -41,6 +41,10 @@ The new build replaces the previous native home, library, search, detail, lists,
 - Xbox Cloud WebView and streaming bridge remain unchanged.
 - Better xCloud injection support remains available to the preserved WebView layer.
 - Legacy native UI and catalog sources are no longer included in the Xcode target.
+
+### Credits
+
+The native rebuild keeps the project creator credit visible in the app and repository: **Made with ♥ by Bestin.**
 
 ### Build
 
