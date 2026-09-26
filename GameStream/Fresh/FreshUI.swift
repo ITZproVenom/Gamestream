@@ -77,6 +77,7 @@ struct FreshAppRoot: View {
     @EnvironmentObject private var session: SessionStore
     @StateObject private var catalog = FreshCatalogStore.shared
     @StateObject private var preferences = FreshPreferences.shared
+    @StateObject private var lists = FreshListsStore.shared
     @State private var selectedTab: FreshTab = .home
     @State private var showingCloud = false
     @State private var showingSignIn = false
@@ -94,6 +95,7 @@ struct FreshAppRoot: View {
         }
         .environmentObject(catalog)
         .environmentObject(preferences)
+        .environmentObject(lists)
         .preferredColorScheme(preferences.theme.colorScheme)
         .tint(preferences.tint)
         .onAppear {
@@ -679,8 +681,7 @@ struct FreshSettingsView: View {
                 isPresented: $confirmClear,
                 titleVisibility: .visible
             ) {
-                Button("Clear cache", role: .destructive) {
-                    catalog.games = []
+                Button("Reload catalog", role: .destructive) {
                     catalog.refresh()
                 }
                 Button("Cancel", role: .cancel) {}
