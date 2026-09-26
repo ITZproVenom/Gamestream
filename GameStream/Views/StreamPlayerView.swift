@@ -16,6 +16,7 @@ struct StreamPlayerView: View {
     @State private var showChrome = false
     @State private var chromeHideTask: Task<Void, Never>?
     @State private var didRecordWebViewCreated = false
+    @State private var webViewLoadStartedAt: Date?
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -35,11 +36,18 @@ struct StreamPlayerView: View {
         .edgesIgnoringSafeArea(.all)
         .onReceive(NotificationCenter.default.publisher(for: .webViewLoadingChanged)) { note in
             if let loading = note.object as? Bool {
-                if isLoading && !loading {
+                if loading {
+                    webViewLoadStartedAt = Date()
+                } else if isLoading {
                     SoundManager.playReady()
+                    let durationMs: Double? = webViewLoadStartedAt.map {
+                        Date().timeIntervalSince($0) * 1000
+                    }
+                    webViewLoadStartedAt = nil
                     DiagnosticsStore.shared.record(
                         event: "webview_loaded",
                         feature: "stream",
+                        durationMs: durationMs,
                         gameId: session.currentGame?.id,
                         gameTitle: session.currentGame?.title
                     )
@@ -58,6 +66,7 @@ struct StreamPlayerView: View {
         .onReceive(NotificationCenter.default.publisher(for: .webViewDidFail)) { note in
             errorMessage = note.object as? String
             isLoading = false
+            webViewLoadStartedAt = nil
             DiagnosticsStore.shared.record(
                 event: "webview_failed",
                 feature: "stream",
