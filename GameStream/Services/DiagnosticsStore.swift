@@ -40,6 +40,7 @@ final class DiagnosticsStore: ObservableObject {
     private let supabasePublishableKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZzd3N3dmhwc3plYnV4bmxveXN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxNDk3ODcsImV4cCI6MjEwNTcyNTc4N30.AY761m_RqpQ7qFP-_FBvO2T2lrsbTn3oQ1-lOAB-Sfg"
     private let maxQueue = 60
     private var flushTask: Task<Void, Never>?
+    private var uploadTask: Task<Void, Never>?
     private var didLaunch = false
     private var backgroundedAt: Date?
     private var observers: [NSObjectProtocol] = []
@@ -53,6 +54,8 @@ final class DiagnosticsStore: ObservableObject {
     }
 
     deinit {
+        flushTask?.cancel()
+        uploadTask?.cancel()
         observers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 
@@ -166,7 +169,7 @@ final class DiagnosticsStore: ObservableObject {
         if loadQueue().isEmpty {
             record(event: "manual_upload", feature: "settings", properties: ["source": "settings"])
         }
-        Task { await performUpload(attempt: 0) }
+        startUploadIfNeeded()
     }
 
     func clearQueue() {
@@ -212,7 +215,19 @@ final class DiagnosticsStore: ObservableObject {
         flushTask?.cancel()
         flushTask = Task {
             try? await Task.sleep(nanoseconds: 2_500_000_000)
-            await performUpload(attempt: 0)
+            startUploadIfNeeded()
+        }
+    }
+
+    private func startUploadIfNeeded() {
+        guard uploadTask == nil else { return }
+        uploadTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.performUpload(attempt: 0)
+            self.uploadTask = nil
+            if self.isOptedIn && !self.loadQueue().isEmpty {
+                self.scheduleFlush()
+            }
         }
     }
 
