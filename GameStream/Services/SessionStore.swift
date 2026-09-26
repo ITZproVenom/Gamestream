@@ -71,6 +71,7 @@ final class SessionStore: ObservableObject {
         UserDefaults.standard.set(MicrosoftAuth.proofVersion, forKey: MicrosoftAuth.proofKey)
         self.accountLabel = label
         self.isSignedIn = true
+        DiagnosticsStore.shared.record(event: "login_success", feature: "auth")
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
             self?.refreshXboxPlayHistory(force: true)
         }
@@ -95,6 +96,7 @@ final class SessionStore: ObservableObject {
 
     func signOut() {
         PlayActivityStore.shared.end()
+        DiagnosticsStore.shared.record(event: "logout", feature: "auth")
         clearLocalAuthFlag()
         isStreaming = false
         offerPlayNext = false
