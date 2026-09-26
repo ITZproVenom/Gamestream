@@ -247,8 +247,10 @@ final class AppearanceStore: ObservableObject {
         static let showGenres = "GameStream.showGenreFilters"
     }
 
-    private var photoURL: URL {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+    private var photoURL: URL? {
+        guard let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
+        }
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("custom-background.jpg")
     }
@@ -275,7 +277,8 @@ final class AppearanceStore: ObservableObject {
             ? true : UserDefaults.standard.bool(forKey: Keys.showActivity)
         showGenreFilters = UserDefaults.standard.object(forKey: Keys.showGenres) == nil
             ? true : UserDefaults.standard.bool(forKey: Keys.showGenres)
-        if let data = try? Data(contentsOf: photoURL),
+        if let photoURL,
+           let data = try? Data(contentsOf: photoURL),
            let image = UIImage(data: data) {
             customBackgroundImage = image
         } else {
@@ -292,7 +295,9 @@ final class AppearanceStore: ObservableObject {
 
     func clearCustomPhoto() {
         customBackgroundImage = nil
-        try? FileManager.default.removeItem(at: photoURL)
+        if let photoURL {
+            try? FileManager.default.removeItem(at: photoURL)
+        }
         if backgroundStyle == .customPhoto {
             backgroundStyle = .aurora
         }
@@ -300,10 +305,13 @@ final class AppearanceStore: ObservableObject {
 
     private func persistCustomPhoto(_ image: UIImage?) {
         guard let image else {
-            try? FileManager.default.removeItem(at: photoURL)
+            if let photoURL {
+                try? FileManager.default.removeItem(at: photoURL)
+            }
             return
         }
-        if let data = image.jpegData(compressionQuality: 0.85) {
+        if let photoURL,
+           let data = image.jpegData(compressionQuality: 0.85) {
             try? data.write(to: photoURL, options: .atomic)
         }
     }
