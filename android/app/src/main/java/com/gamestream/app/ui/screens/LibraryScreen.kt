@@ -75,16 +75,8 @@ private fun StreamPlayerShell(session: SessionStore) {
     ) {
         XboxWebView(session = session, modifier = Modifier.fillMaxSize())
 
-        // Tap empty area to toggle chrome
-        Box(
-            Modifier
-                .fillMaxSize()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { chromeVisible = !chromeVisible }
-        )
-
+        // Keep the WebView fully touchable. A full-screen transparent clickable
+        // overlay intercepts controller/touch input intended for the game stream.
         AnimatedVisibility(
             visible = chromeVisible,
             enter = fadeIn(),
