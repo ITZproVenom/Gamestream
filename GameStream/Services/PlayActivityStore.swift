@@ -23,6 +23,7 @@ final class PlayActivityStore: ObservableObject {
     private let key = "GameStream.playActivity.v1"
     private var activeId: String?
     private var activeStart: Date?
+    private var accumulatedSeconds: TimeInterval = 0
     private var tick: Timer?
 
     init() {
@@ -43,6 +44,7 @@ final class PlayActivityStore: ObservableObject {
         activeId = id
         activeTitle = title
         activeStart = Date()
+        accumulatedSeconds = 0
         liveSeconds = 0
         ensureStat(id: id, title: title, slug: slug)
         startTick()
@@ -52,7 +54,23 @@ final class PlayActivityStore: ObservableObject {
         endActiveIfNeeded()
         stopTick()
         liveSeconds = 0
+        accumulatedSeconds = 0
         activeTitle = nil
+    }
+
+    func pause() {
+        guard activeId != nil, let start = activeStart else { return }
+        accumulatedSeconds += max(0, Date().timeIntervalSince(start))
+        activeStart = nil
+        liveSeconds = accumulatedSeconds
+        stopTick()
+    }
+
+    func resume() {
+        guard activeId != nil, activeStart == nil else { return }
+        activeStart = Date()
+        liveSeconds = accumulatedSeconds
+        startTick()
     }
 
     func stat(for id: String) -> PlayStat? {
@@ -104,7 +122,7 @@ final class PlayActivityStore: ObservableObject {
         tick = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self, let start = self.activeStart else { return }
-                self.liveSeconds = Date().timeIntervalSince(start)
+                self.liveSeconds = self.accumulatedSeconds + Date().timeIntervalSince(start)
             }
         }
         if let tick { RunLoop.main.add(tick, forMode: .common) }
@@ -116,17 +134,21 @@ final class PlayActivityStore: ObservableObject {
     }
 
     private func endActiveIfNeeded() {
-        guard let id = activeId, let start = activeStart else {
-            activeId = nil
+        guard let id = activeId else {
             activeStart = nil
+            accumulatedSeconds = 0
             return
         }
-        let elapsed = max(0, Date().timeIntervalSince(start))
+        var elapsed = accumulatedSeconds
+        if let start = activeStart {
+            elapsed += max(0, Date().timeIntervalSince(start))
+        }
         if elapsed >= 20 {
             record(id: id, seconds: elapsed)
         }
         activeId = nil
         activeStart = nil
+        accumulatedSeconds = 0
     }
 
     private func record(id: String, seconds: TimeInterval) {
