@@ -51,7 +51,7 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
     val bgColor = Color(appearance.backgroundColorArgb())
 
     LaunchedEffect(Unit) {
-        CloudCatalogService.refreshIfNeeded(context.applicationContext)
+        CloudCatalogService.fetchAndInstall(context.applicationContext)
         withContext(Dispatchers.IO) {
             BetterXCloudInjector.ensureFetched(context.applicationContext)
         }
