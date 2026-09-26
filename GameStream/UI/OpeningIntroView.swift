@@ -65,6 +65,7 @@ struct OpeningIntroView: View {
     @State private var visible = false
     @State private var scale = 0.78
     @State private var titleOpacity = 0.0
+    @State private var minimumDurationComplete = false
 
     var body: some View {
         ZStack {
@@ -102,17 +103,18 @@ struct OpeningIntroView: View {
             // Keep the cinematic layer alive while the catalog/posters initialize.
             // Once ready, let the animation finish naturally.
             try? await Task.sleep(for: .milliseconds(1200))
+            minimumDurationComplete = true
             if isReady {
                 finishWhenReady()
             }
         }
         .onChange(of: isReady) { _, ready in
-            if ready { finishWhenReady() }
+            if ready && minimumDurationComplete { finishWhenReady() }
         }
     }
 
     private func finishWhenReady() {
-        guard visible else { return }
+        guard visible, minimumDurationComplete else { return }
         withAnimation(.easeInOut(duration: 0.28)) { visible = false }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: onFinished)
     }
