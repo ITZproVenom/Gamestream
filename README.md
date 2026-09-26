@@ -190,6 +190,7 @@ android/app/build/outputs/apk/release/app-release.apk
 
 - [Changelog](CHANGELOG.md)
 - [Credits](CREDITS.md)
+- [Architecture](docs/ARCHITECTURE.md)
 - [Android notes](android/README.md)
 - [MIT License](LICENSE)
 
