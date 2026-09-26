@@ -137,6 +137,7 @@ struct GameHubView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
+            .layoutPriority(1)
             Spacer(minLength: 8)
             Button { session.openXboxCloud() } label: {
                 Image(systemName: "cloud.fill")
