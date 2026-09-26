@@ -6,12 +6,13 @@ struct SettingsView: View {
     @ObservedObject private var activity = PlayActivityStore.shared
     @ObservedObject private var appearance = AppearanceStore.shared
     @ObservedObject private var controller = ControllerManager.shared
-    @State private var keepAwake: Bool = false
-    @State private var resumeOnOpen: Bool = false
+
+    @State private var keepAwake = false
+    @State private var resumeOnOpen = false
     @State private var resolution: String = SessionStore.storedResolution
     @State private var region: String = SessionStore.storedRegion
     @State private var photoItem: PhotosPickerItem?
-    @State private var testPulseNote: String = ""
+    @State private var testPulseNote = ""
 
     var isActive: Bool = true
 
@@ -33,152 +34,79 @@ struct SettingsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("Settings")
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .padding(.top, 8)
+            VStack(alignment: .leading, spacing: 26) {
+                pageHeader
 
-                category("Account") {
-                    Text(session.accountLabel ?? "Not signed in")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-
-                // MARK: Controller test — always visible, never locked behind detection
-                category("Controller test") {
-                    HStack(spacing: 8) {
-                        Image(systemName: controller.isConnected ? "gamecontroller.fill" : "gamecontroller")
-                            .foregroundStyle(controller.isConnected ? .green : .secondary)
-                        Text(controller.isConnected ? "Controller detected" : "No controller detected yet")
-                            .font(.subheadline)
+                settingsSection("Account") {
+                    settingRow(icon: "person.crop.circle", title: "Microsoft account") {
+                        Text(session.accountLabel ?? "Not signed in")
                             .foregroundStyle(.secondary)
-                    }
-
-                    Toggle("Controller haptics", isOn: $appearance.controllerHapticsEnabled)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Rumble intensity")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text("\(rumbleIntensityLabel) · \(String(format: "%.1f", appearance.controllerRumbleIntensity))×")
-                                .font(.caption.weight(.semibold))
-                        }
-                        Slider(value: $appearance.controllerRumbleIntensity, in: 0.5...3.0, step: 0.1)
-                        Text("Turn intensity up for weak wired pads. Hardware still sets the ceiling.")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Button {
-                        ControllerManager.shared.start()
-                        ControllerRumble.shared.playTest()
-                        testPulseNote = controller.isConnected
-                            ? "Pulse sent — you should feel two bursts."
-                            : "Pulse sent. If you feel nothing, plug in / wake the pad and try again."
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "waveform.path")
-                            Text("Test rumble")
-                                .font(.subheadline.weight(.semibold))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                    }
-                    .buttonStyle(.glassProminent)
-
-                    if !testPulseNote.isEmpty {
-                        Text(testPulseNote)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .lineLimit(1)
                     }
                 }
 
-                category("Appearance") {
-                    labeledChips("Theme", AppAppearanceMode.allCases.map(\.title), appearance.mode.title) { title in
-                        if let m = AppAppearanceMode.allCases.first(where: { $0.title == title }) {
-                            appearance.mode = m
+                settingsSection("Appearance") {
+                    menuRow("Theme", icon: "circle.lefthalf.filled", value: appearance.mode.title) {
+                        ForEach(AppAppearanceMode.allCases, id: \.self) { option in
+                            Button(option.title) { appearance.mode = option }
                         }
                     }
-                    labeledChips("Accent", AccentTheme.allCases.map(\.title), appearance.accent.title) { title in
-                        if let t = AccentTheme.allCases.first(where: { $0.title == title }) {
-                            appearance.accent = t
+                    divider
+                    menuRow("Accent", icon: "paintpalette", value: appearance.accent.title) {
+                        ForEach(AccentTheme.allCases, id: \.self) { option in
+                            Button(option.title) { appearance.accent = option }
                         }
                     }
-                }
-
-                category("Background") {
-                    labeledChips("Style", BackgroundStyle.allCases.map(\.title), appearance.backgroundStyle.title) { title in
-                        if let s = BackgroundStyle.allCases.first(where: { $0.title == title }) {
-                            appearance.backgroundStyle = s
+                    divider
+                    menuRow("Background", icon: "rectangle.on.rectangle", value: appearance.backgroundStyle.title) {
+                        ForEach(BackgroundStyle.allCases, id: \.self) { option in
+                            Button(option.title) { appearance.backgroundStyle = option }
                         }
                     }
 
                     if appearance.backgroundStyle == .customColor {
-                        labeledChips("Color", CustomBgColor.allCases.map(\.title), appearance.customBgColor.title) { title in
-                            if let c = CustomBgColor.allCases.first(where: { $0.title == title }) {
-                                appearance.customBgColor = c
-                            }
-                        }
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 10) {
-                                ForEach(CustomBgColor.allCases) { c in
-                                    Circle()
-                                        .fill(c.color)
-                                        .frame(width: 32, height: 32)
-                                        .overlay {
-                                            if appearance.customBgColor == c {
-                                                Circle().strokeBorder(.white, lineWidth: 2)
-                                            }
-                                        }
-                                        .onTapGesture { appearance.customBgColor = c }
-                                }
+                        divider
+                        menuRow("Color", icon: "circle.fill", value: appearance.customBgColor.title) {
+                            ForEach(CustomBgColor.allCases, id: \.self) { option in
+                                Button(option.title) { appearance.customBgColor = option }
                             }
                         }
                     }
 
                     if appearance.backgroundStyle == .customPhoto {
-                        VStack(alignment: .leading, spacing: 10) {
-                            if let img = appearance.customBackgroundImage {
-                                Image(uiImage: img)
+                        divider
+                        VStack(alignment: .leading, spacing: 12) {
+                            if let image = appearance.customBackgroundImage {
+                                Image(uiImage: image)
                                     .resizable()
                                     .scaledToFill()
-                                    .frame(height: 100)
+                                    .frame(height: 120)
+                                    .frame(maxWidth: .infinity)
                                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
-                            PhotosPicker(selection: $photoItem, matching: .images) {
-                                Label(
-                                    appearance.customBackgroundImage == nil ? "Choose photo" : "Change photo",
-                                    systemImage: "photo"
-                                )
-                                .font(.subheadline.weight(.semibold))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                            }
-                            .buttonStyle(.glass)
-                            if appearance.customBackgroundImage != nil {
-                                Button {
-                                    appearance.clearCustomPhoto()
-                                } label: {
-                                    Text("Remove photo")
-                                        .font(.subheadline.weight(.medium))
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 10)
+
+                            HStack {
+                                PhotosPicker(selection: $photoItem, matching: .images) {
+                                    Label(
+                                        appearance.customBackgroundImage == nil ? "Choose photo" : "Change photo",
+                                        systemImage: "photo"
+                                    )
+                                    .font(.subheadline.weight(.medium))
                                 }
                                 .buttonStyle(.glass)
+
+                                if appearance.customBackgroundImage != nil {
+                                    Button("Remove", role: .destructive) {
+                                        appearance.clearCustomPhoto()
+                                    }
+                                    .font(.subheadline.weight(.medium))
+                                }
                             }
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Dim overlay")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                                Slider(value: $appearance.backgroundDim, in: 0.15...0.85)
-                            }
+
+                            Slider(value: $appearance.backgroundDim, in: 0.15...0.85)
+                            Text("Background dim")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                         .onChange(of: photoItem) { _, item in
                             Task { @MainActor in
@@ -189,225 +117,368 @@ struct SettingsView: View {
                             }
                         }
                     }
-
-                    Text("Aurora · Still · Solid · Mesh · Dusk · Midnight, or pick a custom color / photo.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
 
-                category("Library") {
-                    labeledChips("Home layout", HubHomeLayout.allCases.map(\.title), appearance.hubLayout.title) { title in
-                        if let l = HubHomeLayout.allCases.first(where: { $0.title == title }) {
-                            appearance.hubLayout = l
+                settingsSection("GameHub") {
+                    menuRow("Home layout", icon: "square.grid.2x2", value: appearance.hubLayout.title) {
+                        ForEach(HubHomeLayout.allCases, id: \.self) { option in
+                            Button(option.title) { appearance.hubLayout = option }
                         }
                     }
-                    labeledChips("Game cards", GameCardStyle.allCases.map(\.title), appearance.cardStyle.title) { title in
-                        if let s = GameCardStyle.allCases.first(where: { $0.title == title }) {
-                            appearance.cardStyle = s
+                    divider
+                    menuRow("Game cards", icon: "rectangle.portrait", value: appearance.cardStyle.title) {
+                        ForEach(GameCardStyle.allCases, id: \.self) { option in
+                            Button(option.title) { appearance.cardStyle = option }
                         }
                     }
-                    labeledChips("Density", LibraryDensity.allCases.map(\.title), appearance.density.title) { title in
-                        if let d = LibraryDensity.allCases.first(where: { $0.title == title }) {
-                            appearance.density = d
+                    divider
+                    menuRow("Density", icon: "line.3.horizontal", value: appearance.density.title) {
+                        ForEach(LibraryDensity.allCases, id: \.self) { option in
+                            Button(option.title) { appearance.density = option }
                         }
                     }
-                    Toggle("Activity on home", isOn: $appearance.showActivityOnHome)
-                    Toggle("Genre filter row", isOn: $appearance.showGenreFilters)
+                    divider
+                    toggleRow("Activity on Home", icon: "chart.bar.xaxis", isOn: $appearance.showActivityOnHome)
+                    divider
+                    toggleRow("Genre filters", icon: "line.3.horizontal.decrease", isOn: $appearance.showGenreFilters)
                 }
 
-                category("Motion & effects") {
-                    labeledChips("Motion", AnimationIntensity.allCases.map(\.title), appearance.animationIntensity.title) { title in
-                        if let i = AnimationIntensity.allCases.first(where: { $0.title == title }) {
-                            appearance.animationIntensity = i
+                settingsSection("Playback") {
+                    settingRow(icon: "play.circle", title: "Continue") {
+                        if let game = session.continueGame {
+                            Text(game.title)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        } else {
+                            Text("No recent game")
+                                .foregroundStyle(.secondary)
                         }
                     }
-                    labeledChips("Effects", EffectsMode.allCases.map(\.title), appearance.effectsMode.title) { title in
-                        if let m = EffectsMode.allCases.first(where: { $0.title == title }) {
-                            appearance.effectsMode = m
-                        }
-                    }
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Glass intensity")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        Slider(value: $appearance.glassIntensity, in: 0.35...1.0)
-                    }
-                }
-
-                category("Sound") {
-                    Toggle("UI sounds", isOn: $appearance.uiSoundsEnabled)
-                }
-
-                category("Playback") {
-                    if let last = session.continueGame {
-                        Text(last.title)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    } else {
-                        Text("Play a game and Resume will appear here.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    Toggle("Resume last game on launch", isOn: $resumeOnOpen)
+                    divider
+                    toggleRow("Resume on launch", icon: "arrow.clockwise", isOn: $resumeOnOpen)
                         .onChange(of: resumeOnOpen) { _, value in session.resumeLastOnOpen = value }
-                    Toggle("Keep screen awake", isOn: $keepAwake)
+                    divider
+                    toggleRow("Keep screen awake", icon: "sun.max", isOn: $keepAwake)
                         .onChange(of: keepAwake) { _, value in session.keepScreenAwake = value }
+
                     if session.continueGame != nil {
+                        divider
                         Button {
                             _ = session.resumeLastStream()
                         } label: {
-                            Text(session.continueGame.map { "Resume \($0.title)" } ?? "Resume")
-                                .font(.subheadline.weight(.semibold))
-                                .lineLimit(1)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
+                            HStack {
+                                Label("Resume last game", systemImage: "play.fill")
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.vertical, 4)
                         }
-                        .buttonStyle(.glassProminent)
+                        .buttonStyle(.plain)
                     }
                 }
 
-                category("This week") {
-                    Text("\(PlayActivityStore.format(activity.weekTotal)) streamed on this device")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    if let top = activity.mostPlayedThisWeek {
-                        Text("Most played: \(top.title)")
+                settingsSection("Streaming") {
+                    menuRow("Resolution", icon: "rectangle.inset.filled", value: resolution) {
+                        ForEach(resolutions, id: \.self) { option in
+                            Button(option) {
+                                resolution = option
+                                session.applyStreamResolution(option)
+                            }
+                        }
+                    }
+                    divider
+                    menuRow("Region", icon: "globe", value: region) {
+                        ForEach(regions, id: \.self) { option in
+                            Button(option) {
+                                region = option
+                                session.applyServerRegion(option)
+                            }
+                        }
+                    }
+                }
+
+                settingsSection("Controller") {
+                    settingRow(
+                        icon: controller.isConnected ? "gamecontroller.fill" : "gamecontroller",
+                        title: "Status"
+                    ) {
+                        Text(controller.isConnected ? "Connected" : "Not connected")
+                            .foregroundStyle(controller.isConnected ? .green : .secondary)
+                    }
+                    divider
+                    toggleRow("Haptics", icon: "waveform.path", isOn: $appearance.controllerHapticsEnabled)
+                    divider
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Label("Rumble intensity", systemImage: "dot.radiowaves.left.and.right")
+                                .font(.subheadline)
+                            Spacer()
+                            Text(rumbleIntensityLabel)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(value: $appearance.controllerRumbleIntensity, in: 0.5...3.0, step: 0.1)
+                    }
+                    divider
+                    Button {
+                        ControllerManager.shared.start()
+                        ControllerRumble.shared.playTest()
+                        testPulseNote = controller.isConnected
+                            ? "Test pulse sent."
+                            : "Pulse sent. Wake the controller and try again if needed."
+                    } label: {
+                        HStack {
+                            Label("Test rumble", systemImage: "waveform.path.ecg")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .font(.subheadline.weight(.semibold))
+                    }
+                    .buttonStyle(.plain)
+
+                    if !testPulseNote.isEmpty {
+                        Text(testPulseNote)
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                            .padding(.top, 2)
                     }
                 }
 
-                category("Stream") {
-                    Text("Applied to Better xCloud and reloads the page.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    labeledChips("Resolution", resolutions, resolution) { opt in
-                        resolution = opt
-                        session.applyStreamResolution(opt)
+                settingsSection("Motion & Sound") {
+                    menuRow("Motion", icon: "figure.walk.motion", value: appearance.animationIntensity.title) {
+                        ForEach(AnimationIntensity.allCases, id: \.self) { option in
+                            Button(option.title) { appearance.animationIntensity = option }
+                        }
                     }
-                    labeledChips("Region", regions, region) { opt in
-                        region = opt
-                        session.applyServerRegion(opt)
+                    divider
+                    menuRow("Effects", icon: "sparkles", value: appearance.effectsMode.title) {
+                        ForEach(EffectsMode.allCases, id: \.self) { option in
+                            Button(option.title) { appearance.effectsMode = option }
+                        }
+                    }
+                    divider
+                    VStack(alignment: .leading, spacing: 9) {
+                        HStack {
+                            Label("Glass intensity", systemImage: "circle.hexagongrid.fill")
+                                .font(.subheadline)
+                            Spacer()
+                            Text("\(Int(appearance.glassIntensity * 100))%")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(value: $appearance.glassIntensity, in: 0.35...1.0)
+                    }
+                    divider
+                    toggleRow("UI sounds", icon: "speaker.wave.2", isOn: $appearance.uiSoundsEnabled)
+                }
+
+                settingsSection("Activity") {
+                    settingRow(icon: "chart.bar.fill", title: "This week") {
+                        Text(PlayActivityStore.format(activity.weekTotal))
+                            .foregroundStyle(.secondary)
+                    }
+                    if let top = activity.mostPlayedThisWeek {
+                        divider
+                        settingRow(icon: "trophy", title: "Most played") {
+                            Text(top.title)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
                     }
                 }
 
-                category("Actions") {
+                settingsSection("Maintenance") {
                     Button {
                         HapticManager.tap()
                         session.returnToHub()
                     } label: {
-                        Text("Open GameHub")
-                            .font(.subheadline.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
+                        actionRow("Open GameHub", icon: "square.grid.2x2.fill")
                     }
-                    .buttonStyle(.glassProminent)
+                    divider
                     Button {
                         HapticManager.tap()
                         session.clearCache()
                         SoundManager.playSuccess()
                     } label: {
-                        Text("Clear cache")
-                            .font(.subheadline.weight(.medium))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
+                        actionRow("Clear cache", icon: "trash")
                     }
-                    .buttonStyle(.glass)
+                    divider
                     Button {
                         HapticManager.tap()
                         session.refreshBetterXCloudScript()
                     } label: {
-                        Text("Refresh Better xCloud script")
-                            .font(.subheadline.weight(.medium))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
+                        actionRow("Refresh Better xCloud", icon: "arrow.clockwise")
                     }
-                    .buttonStyle(.glass)
+
                     if session.isSignedIn {
-                        Button { session.signOut() } label: {
-                            Text("Sign Out")
-                                .font(.subheadline.weight(.medium))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
+                        divider
+                        Button(role: .destructive) {
+                            session.signOut()
+                        } label: {
+                            actionRow("Sign Out", icon: "rectangle.portrait.and.arrow.right")
                         }
-                        .buttonStyle(.glass)
                     }
                 }
 
-                category("About") {
-                    Text("GameStream iOS \(appVersion) — native GameHub and Xbox Cloud client with Better xCloud.")
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("GameStream")
+                        .font(.headline)
+                    Text("Version \(appVersion) · Native GameHub + Xbox Cloud")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    HStack(spacing: 8) {
-                        Image(systemName: controller.isConnected ? "gamecontroller.fill" : "gamecontroller")
-                            .foregroundStyle(controller.isConnected ? .green : .secondary)
-                        Text(controller.isConnected ? "Controller connected" : "No controller")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Text("Made with \u{2665} by Bestin")
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.top, 4)
+                    Text(controller.isConnected ? "Controller connected" : "No controller connected")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
+                .padding(.horizontal, 4)
+                .padding(.bottom, 24)
             }
+            .frame(maxWidth: 680)
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, 20)
-            .padding(.bottom, 24)
+            .padding(.top, 10)
         }
-        .safeAreaPadding(.top, 12)
         .scrollIndicators(.hidden)
-        .onAppear {
-            keepAwake = session.keepScreenAwake
-            resumeOnOpen = session.resumeLastOnOpen
-            resolution = SessionStore.storedResolution
-            region = SessionStore.storedRegion
-            ControllerManager.shared.start()
-        }
+        .onAppear(perform: syncState)
         .onChange(of: isActive) { _, active in
-            guard active else { return }
-            keepAwake = session.keepScreenAwake
-            resumeOnOpen = session.resumeLastOnOpen
-            resolution = SessionStore.storedResolution
-            region = SessionStore.storedRegion
-            ControllerManager.shared.start()
+            if active { syncState() }
         }
     }
 
-    private func category<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.title3.weight(.bold))
-                .lineLimit(1)
-            content()
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-    }
-
-    private func labeledChips(_ label: String, _ options: [String], _ selected: String, onSelect: @escaping (String) -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label)
-                .font(.caption.weight(.semibold))
+    private var pageHeader: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("Settings")
+                .font(.system(size: 36, weight: .bold, design: .rounded))
+            Text("Tune GameStream to the way you play.")
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(options, id: \.self) { opt in
-                        Button { onSelect(opt) } label: {
-                            Text(opt)
-                                .font(.caption.weight(.semibold))
-                                .lineLimit(1)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                        }
-                        .modifier(HubChipStyle(selected: selected == opt))
-                        .accessibilityLabel(opt)
-                    }
-                }
+        }
+    }
+
+    @ViewBuilder
+    private func settingsSection<Content: View>(
+        _ title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text(title.uppercased())
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.secondary)
+                .tracking(0.5)
+                .padding(.horizontal, 4)
+
+            VStack(spacing: 0) {
+                content()
+            }
+            .padding(.horizontal, 15)
+            .padding(.vertical, 7)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 17, style: .continuous)
+                    .strokeBorder(.primary.opacity(0.07), lineWidth: 1)
             }
         }
+    }
+
+    private var divider: some View {
+        Divider()
+            .padding(.leading, 34)
+    }
+
+    private func settingRow<Accessory: View>(
+        icon: String,
+        title: String,
+        @ViewBuilder accessory: () -> Accessory
+    ) -> some View {
+        HStack(spacing: 11) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 22)
+
+            Text(title)
+                .font(.subheadline)
+
+            Spacer(minLength: 10)
+            accessory()
+                .font(.subheadline)
+        }
+        .frame(minHeight: 44)
+    }
+
+    private func toggleRow(_ title: String, icon: String, isOn: Binding<Bool>) -> some View {
+        HStack(spacing: 11) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 22)
+            Toggle(title, isOn: isOn)
+                .font(.subheadline)
+        }
+        .frame(minHeight: 44)
+    }
+
+    private func menuRow<MenuContent: View>(
+        _ title: String,
+        icon: String,
+        value: String,
+        @ViewBuilder menu: () -> MenuContent
+    ) -> some View {
+        Menu {
+            menu()
+        } label: {
+            HStack(spacing: 11) {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22)
+
+                Text(title)
+                    .font(.subheadline)
+
+                Spacer(minLength: 10)
+
+                Text(value)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func actionRow(_ title: String, icon: String) -> some View {
+        HStack(spacing: 11) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 22)
+            Text(title)
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.tertiary)
+        }
+        .frame(minHeight: 44)
+        .font(.subheadline.weight(.medium))
+    }
+
+    private func syncState() {
+        keepAwake = session.keepScreenAwake
+        resumeOnOpen = session.resumeLastOnOpen
+        resolution = SessionStore.storedResolution
+        region = SessionStore.storedRegion
+        ControllerManager.shared.start()
     }
 }
