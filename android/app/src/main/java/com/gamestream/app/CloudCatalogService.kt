@@ -15,10 +15,13 @@ object CloudCatalogService {
     private const val CACHE = "xcloud-catalog-v2.json"
     @Volatile private var started = false
 
-    fun refreshIfNeeded(context: Context) {
+    fun refreshIfNeeded(context: Context, onReady: (() -> Unit)? = null) {
         if (started) return
         started = true
-        loadCache(context)?.takeIf { it.size >= 20 }?.let { GameCatalog.installLiveCatalog(it) }
+        loadCache(context)?.takeIf { it.size >= 20 }?.let {
+            GameCatalog.installLiveCatalog(it)
+            onReady?.invoke()
+        }
     }
 
     suspend fun fetchAndInstall(context: Context) = withContext(Dispatchers.IO) {
@@ -29,9 +32,11 @@ object CloudCatalogService {
                 saveCache(context, remote)
                 withContext(Dispatchers.Main) {
                     GameCatalog.installLiveCatalog(remote)
+                    onReady?.invoke()
                 }
             }
         } catch (_: Exception) {
+            withContext(Dispatchers.Main) { onReady?.invoke() }
         }
     }
 
