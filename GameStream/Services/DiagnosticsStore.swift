@@ -135,6 +135,7 @@ final class DiagnosticsStore: ObservableObject {
             "duration_ms": durationMs as Any,
             "game_id": gameId as Any,
             "error_category": errorCategory as Any,
+            "error_code": errorCode as Any,
             "screen_width": Double(screen.width),
             "screen_height": Double(screen.height)
         ].compactMapValues { value -> Any? in
