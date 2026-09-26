@@ -28,7 +28,7 @@ struct FeaturedGameCard: View {
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(.ultraThinMaterial, in: Capsule())
+                    .glassEffect(.regular, in: Capsule())
                     .lineLimit(1)
 
                 Text(game.title)
@@ -94,11 +94,11 @@ struct GamePosterCard: View {
                     Image(systemName: isFavorite ? "star.fill" : "star")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(isFavorite ? .yellow : .primary)
-                        .padding(8)
-                        .background(.ultraThinMaterial, in: Circle())
+                        .frame(width: 44, height: 44)
+                        .glassEffect(.regular.interactive(), in: Circle())
                 }
                 .buttonStyle(.plain)
-                .padding(10)
+                .padding(8)
             }
 
             VStack(alignment: .leading, spacing: 4) {
