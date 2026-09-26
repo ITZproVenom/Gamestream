@@ -5,16 +5,22 @@ options:
     iOS: "26.0"
   xcodeVersion: "26"
 
-# No SPM packages — native GameHub + Better xCloud service layer
-
 targets:
   GameStream:
     type: application
     platform: iOS
     sources:
-      - path: GameStream
-        excludes:
-          - "Resources/**"
+      - path: GameStream/GameStreamApp.swift
+      - path: GameStream/Fresh
+      - path: GameStream/Services/SessionStore.swift
+      - path: GameStream/Services/MicrosoftAuth.swift
+      - path: GameStream/Services/BetterXCloudInjector.swift
+      - path: GameStream/Services/ControllerRumble.swift
+      - path: GameStream/Services/HapticManager.swift
+      - path: GameStream/Services/SoundManager.swift
+      - path: GameStream/Services/EmbeddedSounds.swift
+      - path: GameStream/Views/SignInWebView.swift
+      - path: GameStream/Views/StreamPlayerView.swift
     resources:
       - path: GameStream/Assets.xcassets
       - path: GameStream/Resources
