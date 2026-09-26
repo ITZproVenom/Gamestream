@@ -226,6 +226,24 @@ struct XboxCloudWebView: UIViewRepresentable {
         } catch (e) {}
 
         try {
+            // Hook RTCDataChannel listeners directly as a second path. This catches
+            // input channels created by the remote peer even when the page's
+            // RTCPeerConnection datachannel event plumbing is wrapped by xCloud.
+            var dcProto = window.RTCDataChannel && RTCDataChannel.prototype;
+            if (dcProto && dcProto.addEventListener) {
+                var nativeDCAdd = dcProto.addEventListener;
+                dcProto.addEventListener = function(type, listener, options) {
+                    if (type === 'message') {
+                        try {
+                            if (this && this.label === 'input') hookInputChannel(this, 'channel.addEventListener');
+                        } catch (e) {}
+                    }
+                    return nativeDCAdd.call(this, type, listener, options);
+                };
+            }
+        } catch (e) {}
+
+        try {
             var pcProto = window.RTCPeerConnection && RTCPeerConnection.prototype;
             if (pcProto && pcProto.addEventListener) {
                 var nativeAdd = pcProto.addEventListener;
