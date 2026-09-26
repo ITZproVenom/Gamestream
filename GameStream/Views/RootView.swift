@@ -254,7 +254,7 @@ struct RootView: View {
                     )
                     .glassEffectID("selected-tab", in: tabGlassNamespace)
                     .overlay {
-                        sliderLabel(visibleTab)
+                        sliderLabel(visibleTab, active: true)
                     }
                     .position(x: thumbCenter, y: 31)
                     .allowsHitTesting(false)
@@ -279,7 +279,7 @@ struct RootView: View {
         .frame(height: 62)
     }
 
-    private func sliderLabel(_ tab: Tab) -> some View {
+    private func sliderLabel(_ tab: Tab, active: Bool) -> some View {
         VStack(spacing: 3) {
             Image(systemName: tab.icon)
                 .font(.system(size: 17, weight: .semibold))
@@ -290,7 +290,7 @@ struct RootView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
         }
-        .foregroundStyle(tab == selectedTab ? .primary : .secondary)
+        .foregroundStyle(active ? .primary : .secondary)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
     }
