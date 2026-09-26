@@ -100,7 +100,7 @@ struct GamePosterCard: View {
                     Image(systemName: isFavorite ? "star.fill" : "star")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(isFavorite ? .yellow : .white)
-                        .padding(8)
+                        .frame(width: 44, height: 44)
                         .glassEffect(.regular, in: Circle())
                 }
                 .buttonStyle(.plain)
