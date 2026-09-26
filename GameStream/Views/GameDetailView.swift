@@ -199,7 +199,6 @@ struct GameDetailView: View {
                 }
             }
 
-            .accessibilityLabel("Open \(game.title) on Xbox Cloud")
         }
     }
 
