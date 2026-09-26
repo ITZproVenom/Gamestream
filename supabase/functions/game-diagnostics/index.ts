@@ -1,12 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 /**
- * game-diagnostics — production Edge Function (v4)
+ * game-diagnostics — production Edge Function (v7)
  *
  * Project: fswswvhpszebuxnloysy
- * Table: public.diagnostics (uuid PK, device columns, jsonb payload,
- *        session_id, duration_ms, game_id, error_category, error_code)
- * Auth: verify_jwt=true; service_role used only server-side for inserts.
+ * Table: public.diagnostics
+ * Auth: verify_jwt=true; service_role server-side only.
  * Client: GameStream iOS DiagnosticsStore (anon JWT only).
  */
 
@@ -43,6 +42,19 @@ function numOrNull(value: unknown): number | null {
   return null;
 }
 
+/** Parse ISO-8601 / common date strings into ISO for timestamptz columns. */
+function tsOrNull(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return new Date(value).toISOString();
+  }
+  const s = String(value).trim();
+  if (!s) return null;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
 function normalizeEvent(event: Record<string, unknown>, body: Record<string, unknown>) {
   const rawType = event.event_type ?? event.event ?? event.type ?? "diagnostic";
   const eventType = String(rawType);
@@ -56,7 +68,7 @@ function normalizeEvent(event: Record<string, unknown>, body: Record<string, unk
   const payload =
     event.props || event.properties
       ? {
-          ts: event.ts ?? null,
+          ts: event.ts ?? event.event_at ?? null,
           event: event.event ?? safeType,
           event_id: event.event_id ?? null,
           session_id: event.session_id ?? null,
@@ -65,6 +77,7 @@ function normalizeEvent(event: Record<string, unknown>, body: Record<string, unk
           build: event.build ?? body.build_number ?? null,
           platform: event.platform ?? body.platform ?? "ios",
           feature: event.feature ?? null,
+          game_title: event.game_title ?? props.game_title ?? null,
         }
       : event.payload && typeof event.payload === "object"
         ? event.payload
@@ -83,6 +96,10 @@ function normalizeEvent(event: Record<string, unknown>, body: Record<string, unk
     event_type: safeType,
     feature: cleanString(event.feature ?? body.feature, 128),
     session_id: cleanString(event.session_id ?? props.session_id, 64),
+    event_id: cleanString(event.event_id, 64),
+    event_at: tsOrNull(event.event_at ?? event.ts),
+    platform: cleanString(event.platform ?? body.platform ?? "ios", 32),
+    game_title: cleanString(event.game_title ?? props.game_title, 128),
     duration_ms: numOrNull(event.duration_ms ?? props.duration_ms),
     game_id: cleanString(event.game_id ?? props.game_id, 64),
     error_category: cleanString(event.error_category ?? props.error_category, 64),
