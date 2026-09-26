@@ -22,7 +22,13 @@ enum CloudCatalogService {
     }
 
     private static func fetchRemoteProgressive() async throws {
-        let (data, _) = try await URLSession.shared.data(from: siglURL)
+        var request = URLRequest(url: siglURL)
+        request.timeoutInterval = 15
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
         let ids = parseIds(from: data)
         guard ids.count >= 20 else { return }
 
@@ -84,7 +90,13 @@ enum CloudCatalogService {
         guard let url = URL(string: "https://displaycatalog.mp.microsoft.com/v7.0/products?bigIds=\(joined)&market=US&languages=en-us&MS-CV=GS.1") else {
             return []
         }
-        let (data, _) = try await URLSession.shared.data(from: url)
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 15
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
         guard
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
             let products = json["Products"] as? [[String: Any]]
