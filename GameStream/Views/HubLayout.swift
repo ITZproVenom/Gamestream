@@ -28,7 +28,7 @@ struct HubPage<Content: View>: View {
                 .frame(width: contentWidth, alignment: .leading)
                 .padding(.horizontal, horizontalPadding)
                 .padding(.top, 12)
-                .padding(.bottom, 110)
+                .safeAreaPadding(.bottom, 18)
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
