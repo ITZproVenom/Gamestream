@@ -1,3 +1,4 @@
+import CryptoKit
 import SwiftUI
 import UIKit
 
@@ -685,6 +686,7 @@ struct FreshSettingsView: View {
                 titleVisibility: .visible
             ) {
                 Button("Reload catalog", role: .destructive) {
+                    FreshPosterCache.shared.clear()
                     catalog.refresh()
                 }
                 Button("Cancel", role: .cancel) {}
