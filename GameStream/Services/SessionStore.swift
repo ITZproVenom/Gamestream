@@ -308,7 +308,6 @@ final class SessionStore: ObservableObject {
         URLCache.shared.removeAllCachedResponses()
         CloudCatalogService.clearDiskCache()
         ArtworkStore.shared.clear()
-        RemoteImageLoader.shared.clear()
         BetterXCloudInjector.shared.invalidateCache()
         UserDefaults.standard.removeObject(forKey: "BetterXCloud.Script.v2")
         UserDefaults.standard.removeObject(forKey: "BetterXCloud.Script.Date.v2")
