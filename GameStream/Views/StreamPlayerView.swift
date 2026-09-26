@@ -87,12 +87,15 @@ struct XboxCloudWebView: UIViewRepresentable {
         if (window.__gsRumbleBridgeV2) return;
         window.__gsRumbleBridgeV2 = true;
 
+        var lastPacketRumbleAt = 0;
+
         function send(weak, strong, duration, index) {
             try {
                 var w = Math.max(0, Math.min(1, Number(weak) || 0));
                 var s = Math.max(0, Math.min(1, Number(strong) || 0));
                 var d = Math.max(0, Math.min(2500, Number(duration) || 0));
                 if (w === 0 && s === 0) return;
+                lastPacketRumbleAt = performance.now();
                 window.webkit.messageHandlers.gamestreamBridge.postMessage({
                     type: "rumble",
                     weak: w,
@@ -231,6 +234,12 @@ struct XboxCloudWebView: UIViewRepresentable {
                         if (typeof pattern === "number") duration = pattern;
                         else if (pattern && pattern.length) duration = Number(pattern[0]) || 80;
                     } catch (e) {}
+                    // DeviceVibrationManager calls navigator.vibrate immediately
+                    // after parsing the same WebRTC packet. Suppress that duplicate
+                    // path when the packet bridge already delivered exact motor data.
+                    if (performance.now() - lastPacketRumbleAt < 500) {
+                        return true;
+                    }
                     send(0.65, 0.85, duration, 0);
                     return true;
                 };
