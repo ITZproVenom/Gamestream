@@ -1,18 +1,6 @@
 {
   "images": [
     {
-      "filename": "fiona.g@example.net",
-      "idiom": "iphone",
-      "scale": "2x",
-      "size": "20x20"
-    },
-    {
-      "filename": "carlos.r@example.net",
-      "idiom": "iphone",
-      "scale": "3x",
-      "size": "20x20"
-    },
-    {
       "filename": "icon-60@2x.png",
       "idiom": "iphone",
       "scale": "2x",
