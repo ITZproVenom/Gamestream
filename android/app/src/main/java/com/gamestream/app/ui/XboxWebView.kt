@@ -99,7 +99,7 @@ fun XboxWebView(
             webView.onPause()
             webView.removeJavascriptInterface("GameStreamBridge")
             webView.webChromeClient = null
-            webView.webViewClient = null
+            webView.stopLoading()
             webView.destroy()
         }
     }
