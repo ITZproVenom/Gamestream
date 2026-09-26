@@ -6,7 +6,7 @@ struct RootView: View {
     @ObservedObject private var hub = HubState.shared
     @ObservedObject private var controller = ControllerManager.shared
     @State private var selectedTab: Tab = RootView.restoredTab()
-    @State private var tabDragOffset: CGFloat = 0
+    @State private var tabSliderProgress: CGFloat?
     @Namespace private var tabGlassNamespace
 
     enum Tab: String, CaseIterable, Hashable {
@@ -205,52 +205,58 @@ struct RootView: View {
         return .library
     }
 
-    // MARK: - Liquid Glass tab switcher (tap + slide on bar)
+    // MARK: - Liquid Glass navigation slider
 
     private var glassNavigation: some View {
         GeometryReader { geo in
             let width = max(geo.size.width, 1)
-            let horizontalInset: CGFloat = 6
-            let trackWidth = max(width - (horizontalInset * 2), 1)
-            let thumbWidth = max(min(trackWidth / tabCount, 116), 92)
+            let inset: CGFloat = 6
+            let trackWidth = max(width - inset * 2, 1)
+            let thumbWidth = max(min(trackWidth / tabCount, 116), 94)
             let usable = max(trackWidth - thumbWidth, 1)
-            let selectedX = horizontalInset + (thumbWidth / 2) + (usable * CGFloat(selectedTab.index) / max(tabCount - 1, 1))
+            let selectedProgress = CGFloat(selectedTab.index) / max(tabCount - 1, 1)
+            let progress = min(max(tabSliderProgress ?? selectedProgress, 0), 1)
+            let thumbCenter = inset + thumbWidth / 2 + usable * progress
+            let visibleIndex = min(
+                max(Int((progress * CGFloat(Tab.allCases.count - 1)).rounded()), 0),
+                Tab.allCases.count - 1
+            )
+            let visibleTab = Tab.allCases[visibleIndex]
 
             ZStack(alignment: .leading) {
-                // A single native Liquid Glass track. The control is a slider,
-                // not three independent buttons.
                 Capsule()
                     .fill(.clear)
                     .glassEffect(.regular, in: Capsule())
 
                 HStack(spacing: 0) {
-                    ForEach(Tab.allCases, id: \.self) { tab in
-                        VStack(spacing: 3) {
-                            Image(systemName: tab.icon)
-                                .font(.system(size: 17, weight: .semibold))
-                                .symbolRenderingMode(.hierarchical)
-                            Text(tab.rawValue)
-                                .font(.system(size: 10, weight: .semibold))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.75)
+                    ForEach(Tab.allCases) { tab in
+                        if tab != visibleTab {
+                            sliderLabel(tab)
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Color.clear
+                                .frame(maxWidth: .infinity)
                         }
-                        .foregroundStyle(selectedTab == tab ? .primary : .secondary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .contentShape(Rectangle())
                     }
                 }
-                .padding(.horizontal, 4)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 6)
+                .allowsHitTesting(false)
 
                 Capsule()
                     .fill(.clear)
                     .frame(width: thumbWidth, height: 52)
-                    .glassEffect(.regular.tint(Color.accentColor.opacity(0.24)).interactive(), in: Capsule())
+                    .glassEffect(
+                        .regular
+                            .tint(Color.accentColor.opacity(0.25))
+                            .interactive(),
+                        in: Capsule()
+                    )
                     .glassEffectID("selected-tab", in: tabGlassNamespace)
                     .overlay {
-                        Capsule()
-                            .strokeBorder(.white.opacity(0.16), lineWidth: 0.5)
+                        sliderLabel(visibleTab)
                     }
-                    .position(x: selectedX, y: 31)
+                    .position(x: thumbCenter, y: 31)
                     .allowsHitTesting(false)
             }
             .frame(width: width, height: 62)
@@ -258,7 +264,7 @@ struct RootView: View {
             .gesture(tabSliderGesture(trackWidth: trackWidth, thumbWidth: thumbWidth))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Navigation")
-            .accessibilityValue(selectedTab.rawValue)
+            .accessibilityValue(visibleTab.rawValue)
             .accessibilityAdjustableAction { direction in
                 switch direction {
                 case .increment:
@@ -273,30 +279,10 @@ struct RootView: View {
         .frame(height: 62)
     }
 
-    private func tabSliderGesture(trackWidth: CGFloat, thumbWidth: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 0, coordinateSpace: .local)
-            .onChanged { value in
-                let usable = max(trackWidth - thumbWidth, 1)
-                let clamped = min(max(value.location.x - (thumbWidth / 2), 0), usable)
-                tabDragOffset = clamped
-            }
-            .onEnded { value in
-                let usable = max(trackWidth - thumbWidth, 1)
-                let clamped = min(max(value.location.x - (thumbWidth / 2), 0), usable)
-                let fraction = clamped / usable
-                let index = Int((fraction * CGFloat(Tab.allCases.count - 1)).rounded())
-                tabDragOffset = 0
-                let next = Tab.allCases[min(max(index, 0), Tab.allCases.count - 1)]
-                if next != selectedTab {
-                    selectTab(next)
-                }
-            }
-    }
-
-    private func tabLabel(_ tab: Tab) -> some View {
+    private func sliderLabel(_ tab: Tab) -> some View {
         VStack(spacing: 3) {
             Image(systemName: tab.icon)
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: 17, weight: .semibold))
                 .symbolRenderingMode(.hierarchical)
 
             Text(tab.rawValue)
@@ -304,27 +290,29 @@ struct RootView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
         }
-        .foregroundStyle(selectedTab == tab ? .primary : .secondary)
+        .foregroundStyle(tab == selectedTab ? .primary : .secondary)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .contentShape(Capsule())
+        .contentShape(Rectangle())
     }
 
-    private func tabDragGesture(slotWidth: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 6, coordinateSpace: .local)
+    private func tabSliderGesture(trackWidth: CGFloat, thumbWidth: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .local)
             .onChanged { value in
-                guard abs(value.translation.width) > abs(value.translation.height) * 0.6 else { return }
-                tabDragOffset = value.translation.width
+                let usable = max(trackWidth - thumbWidth, 1)
+                let thumbLeft = min(max(value.location.x - thumbWidth / 2, 0), usable)
+                tabSliderProgress = thumbLeft / usable
             }
             .onEnded { value in
-                let predicted = value.predictedEndTranslation.width
-                let delta = Int((predicted / max(slotWidth, 1)).rounded())
-                let all = Tab.allCases
-                let current = selectedTab.index
-                let nextIndex = min(max(current + delta, 0), all.count - 1)
-                tabDragOffset = 0
-                if nextIndex != current {
-                    selectTab(all[nextIndex])
+                let usable = max(trackWidth - thumbWidth, 1)
+                let thumbLeft = min(max(value.location.x - thumbWidth / 2, 0), usable)
+                let fraction = thumbLeft / usable
+                let index = Int((fraction * CGFloat(Tab.allCases.count - 1)).rounded())
+                tabSliderProgress = nil
+                let next = Tab.allCases[min(max(index, 0), Tab.allCases.count - 1)]
+                if next != selectedTab {
+                    selectTab(next)
                 }
             }
     }
+
 }
