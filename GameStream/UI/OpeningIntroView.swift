@@ -11,7 +11,8 @@ final class OpeningIntroSound {
         do {
             let session = AVAudioSession.sharedInstance()
             try? session.setCategory(.ambient, options: [.mixWithOthers])
-            try? session.setActive(true)
+            // Do not activate the audio session during app bootstrap. Some iOS audio routes
+            // can reject activation while another app/session is transitioning.
             player = try AVAudioPlayer(data: Self.makeWAV())
             player?.volume = 0.72
             player?.prepareToPlay()
@@ -96,7 +97,11 @@ struct OpeningIntroView: View {
         }
         .opacity(visible ? 1 : 0)
         .onAppear {
-            OpeningIntroSound.shared.play()
+            // Audio is decorative. Start it after the first frame so a sound-route
+            // problem can never block the initial SwiftUI render.
+            DispatchQueue.main.async {
+                OpeningIntroSound.shared.play()
+            }
             withAnimation(.easeOut(duration: 0.55)) {
                 visible = true; scale = 1; titleOpacity = 1
             }
