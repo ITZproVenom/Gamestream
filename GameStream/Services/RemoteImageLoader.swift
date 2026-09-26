@@ -20,6 +20,9 @@ final class RemoteImageLoader: ObservableObject {
     @Published private(set) var revision = 0
 
     private static let diskDirectoryName = "GameStreamArtwork"
+    private static let maxDiskBytes: UInt64 = 160 * 1024 * 1024
+    private static let maxDiskFiles = 300
+    private static let diskLock = NSLock()
     private let fileManager = FileManager.default
 
     private var diskDirectory: URL? {
@@ -91,11 +94,11 @@ final class RemoteImageLoader: ObservableObject {
     }
 
     nonisolated private static func loadDiskImage(url: URL, directory: URL?) async -> UIImage? {
-        guard let path = diskURL(for: url, directory: directory),
-              let data = try? Data(contentsOf: path),
-              let image = UIImage(data: data) else {
-            return nil
-        }
+        guard let path = diskURL(for: url, directory: directory) else { return nil }
+        diskLock.lock()
+        let data = try? Data(contentsOf: path)
+        diskLock.unlock()
+        guard let data, let image = UIImage(data: data) else { return nil }
         return image
     }
 
@@ -105,8 +108,41 @@ final class RemoteImageLoader: ObservableObject {
               let data = image.jpegData(compressionQuality: 0.86) else {
             return
         }
+        diskLock.lock()
+        defer { diskLock.unlock() }
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try? data.write(to: path, options: .atomic)
+        pruneDiskCache(in: directory)
+    }
+
+    nonisolated private static func pruneDiskCache(in directory: URL) {
+        let fm = FileManager.default
+        guard let urls = try? fm.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else { return }
+
+        var entries: [(url: URL, size: UInt64, date: Date)] = []
+        entries.reserveCapacity(urls.count)
+
+        for url in urls {
+            guard let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]),
+                  let size = values.fileSize.map(UInt64.init),
+                  let date = values.contentModificationDate else {
+                continue
+            }
+            entries.append((url, size, date))
+        }
+
+        var total = entries.reduce(UInt64(0)) { $0 + $1.size }
+        var sorted = entries.sorted { $0.date < $1.date }
+
+        while (total > maxDiskBytes || sorted.count > maxDiskFiles), !sorted.isEmpty {
+            let victim = sorted.removeFirst()
+            try? fm.removeItem(at: victim.url)
+            total = total > victim.size ? total - victim.size : 0
+        }
     }
 
     nonisolated private static func image(for url: URL) async -> UIImage? {
@@ -115,7 +151,10 @@ final class RemoteImageLoader: ObservableObject {
     }
 
     nonisolated private static func data(for url: URL) async -> Data? {
-        (try? await URLSession.shared.data(from: url))?.0
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 12
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        return (try? await URLSession.shared.data(for: request))?.0
     }
 
     /// ImageIO thumbnail: decodes to ~720px instead of the poster's full size.
