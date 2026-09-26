@@ -72,10 +72,10 @@ struct StreamPlayerView: View {
             isLoading = false
         }
         .onAppear {
-            ControllerRumble.shared.start()
+            ExperimentalControllerInput.shared.start()
         }
         .onDisappear {
-            ControllerRumble.shared.teardown()
+            ExperimentalControllerInput.shared.stop()
         }
     }
 }
@@ -504,12 +504,15 @@ struct XboxCloudWebView: UIViewRepresentable {
                 let rightTrigger = floatValue(body["rightTriggerMotorPercent"])
                 let duration = firstDouble(body["durationMs"], body["duration"], fallback: 80)
                 Task { @MainActor in
-                    ControllerRumble.shared.play(
-                        leftMotorPercent: left,
-                        rightMotorPercent: right,
-                        leftTriggerMotorPercent: leftTrigger,
-                        rightTriggerMotorPercent: rightTrigger,
-                        durationMs: duration
+                    ExperimentalControllerInput.shared.playRumble(
+                        ControllerRumbleEvent(
+                            controllerID: Int(body["gamepadIndex"] as? Int ?? 0),
+                            lowFrequency: left,
+                            highFrequency: right,
+                            leftTrigger: leftTrigger,
+                            rightTrigger: rightTrigger,
+                            durationMs: duration
+                        )
                     )
                 }
             case "rumbleLog":
