@@ -97,7 +97,7 @@ jobs:
           echo "Sound pack generation disabled for crash isolation"
 
       - name: Verify Resources on disk
-        if: ${{ github.event.inputs.bundle_injection == 'full' }}
+        if: ${{ github.event_name == 'push' || github.event.inputs.bundle_injection == 'full' }}
         run: |
           set -euo pipefail
           echo "Resources tree:"
@@ -149,7 +149,7 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO
 
       - name: Inject Resources into app bundle
-        if: ${{ github.event.inputs.bundle_injection == 'full' }}
+        if: ${{ github.event_name == 'push' || github.event.inputs.bundle_injection == 'full' }}
         run: |
           set -euo pipefail
           APP="build/GameStream.xcarchive/Products/Applications/GameStream.app"
