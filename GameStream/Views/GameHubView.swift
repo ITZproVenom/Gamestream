@@ -101,9 +101,24 @@ struct GameHubView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
-            let firstScreen = GameCatalog.featured.map(\.id)
-                + Array(GameCatalog.sortedBrowse.prefix(24)).map(\.id)
-            artwork.prefetch(Array(Set(firstScreen)))
+            let firstScreen = Array(
+                Set(
+                    GameCatalog.featured.map(\.id)
+                    + GameCatalog.sortedBrowse.prefix(16).map(\.id)
+                )
+            )
+            artwork.prefetch(firstScreen)
+
+            // Warm the image cache for the first screen so posters are already
+            // decoded when their cards scroll into view.
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 120_000_000)
+                for id in firstScreen {
+                    if let url = artwork.url(for: id) {
+                        RemoteImageLoader.shared.request(url)
+                    }
+                }
+            }
         }
         .onChange(of: nav.token) { _, _ in
             if let action = nav.action { handleGridNav(action) }
