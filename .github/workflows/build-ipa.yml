@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       bundle_injection:
-        description: "Inject bundled resources/icons into the .app (default 'none' == last-working 2a31e1f packaging; 'full' reproduces the crash-era d31852d packaging for diagnosis)"
+        description: "Inject the bundled Better xCloud script and app icons into the .app"
         type: choice
         options: ["full", "none"]
         default: "full"
