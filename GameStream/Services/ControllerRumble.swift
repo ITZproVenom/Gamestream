@@ -2,322 +2,149 @@ import Foundation
 import GameController
 import CoreHaptics
 
-/// Native controller rumble bridge for Xbox / MFi / supported Bluetooth controllers.
-///
-/// The web player sends standard weak/strong magnitudes through XboxCloudWebView.
-/// This class translates those requests into Core Haptics on the controller's
-/// actual handle actuators instead of relying on a generic/default locality.
-///
-/// Crash isolation:
-/// - No controller or haptic engine is touched at process launch.
-/// - Engines are created lazily on the first rumble request.
-/// - Controller disconnects/reset are handled by rebuilding the engines.
-/// - Every hardware/API failure is best-effort and swallowed.
 @MainActor
 final class ControllerRumble {
     static let shared = ControllerRumble()
 
-    private static let intensityKey = "GameStream.controllerRumbleIntensity"
-    private static let enabledKey = "GameStream.controllerHapticsEnabled"
-
-    /// Software gain before the user's intensity setting.
-    private let baseGain: Float = 2.4
-    private let minimumOutput: Float = 0.16
+    private enum Defaults {
+        static let enabled = "GameStream.controllerHapticsEnabled"
+        static let intensity = "GameStream.controllerRumbleIntensity"
+    }
 
     private var leftEngine: CHHapticEngine?
     private var rightEngine: CHHapticEngine?
+    private var handlesEngine: CHHapticEngine?
     private var defaultEngine: CHHapticEngine?
     private var controllerID: ObjectIdentifier?
-    private var leftSupported = false
-    private var rightSupported = false
-    private var defaultSupported = false
-    private var stopWorkItem: DispatchWorkItem?
+    private var leftAvailable = false
+    private var rightAvailable = false
+    private var handlesAvailable = false
+    private var defaultAvailable = false
+    private var generation = 0
 
-    private init() {}
-
-    private var userIntensity: Float {
-        let stored = UserDefaults.standard.object(forKey: Self.intensityKey) as? Double
-        return min(max(Float(stored ?? 1.6), 0.5), 3.0)
+    private init() {
+        NotificationCenter.default.addObserver(forName: .GCControllerDidConnect, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.invalidateEngines() }
+        }
+        NotificationCenter.default.addObserver(forName: .GCControllerDidDisconnect, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.invalidateEngines() }
+        }
     }
 
-    private var isEnabled: Bool {
-        if UserDefaults.standard.object(forKey: Self.enabledKey) == nil { return true }
-        return UserDefaults.standard.bool(forKey: Self.enabledKey)
+    deinit { NotificationCenter.default.removeObserver(self) }
+
+    var isEnabled: Bool {
+        if UserDefaults.standard.object(forKey: Defaults.enabled) == nil { return true }
+        return UserDefaults.standard.bool(forKey: Defaults.enabled)
     }
 
-    /// Plays a dual-handle rumble. The weak/strong values are intentionally
-    /// mapped to left/right handle energy so both physical handle actuators
-    /// receive output on controllers that expose separate handle haptics.
+    var connectedControllerName: String? { activeController()?.vendorName }
+
+    var supportsRumble: Bool { activeController()?.haptics != nil }
+
     func play(weak: Float, strong: Float, durationMs: Double, force: Bool = false) {
         guard force || isEnabled else { return }
-
-        let weakValue = boosted(weak)
-        let strongValue = boosted(strong)
-
-        guard weakValue > 0 || strongValue > 0 else {
-            stop()
-            return
-        }
-
+        let left = scale(weak)
+        let right = scale(strong)
+        guard left > 0 || right > 0, prepare() else { return }
+        let duration = min(max(durationMs / 1000, 0.025), 2.5)
         do {
-            try ensureEngines()
-
-            let duration = min(max(durationMs / 1000.0, 0.025), 2.5)
             var played = false
-
-            if leftSupported, let leftEngine {
-                played = try play(on: leftEngine, intensity: weakValue, duration: duration) || played
-            }
-
-            if rightSupported, let rightEngine {
-                played = try play(on: rightEngine, intensity: strongValue, duration: duration) || played
-            }
-
-            // Some controllers expose only the combined handle locality.
-            // Fall back to the strongest signal instead of silently dropping
-            // rumble altogether.
+            if leftAvailable, let engine = leftEngine { played = try play(engine, intensity: left, duration: duration) || played }
+            if rightAvailable, let engine = rightEngine { played = try play(engine, intensity: right, duration: duration) || played }
             if !played {
-                try playCombinedFallback(weak: weakValue, strong: strongValue, duration: duration)
+                let intensity = max(left, right)
+                if handlesAvailable, let engine = handlesEngine { played = try play(engine, intensity: intensity, duration: duration) || played }
+                if !played, defaultAvailable, let engine = defaultEngine { _ = try play(engine, intensity: intensity, duration: duration) }
             }
-
-            scheduleStop(after: duration)
         } catch {
-            teardownEngines()
+            invalidateEngines()
         }
     }
 
-    /// Full rumble test: left handle, then right handle, then both.
-    /// Useful for confirming that a controller exposes independent handle haptics.
+    func testLeft() { testChannel(left: true, right: false) }
+    func testRight() { testChannel(left: false, right: true) }
+
     func playTest() {
         testLeft()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) { [weak self] in
-            Task { @MainActor in self?.testRight() }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.30) { [weak self] in
-            Task { @MainActor in self?.play(weak: 1.0, strong: 1.0, durationMs: 320, force: true) }
-        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) { [weak self] in Task { @MainActor in self?.testRight() } }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.3) { [weak self] in Task { @MainActor in self?.play(weak: 1, strong: 1, durationMs: 350, force: true) } }
     }
 
-    func testLeft() {
-        playHandle(left: true, right: false, intensity: 1.0, durationMs: 420)
-    }
+    func teardown() { invalidateEngines() }
 
-    func testRight() {
-        playHandle(left: false, right: true, intensity: 1.0, durationMs: 420)
-    }
-
-    private func playHandle(left: Bool, right: Bool, intensity: Float, durationMs: Double) {
-        guard isEnabled || true else { return }
-        do {
-            try ensureEngines()
-            let duration = min(max(durationMs / 1000.0, 0.025), 2.5)
-            if left, leftSupported, let engine = leftEngine {
-                _ = try play(on: engine, intensity: boosted(intensity), duration: duration)
-            }
-            if right, rightSupported, let engine = rightEngine {
-                _ = try play(on: engine, intensity: boosted(intensity), duration: duration)
-            }
-        } catch {
-            teardownEngines()
-        }
-    }
-
-    func stop() {
-        stopWorkItem?.cancel()
-        stopWorkItem = nil
-        // Stopping the engine is intentionally avoided for every shot. The
-        // controller haptic engine is kept warm so rapid COD gunfire does not
-        // pay an engine restart penalty.
-    }
-
-    func teardown() {
-        stop()
-        teardownEngines()
-    }
-
-    private func boosted(_ value: Float) -> Float {
-        let raw = min(max(value, 0), 1)
-        guard raw > 0.005 else { return 0 }
-        let scaled = min(raw * baseGain * userIntensity, 1)
-        return max(scaled, minimumOutput)
-    }
-
-    private func ensureEngines() throws {
+    private func activeController() -> GCController? {
         let controllers = GCController.controllers()
-
-        // Prefer the active controller, then any controller that actually
-        // advertises haptics. This avoids accidentally attaching rumble to a
-        // stale/snapshot controller.
-        guard let controller =
-            (GCController.current?.haptics != nil ? GCController.current : nil) ??
-            controllers.first(where: { $0.haptics != nil })
-        else {
-            throw RumbleError.noHaptics
-        }
-
-        let id = ObjectIdentifier(controller)
-
-        if controllerID == id, leftEngine != nil || rightEngine != nil {
-            return
-        }
-
-        teardownEngines()
-
-        guard let haptics = controller.haptics else {
-            throw RumbleError.noHaptics
-        }
-
-        let localities = haptics.supportedLocalities
-
-        if localities.contains(.leftHandle),
-           let engine = haptics.createEngine(withLocality: .leftHandle) {
-            configure(engine)
-            try engine.start()
-            leftEngine = engine
-            leftSupported = true
-            installHandlers(on: engine)
-        }
-
-        if localities.contains(.rightHandle),
-           let engine = haptics.createEngine(withLocality: .rightHandle) {
-            configure(engine)
-            try engine.start()
-            rightEngine = engine
-            rightSupported = true
-            installHandlers(on: engine)
-        }
-
-        // Prefer an aggregate handle engine when independent handles are
-        // unavailable. Apple's default locality is also a valid controller
-        // haptics path and normally maps to the controller handle actuators.
-        if !leftSupported && !rightSupported,
-           localities.contains(.handles),
-           let engine = haptics.createEngine(withLocality: .handles) {
-            configure(engine)
-            try engine.start()
-            defaultEngine = engine
-            defaultSupported = true
-            installHandlers(on: engine)
-        }
-
-        if !leftSupported && !rightSupported && !defaultSupported,
-           localities.contains(.default),
-           let engine = haptics.createEngine(withLocality: .default) {
-            configure(engine)
-            try engine.start()
-            defaultEngine = engine
-            defaultSupported = true
-            installHandlers(on: engine)
-        }
-
-        guard leftSupported || rightSupported || defaultSupported else {
-            throw RumbleError.unsupportedLocality
-        }
-
-        controllerID = id
+        if let current = GCController.current, current.haptics != nil { return current }
+        return controllers.first(where: { $0.haptics != nil })
     }
 
-    private func configure(_ engine: CHHapticEngine) {
+    private func prepare() -> Bool {
+        guard let controller = activeController(), let haptics = controller.haptics else {
+            invalidateEngines()
+            return false
+        }
+        let id = ObjectIdentifier(controller)
+        if controllerID == id, leftEngine != nil || rightEngine != nil || handlesEngine != nil || defaultEngine != nil { return true }
+        invalidateEngines()
+        let localities = haptics.supportedLocalities
+        controllerID = id
+        do {
+            if localities.contains(.leftHandle), let e = haptics.createEngine(withLocality: .leftHandle) { try start(e); leftEngine = e; leftAvailable = true }
+            if localities.contains(.rightHandle), let e = haptics.createEngine(withLocality: .rightHandle) { try start(e); rightEngine = e; rightAvailable = true }
+            if localities.contains(.handles), let e = haptics.createEngine(withLocality: .handles) { try start(e); handlesEngine = e; handlesAvailable = true }
+            if localities.contains(.default), let e = haptics.createEngine(withLocality: .default) { try start(e); defaultEngine = e; defaultAvailable = true }
+            return leftAvailable || rightAvailable || handlesAvailable || defaultAvailable
+        } catch {
+            invalidateEngines()
+            return false
+        }
+    }
+
+    private func start(_ engine: CHHapticEngine) throws {
         engine.playsHapticsOnly = true
         engine.isAutoShutdownEnabled = false
+        let g = generation
+        engine.resetHandler = { [weak self] in Task { @MainActor in if self?.generation == g { self?.invalidateEngines() } } }
+        engine.stoppedHandler = { [weak self] _ in Task { @MainActor in if self?.generation == g { self?.invalidateEngines() } } }
+        try engine.start()
     }
 
-    private func installHandlers(on engine: CHHapticEngine) {
-        engine.resetHandler = { [weak self] in
-            Task { @MainActor in
-                self?.teardownEngines()
-            }
-        }
-
-        engine.stoppedHandler = { [weak self] _ in
-            Task { @MainActor in
-                self?.teardownEngines()
-            }
-        }
+    private func testChannel(left: Bool, right: Bool) {
+        guard prepare() else { return }
+        do {
+            if left, leftAvailable, let e = leftEngine { _ = try play(e, intensity: scale(1), duration: 0.45) }
+            if right, rightAvailable, let e = rightEngine { _ = try play(e, intensity: scale(1), duration: 0.45) }
+        } catch { invalidateEngines() }
     }
 
-    @discardableResult
-    private func play(
-        on engine: CHHapticEngine,
-        intensity: Float,
-        duration: TimeInterval
-    ) throws -> Bool {
+    private func play(_ engine: CHHapticEngine, intensity: Float, duration: TimeInterval) throws -> Bool {
         guard intensity > 0.005 else { return false }
-
-        let pattern = try CHHapticPattern(
-            events: [
-                CHHapticEvent(
-                    eventType: .hapticContinuous,
-                    parameters: [
-                        CHHapticEventParameter(
-                            parameterID: .hapticIntensity,
-                            value: min(max(intensity, 0), 1)
-                        ),
-                        CHHapticEventParameter(
-                            parameterID: .hapticSharpness,
-                            value: 0.35
-                        )
-                    ],
-                    relativeTime: 0,
-                    duration: duration
-                )
-            ],
-            parameters: []
-        )
-
+        let pattern = try CHHapticPattern(events: [CHHapticEvent(eventType: .hapticContinuous, parameters: [
+            CHHapticEventParameter(parameterID: .hapticIntensity, value: min(max(intensity, 0), 1)),
+            CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.25)
+        ], relativeTime: 0, duration: duration)], parameters: [])
         let player = try engine.makeAdvancedPlayer(with: pattern)
         try player.start(atTime: 0)
         return true
     }
 
-    private func playCombinedFallback(
-        weak: Float,
-        strong: Float,
-        duration: TimeInterval
-    ) throws {
-        let engine = defaultEngine ?? leftEngine ?? rightEngine
-        guard let engine else { return }
-
-        let intensity = min(max(max(weak, strong), 0), 1)
-        _ = try play(on: engine, intensity: intensity, duration: duration)
+    private func scale(_ value: Float) -> Float {
+        let raw = min(max(value, 0), 1)
+        guard raw > 0.005 else { return 0 }
+        let stored = UserDefaults.standard.object(forKey: Defaults.intensity) as? Double
+        let intensity = min(max(Float(stored ?? 1.6), 0.5), 3)
+        return min(max(raw * 2.2 * intensity, 0.08), 1)
     }
 
-    private func scheduleStop(after duration: TimeInterval) {
-        stopWorkItem?.cancel()
-
-        let item = DispatchWorkItem { [weak self] in
-            Task { @MainActor in
-                self?.stopWorkItem = nil
-            }
-        }
-
-        stopWorkItem = item
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + duration + 0.05,
-            execute: item
-        )
-    }
-
-    private func teardownEngines() {
-        stopWorkItem?.cancel()
-        stopWorkItem = nil
-
+    private func invalidateEngines() {
+        generation &+= 1
         leftEngine?.stop(completionHandler: nil)
         rightEngine?.stop(completionHandler: nil)
+        handlesEngine?.stop(completionHandler: nil)
         defaultEngine?.stop(completionHandler: nil)
-
-        leftEngine = nil
-        rightEngine = nil
-        defaultEngine = nil
-        leftSupported = false
-        rightSupported = false
-        defaultSupported = false
+        leftEngine = nil; rightEngine = nil; handlesEngine = nil; defaultEngine = nil
+        leftAvailable = false; rightAvailable = false; handlesAvailable = false; defaultAvailable = false
         controllerID = nil
-    }
-
-    private enum RumbleError: Error {
-        case noController
-        case noHaptics
-        case unsupportedLocality
     }
 }
