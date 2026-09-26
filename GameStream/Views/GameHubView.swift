@@ -147,13 +147,13 @@ struct GameHubView: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
-            Button { session.openXboxCloud() } label: {
+            Button { filter = .browse } label: {
                 Image(systemName: "cloud.fill")
                     .font(.system(size: 15, weight: .semibold))
                     .frame(width: 44, height: 44)
             }
             .buttonStyle(.glass)
-            .accessibilityLabel("Open Xbox Cloud library")
+            .accessibilityLabel("Browse Xbox Cloud catalog")
         }
     }
 
