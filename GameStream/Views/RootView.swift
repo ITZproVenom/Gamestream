@@ -213,11 +213,9 @@ struct RootView: View {
 
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(.ultraThinMaterial)
                     .glassEffect(.regular, in: Capsule())
 
                 Capsule()
-                    .fill(.ultraThinMaterial)
                     .glassEffect(.regular.interactive(), in: Capsule())
                     .overlay {
                         if controller.isConnected {
