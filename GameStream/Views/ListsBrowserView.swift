@@ -70,7 +70,9 @@ struct ListsBrowserView: View {
                                                 onOpen: { onOpen(game) },
                                                 onFavorite: { session.toggleFavorite(game.tracked) }
                                             )
-                                            .frame(width: 132)
+                                            .containerRelativeFrame(.horizontal) { width, _ in
+                                                min(132, max(112, width * 0.34))
+                                            }
                                             .contextMenu {
                                                 Button { onPlay(game) } label: {
                                                     Label("Play now", systemImage: "play.fill")
