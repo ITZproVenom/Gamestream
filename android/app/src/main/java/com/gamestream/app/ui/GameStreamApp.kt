@@ -69,10 +69,11 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
     }
     var introCompleted by remember { mutableStateOf(OnboardingPrefs.isIntroDone(context)) }
     var showOpening by remember { mutableStateOf(true) }
+    var catalogReady by remember { mutableStateOf(false) }
     val bgColor = MaterialTheme.colorScheme.background
 
     LaunchedEffect(Unit) {
-        CloudCatalogService.refreshIfNeeded(context.applicationContext)
+        CloudCatalogService.refreshIfNeeded(context.applicationContext) { catalogReady = true }
         withContext(Dispatchers.IO) {
             BetterXCloudInjector.ensureFetched(context.applicationContext)
         }
@@ -97,7 +98,7 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
     }
 
     if (showOpening) {
-        OpeningIntroOverlay { showOpening = false }
+        OpeningIntroOverlay(isReady = catalogReady) { showOpening = false }
         return
     }
 
