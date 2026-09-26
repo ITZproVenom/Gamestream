@@ -139,9 +139,21 @@ struct RootView: View {
         case .rb:
             advanceTab(1)
         case .left:
-            advanceTab(-1)
+            if selectedTab == .library {
+                ControllerNavState.shared.send(.left)
+            }
         case .right:
-            advanceTab(1)
+            if selectedTab == .library {
+                ControllerNavState.shared.send(.right)
+            }
+        case .up:
+            if selectedTab == .library {
+                ControllerNavState.shared.send(.up)
+            }
+        case .down:
+            if selectedTab == .library {
+                ControllerNavState.shared.send(.down)
+            }
         case .menu:
             HapticManager.impact()
             SoundManager.playTap()
@@ -164,7 +176,7 @@ struct RootView: View {
             ControllerNavState.shared.send(.down)
         case .a:
             ControllerNavState.shared.send(.activate)
-        case .up, .down, .x, .y:
+        case .x, .y:
             break
         }
     }
