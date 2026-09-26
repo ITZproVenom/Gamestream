@@ -339,7 +339,8 @@ jobs:
               items.append(f"- {subject} ({sha})")
 
           items = items[:20]
-          should = event == "workflow_dispatch" or bool(items)
+          workflow_changed = any(p == ".github/workflows/build-ipa.yml" for p in [line.strip() for line in raw.splitlines() if line.strip()])
+          should = event == "workflow_dispatch" or bool(items) or workflow_changed
           Path("should_release.txt").write_text("true" if should else "false")
 
           if not items:
