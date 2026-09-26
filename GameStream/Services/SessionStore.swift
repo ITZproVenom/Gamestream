@@ -299,6 +299,7 @@ final class SessionStore: ObservableObject {
         UserDefaults.standard.removeObject(forKey: "BetterXCloud.Script.v2")
         UserDefaults.standard.removeObject(forKey: "BetterXCloud.Script.Date.v2")
         betterXCloudRefreshToken += 1
+        BetterXCloudInjector.shared.preload()
         if isStreaming, webURL.host?.contains("xbox.com") == true {
             pendingJavaScript = "try { location.reload(); } catch (e) {}"
         }
