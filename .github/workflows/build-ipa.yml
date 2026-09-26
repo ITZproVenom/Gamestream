@@ -295,6 +295,8 @@ jobs:
                       return True
                   if p.startswith("scripts/") and "android" not in p.lower():
                       return True
+                  if p == ".github/workflows/build-ipa.yml":
+                      return True
               return False
 
           items = []
