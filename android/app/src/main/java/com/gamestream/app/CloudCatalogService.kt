@@ -198,9 +198,18 @@ object CloudCatalogService {
 
     private fun httpGet(url: String): String {
         val conn = URL(url).openConnection() as HttpURLConnection
-        conn.connectTimeout = 15000
-        conn.readTimeout = 20000
-        conn.setRequestProperty("Accept", "application/json")
-        conn.inputStream.bufferedReader().use { return it.readText() }
+        try {
+            conn.connectTimeout = 15000
+            conn.readTimeout = 20000
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("Accept", "application/json")
+            val code = conn.responseCode
+            if (code !in 200..299) {
+                throw java.io.IOException("Catalog HTTP $code")
+            }
+            return conn.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            conn.disconnect()
+        }
     }
 }
