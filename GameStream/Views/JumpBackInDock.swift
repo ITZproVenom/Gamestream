@@ -30,6 +30,7 @@ struct JumpBackInDock: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                     VStack(alignment: .leading, spacing: 8) {
+                        // Keep the title flexible so the action controls retain their tap target widths.
                         Text(game.title)
                             .font(.headline)
                             .lineLimit(2)
@@ -67,6 +68,7 @@ struct JumpBackInDock: View {
                             .accessibilityLabel("Open details for \(game.title)")
                         }
                     }
+                    .layoutPriority(1)
                     Spacer(minLength: 0)
                 }
                 .padding(16)
