@@ -360,7 +360,7 @@ jobs:
               or "ExperimentalControllerInput.swift" in latest_files
               or "ControllerRumble.swift" in latest_files
           )
-          should = event == "workflow_dispatch" or bool(items)
+          should = event == "workflow_dispatch" or bool(items) or is_beta
           Path("should_release.txt").write_text("true" if should else "false")
 
           if not items:
