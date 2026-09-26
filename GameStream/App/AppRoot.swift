@@ -8,6 +8,7 @@ struct AppRoot: View {
     @State private var showingMicrosoftLogin = false
     @State private var didBootstrap = false
     @State private var showOpeningIntro = true
+    @State private var catalogReady = false
 
     var body: some View {
         ZStack {
@@ -30,8 +31,8 @@ struct AppRoot: View {
             }
 
             if showOpeningIntro {
-                OpeningIntroView {
-                    withAnimation(.easeInOut(duration: 0.28)) {
+                OpeningIntroView(isReady: catalogReady) {
+                    withAnimation(.easeInOut(duration: 0.32)) {
                         showOpeningIntro = false
                     }
                 }
@@ -81,8 +82,10 @@ struct AppRoot: View {
         if session.isStreaming {
             session.exitStreamToHub()
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            CloudCatalogService.refreshIfNeeded()
+        CloudCatalogService.refreshIfNeeded {
+            Task { @MainActor in
+                catalogReady = true
+            }
         }
         session.revalidatePersistedLogin()
     }
