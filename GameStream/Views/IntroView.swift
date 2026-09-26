@@ -210,13 +210,8 @@ struct IntroView: View {
     private func posterTile(index: Int, width: CGFloat, height: CGFloat) -> some View {
         Group {
             if posters.indices.contains(index) {
-                AsyncImage(url: posters[index]) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        fallbackPoster
-                    }
+                RemoteImage(url: posters[index]) {
+                    fallbackPoster
                 }
             } else {
                 fallbackPoster
