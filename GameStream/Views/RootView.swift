@@ -129,6 +129,7 @@ struct RootView: View {
         .onDisappear {
             ControllerManager.shared.onPress = nil
             tabSliderProgress = nil
+            UIApplication.shared.isIdleTimerDisabled = false
         }
     }
 
