@@ -7,6 +7,7 @@ struct RootView: View {
     @ObservedObject private var controller = ControllerManager.shared
     @State private var selectedTab: Tab = RootView.restoredTab()
     @State private var tabDragOffset: CGFloat = 0
+    @Namespace private var tabGlassNamespace
 
     enum Tab: String, CaseIterable, Hashable {
         case library = "Library"
@@ -210,48 +211,35 @@ struct RootView: View {
         GeometryReader { geo in
             let width = geo.size.width
             let slot = width / tabCount
-            let baseX = CGFloat(selectedTab.index) * slot
-            let maxDragLeft = -baseX
-            let maxDragRight = width - slot - baseX
-            let clampedDrag = min(max(tabDragOffset, maxDragLeft), maxDragRight)
-            let pillX = baseX + clampedDrag
 
-            LiquidGlassContainer(spacing: 4) {
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .glassEffect(.regular, in: Capsule())
-
-                    Capsule()
-                        .glassEffect(.regular.interactive(), in: Capsule())
-                        .overlay {
-                        if controller.isConnected {
-                            Capsule()
-                                .stroke(Color.accentColor, lineWidth: 2)
-                                .padding(1.5)
-                        }
-                    }
-                    .frame(width: max(slot - 4, 0), height: 52)
-                    .offset(x: pillX + 2)
-                    .animation(
-                        tabDragOffset == 0
-                            ? .spring(response: 0.32, dampingFraction: 0.82)
-                            : .interactiveSpring,
-                        value: selectedTab
-                    )
-
-                    HStack(spacing: 0) {
-                        ForEach(Tab.allCases, id: \.self) { tab in
+            GlassEffectContainer(spacing: 8) {
+                HStack(spacing: 0) {
+                    ForEach(Tab.allCases, id: \.self) { tab in
+                        Button {
+                            selectTab(tab)
+                        } label: {
                             tabLabel(tab)
-                                .frame(width: slot, height: 52)
-                                .contentShape(Rectangle())
-                                .onTapGesture { selectTab(tab) }
-                                .accessibilityLabel(tab.rawValue)
-                                .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
+                                .frame(width: slot - 8, height: 52)
                         }
+                        .buttonStyle(.plain)
+                        .glassEffect(
+                            selectedTab == tab
+                                ? .regular.tint(Color.accentColor.opacity(0.22)).interactive()
+                                : .clear,
+                            in: Capsule()
+                        )
+                        .glassEffectID(
+                            selectedTab == tab ? "selected-tab" : nil,
+                            in: tabGlassNamespace
+                        )
+                        .contentShape(Capsule())
+                        .accessibilityLabel(tab.rawValue)
+                        .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
                     }
                 }
+                .padding(5)
+                .glassEffect(.regular, in: Capsule())
             }
-            .padding(5)
             .contentShape(Capsule())
             .gesture(tabDragGesture(slotWidth: slot))
         }
@@ -263,13 +251,15 @@ struct RootView: View {
             Image(systemName: tab.icon)
                 .font(.system(size: 18, weight: .semibold))
                 .symbolRenderingMode(.hierarchical)
+
             Text(tab.rawValue)
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: 10, weight: .semibold))
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.75)
         }
         .foregroundStyle(selectedTab == tab ? .primary : .secondary)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Capsule())
     }
 
     private func tabDragGesture(slotWidth: CGFloat) -> some Gesture {
