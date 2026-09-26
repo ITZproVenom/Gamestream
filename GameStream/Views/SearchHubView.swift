@@ -118,7 +118,7 @@ struct SearchHubView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(GameCatalog.genreNames, id: .self) { name in
+                    ForEach(GameCatalog.genreNames, id: \.self) { name in
                         Button {
                             session.updateSearchDraft(name)
                             performSearch()
@@ -140,7 +140,7 @@ struct SearchHubView: View {
             sectionTitle("Popular searches")
 
             VStack(spacing: 0) {
-                ForEach(Array(popularTitles.enumerated()), id: .element) { index, title in
+                ForEach(Array(popularTitles.enumerated()), id: \.offset) { index, title in
                     Button {
                         session.updateSearchDraft(title)
                         performSearch()
@@ -189,7 +189,7 @@ struct SearchHubView: View {
             }
 
             VStack(spacing: 0) {
-                ForEach(Array(items.enumerated()), id: .element) { index, item in
+                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                     HStack(spacing: 10) {
                         Button {
                             session.updateSearchDraft(item)
