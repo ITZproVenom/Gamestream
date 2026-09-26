@@ -78,6 +78,11 @@ enum CloudCatalogService {
             guard Self.isCurrentGeneration(generation) else { return }
             GameCatalog.installLiveCatalog(unique)
         }
+        stateLock.lock()
+        if Self.generation == generation {
+            started = false
+        }
+        stateLock.unlock()
     }
 
     private static func parseIds(from data: Data) -> [String] {
