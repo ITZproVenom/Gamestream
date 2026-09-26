@@ -43,7 +43,7 @@ struct GameDetailView: View {
                             .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(.primary)
                             .frame(width: 30, height: 30)
-                            .background(.ultraThinMaterial, in: Circle())
+                            .glassEffect(.regular, in: Circle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Close")
@@ -94,7 +94,7 @@ struct GameDetailView: View {
                     .font(.caption2.weight(.semibold))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(.ultraThinMaterial, in: Capsule())
+                    .glassEffect(.regular, in: Capsule())
                     .lineLimit(1)
                 Text(game.title)
                     .font(.title2.weight(.bold))
