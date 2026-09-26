@@ -92,10 +92,7 @@ struct GameHubView: View {
                 searchResults
             } else {
                 playNextBanner
-                segmentBar
-                if appearance.showGenreFilters && !secondaryChips.isEmpty {
-                    genreRow
-                }
+                libraryToolbar
                 filterBody
             }
         }
@@ -126,25 +123,26 @@ struct GameHubView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("GameStream")
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(filter == .all ? "Library" : filter.title)
+                    .font(.title.weight(.bold))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
                 Text("Xbox Cloud Gaming")
-                    .font(.footnote)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
             }
             .layoutPriority(1)
+
             Spacer(minLength: 8)
+
             Button { session.openXboxCloud() } label: {
                 Image(systemName: "cloud.fill")
                     .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 44, height: 44)
+                    .frame(width: 38, height: 38)
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.bordered)
+            .controlSize(.large)
             .accessibilityLabel("Open Xbox Cloud library")
         }
     }
@@ -170,8 +168,52 @@ struct GameHubView: View {
             }
         }
         .padding(.horizontal, 16)
-        .frame(height: 50)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .frame(height: 48)
+        .padding(.horizontal, 14)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(.quaternary, lineWidth: 0.8)
+        }
+    }
+
+    private var libraryToolbar: some View {
+        HStack(spacing: 10) {
+            Menu {
+                Button("Home") { filter = .all }
+                Button("My Library") { filter = .mine }
+                Button("Browse") { filter = .browse }
+                Button("For You") { filter = .forYou }
+                Button("Favorites") { filter = .favorites }
+                Button("Recents") { filter = .recents }
+                Button("Lists") { filter = .lists }
+                Button("Activity") { filter = .activity }
+            } label: {
+                Label("Browse", systemImage: "square.grid.2x2")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            
+            if appearance.showGenreFilters && !secondaryChips.isEmpty {
+                Menu {
+                    ForEach(secondaryChips, id: .self) { chip in
+                        Button(chip.title) { filter = chip }
+                    }
+                } label: {
+                    Label("Genres", systemImage: "line.3.horizontal.decrease")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.bordered)
+            }
+
+            Spacer(minLength: 0)
+
+            if filter != .all {
+                Button("Home") { filter = .all }
+                    .font(.subheadline.weight(.medium))
+                    .buttonStyle(.plain)
+            }
+        }
     }
 
     private var searchResults: some View {
@@ -184,7 +226,11 @@ struct GameHubView: View {
                     .foregroundStyle(.secondary)
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(.quaternary, lineWidth: 0.8)
+                    }
             } else {
                 ScrollViewReader { proxy in
                     LazyVGrid(columns: gridColumns, spacing: appearance.density.carouselSpacing + 4) {
@@ -206,7 +252,7 @@ struct GameHubView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.bordered)
         }
     }
 
@@ -238,7 +284,11 @@ struct GameHubView: View {
                 Spacer(minLength: 0)
             }
             .padding(14)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(.quaternary, lineWidth: 0.8)
+            }
         }
     }
 
@@ -416,7 +466,11 @@ struct GameHubView: View {
                     .foregroundStyle(.secondary)
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(.quaternary, lineWidth: 0.8)
+                    }
             } else {
                 ScrollViewReader { proxy in
                     LazyVGrid(columns: gridColumns, spacing: appearance.density.carouselSpacing + 4) {
