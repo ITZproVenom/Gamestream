@@ -229,7 +229,7 @@ struct RootView: View {
                     .glassEffect(.regular, in: Capsule())
 
                 HStack(spacing: 0) {
-                    ForEach(Tab.allCases) { tab in
+                    ForEach(Tab.allCases, id: \.self) { tab in
                         if tab != visibleTab {
                             sliderLabel(tab)
                                 .frame(maxWidth: .infinity)
