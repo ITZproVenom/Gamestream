@@ -3,6 +3,7 @@ import UIKit
 
 struct RootView: View {
     @EnvironmentObject var session: SessionStore
+    @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var hub = HubState.shared
     @ObservedObject private var controller = ControllerManager.shared
     @State private var selectedTab: Tab = RootView.restoredTab()
@@ -116,6 +117,16 @@ struct RootView: View {
         }
         .onChange(of: session.keepScreenAwake) { _, _ in
             syncIdleTimer()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .active:
+                PlayActivityStore.shared.resume()
+            case .inactive, .background:
+                PlayActivityStore.shared.pause()
+            @unknown default:
+                break
+            }
         }
         .onAppear {
             ControllerManager.shared.onPress = { press in
