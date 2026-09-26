@@ -7,7 +7,6 @@ struct RootView: View {
     @ObservedObject private var controller = ControllerManager.shared
     @State private var selectedTab: Tab = RootView.restoredTab()
     @State private var tabDragOffset: CGFloat = 0
-    @State private var tabBarWidth: CGFloat = 0
 
     enum Tab: String, CaseIterable, Hashable {
         case library = "Library"
@@ -53,13 +52,15 @@ struct RootView: View {
             Group {
                 if session.isStreaming && selectedTab == .library {
                     StreamPlayerView()
-                } else if !session.isStreaming {
-                    // Page-style swipe between Library / Search / Settings
-                    TabView(selection: $selectedTab) {
+                } else {
+                    // Keep only the active page in the hierarchy. This avoids the
+                    // off-screen page stacking/gesture conflicts that can occur
+                    // when several full-screen SwiftUI pages coexist in a TabView.
+                    switch selectedTab {
+                    case .library:
                         GameHubView()
-                            .tag(Tab.library)
-
-                        SearchHubView(isActive: selectedTab == .search)
+                    case .search:
+                        SearchHubView(isActive: true)
                             .safeAreaInset(edge: .top, spacing: 0) {
                                 if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                                    let game = session.continueGame {
@@ -69,13 +70,9 @@ struct RootView: View {
                                         .padding(.bottom, 4)
                                 }
                             }
-                            .tag(Tab.search)
-
-                        SettingsView(isActive: selectedTab == .settings)
-                            .tag(Tab.settings)
+                    case .settings:
+                        SettingsView(isActive: true)
                     }
-                    .tabViewStyle(.page(indexDisplayMode: .never))
-                    .animation(.spring(response: 0.32, dampingFraction: 0.82), value: selectedTab)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -219,15 +216,14 @@ struct RootView: View {
             let clampedDrag = min(max(tabDragOffset, maxDragLeft), maxDragRight)
             let pillX = baseX + clampedDrag
 
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .glassEffect(.regular, in: Capsule())
+            LiquidGlassContainer(spacing: 4) {
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .glassEffect(.regular, in: Capsule())
 
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .glassEffect(.regular.interactive(), in: Capsule())
-                    .overlay {
+                    Capsule()
+                        .glassEffect(.regular.interactive(), in: Capsule())
+                        .overlay {
                         if controller.isConnected {
                             Capsule()
                                 .stroke(Color.accentColor, lineWidth: 2)
@@ -243,22 +239,21 @@ struct RootView: View {
                         value: selectedTab
                     )
 
-                HStack(spacing: 0) {
-                    ForEach(Tab.allCases, id: \.self) { tab in
-                        tabLabel(tab)
-                            .frame(width: slot, height: 52)
-                            .contentShape(Rectangle())
-                            .onTapGesture { selectTab(tab) }
-                            .accessibilityLabel(tab.rawValue)
-                            .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
+                    HStack(spacing: 0) {
+                        ForEach(Tab.allCases, id: \.self) { tab in
+                            tabLabel(tab)
+                                .frame(width: slot, height: 52)
+                                .contentShape(Rectangle())
+                                .onTapGesture { selectTab(tab) }
+                                .accessibilityLabel(tab.rawValue)
+                                .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
+                        }
                     }
                 }
             }
             .padding(5)
             .contentShape(Capsule())
             .gesture(tabDragGesture(slotWidth: slot))
-            .onAppear { tabBarWidth = width }
-            .onChange(of: width) { _, w in tabBarWidth = w }
         }
         .frame(height: 62)
     }
