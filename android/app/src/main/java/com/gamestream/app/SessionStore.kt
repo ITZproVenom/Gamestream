@@ -2,6 +2,7 @@ package com.gamestream.app
 
 import android.app.Application
 import android.content.Context
+import android.webkit.CookieManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -78,6 +79,10 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         webUrl = IDLE_URL
         prefs.edit().putBoolean(KEY_SIGNED_IN, false).remove(KEY_ACCOUNT).remove(KEY_AUTH_PROOF).apply()
         pendingJs = null
+        runCatching {
+            CookieManager.getInstance().removeAllCookies(null)
+            CookieManager.getInstance().flush()
+        }
     }
 
     fun openHome() { returnToHub() }
