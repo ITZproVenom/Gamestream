@@ -27,19 +27,22 @@ struct IntroView: View {
             // Keep the entire foreground in a physical-screen-sized canvas.
             // This deliberately avoids GeometryReader's scene width so a sideload
             // or container host cannot make the glass controls drift off-screen.
-            VStack(spacing: 0) {
-                topBar
+            GeometryReader { proxy in
+                VStack(spacing: 0) {
+                    topBar
+                        .padding(.top, proxy.safeAreaInsets.top + 6)
 
-                Spacer(minLength: 24)
+                    Spacer(minLength: 18)
 
-                heroCard
+                    heroCard
 
-                Spacer(minLength: 24)
+                    Spacer(minLength: 18)
 
-                actionArea
+                    actionArea
+                        .padding(.bottom, max(proxy.safeAreaInsets.bottom, 8))
+                }
+                .frame(width: physicalWidth, height: proxy.size.height, alignment: .top)
             }
-            .frame(width: physicalWidth, alignment: .top)
-            .frame(maxHeight: .infinity, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
@@ -98,7 +101,6 @@ struct IntroView: View {
                 .accessibilityLabel("Skip intro")
         }
         .padding(.horizontal, 20)
-        .safeAreaPadding(.top, 8)
     }
 
     private var heroCard: some View {
@@ -138,10 +140,10 @@ struct IntroView: View {
                 featurePill("GameHub", systemImage: "square.grid.2x2.fill")
             }
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 26)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 22)
         .frame(width: contentWidth)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 32, style: .continuous))
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
         .opacity(appeared ? 1 : 0)
         .offset(y: appeared ? 0 : 14)
     }
@@ -156,7 +158,7 @@ struct IntroView: View {
                 }
                 .font(.headline.weight(.semibold))
                 .frame(maxWidth: .infinity)
-                .frame(height: 58)
+                .frame(height: 56)
             }
             .buttonStyle(.glassProminent)
             .accessibilityLabel("Get Started")
@@ -167,7 +169,6 @@ struct IntroView: View {
                 .multilineTextAlignment(.center)
         }
         .frame(width: contentWidth)
-        .safeAreaPadding(.bottom, 18)
         .opacity(appeared ? 1 : 0)
         .offset(y: appeared ? 0 : 10)
     }
