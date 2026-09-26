@@ -1,7 +1,10 @@
 package com.gamestream.app
 
 import android.content.Context
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -14,6 +17,7 @@ object CloudCatalogService {
         "https://catalog.gamepass.com/sigls/v2?id=29a81209-df6f-41fd-a528-2ae6b91f719c&language=en-us&market=US"
     private const val CACHE = "xcloud-catalog-v2.json"
     @Volatile private var started = false
+    private var refreshJob: Job? = null
 
     fun refreshIfNeeded(context: Context, onReady: (() -> Unit)? = null) {
         if (started) return
@@ -21,6 +25,22 @@ object CloudCatalogService {
         loadCache(context)?.takeIf { it.size >= 20 }?.let {
             GameCatalog.installLiveCatalog(it)
             onReady?.invoke()
+        }
+        refreshJob = CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val remote = fetchRemoteProgressive(context)
+                if (remote.size >= 20) {
+                    saveCache(context, remote)
+                    withContext(Dispatchers.Main) {
+                        GameCatalog.installLiveCatalog(remote)
+                        onReady?.invoke()
+                    }
+                } else if (loadCache(context).isNullOrEmpty()) {
+                    withContext(Dispatchers.Main) { onReady?.invoke() }
+                }
+            } catch (_: Exception) {
+                withContext(Dispatchers.Main) { onReady?.invoke() }
+            }
         }
     }
 
