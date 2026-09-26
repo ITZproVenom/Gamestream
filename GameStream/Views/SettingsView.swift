@@ -325,17 +325,33 @@ struct SettingsView: View {
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("GameStream")
-                        .font(.headline)
-                    Text("Version \(appVersion) · Native GameHub + Xbox Cloud")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(controller.isConnected ? "Controller connected" : "No controller connected")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                settingsSection("About") {
+                    settingRow(icon: "info.circle", title: "Version") {
+                        Text(appVersion)
+                            .foregroundStyle(.secondary)
+                    }
+                    divider
+                    settingRow(icon: "gamecontroller", title: "Controller") {
+                        Text(controller.isConnected ? "Connected" : "Not connected")
+                            .foregroundStyle(controller.isConnected ? .green : .secondary)
+                    }
+                    divider
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("GameStream")
+                            .font(.headline.weight(.bold))
+                        Text("Native GameHub for Xbox Cloud Gaming.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("Made with ♥ by Bestin")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.top, 2)
+                        Text("Built for iOS · Better xCloud integrated")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 10)
                 }
-                .padding(.horizontal, 4)
                 .padding(.bottom, 24)
             }
             .frame(maxWidth: 680)
