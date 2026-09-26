@@ -30,7 +30,7 @@ struct StreamPlayerView: View {
             }
 
             streamChrome
-                .padding(.top, 8)
+                .safeAreaPadding(.top, 8)
                 .zIndex(3)
         }
         .edgesIgnoringSafeArea(.all)
