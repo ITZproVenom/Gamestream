@@ -28,14 +28,14 @@ Builds are **separate by platform**. Pick iOS or Android — do not mix tags.
 |----------|----------------------|------|
 | **iOS** | [📱 Latest iOS build](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios) | `GameStream-unsigned.ipa` |
 | **Android** | [🤖 Latest Android build](https://github.com/ITZproVenom/Gamestream/releases) | See the latest Android release |
-| **iOS Experimental** | [🧪 Experimental rumble build](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios-experimental-rumble) | `GameStream-unsigned.ipa` |
+| **iOS Beta** | [🧪 Latest iOS beta](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios-beta) | `GameStream-unsigned.ipa` |
 
-> **Experimental iOS build:** This is a separate prerelease for testing the experimental native controller-input and rumble path. It is not the normal `latest-ios` build.
+> **iOS Beta:** Experimental and in-development iOS changes are shipped through this beta channel. They do not replace the normal `latest-ios` release.
 
 ### All builds
 
 - **iOS only:** [filter `ios-build`](https://github.com/ITZproVenom/Gamestream/releases?q=ios-build&expanded=true)
-- **iOS experimental:** [Experimental rumble release](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios-experimental-rumble)
+- **iOS beta:** [Latest iOS beta](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios-beta)
 - **Android only:** [filter `android-build`](https://github.com/ITZproVenom/Gamestream/releases?q=android-build&expanded=true)
 - **All releases:** [Releases](https://github.com/ITZproVenom/Gamestream/releases)
 
