@@ -126,6 +126,10 @@ struct RootView: View {
             syncIdleTimer()
             session.consumeLaunchResumeIfNeeded()
         }
+        .onDisappear {
+            ControllerManager.shared.onPress = nil
+            tabSliderProgress = nil
+        }
     }
 
     // MARK: - Controller navigation
