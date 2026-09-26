@@ -17,6 +17,12 @@ struct SearchHubView: View {
 
     var body: some View {
         HubPage {
+            if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               let game = session.continueGame {
+                ContinuePlayingCard(game: game)
+                    .padding(.bottom, 4)
+            }
+
             VStack(alignment: .leading, spacing: 4) {
                 Text("Search")
                     .font(.system(size: 34, weight: .bold, design: .rounded))
