@@ -277,7 +277,7 @@ final class BetterXCloudInjector {
     }
 
     func ensureInjected(into webView: WKWebView) {
-        if let script = cachedScript, !script.isEmpty {
+        if let script = currentScriptSource(), !script.isEmpty {
             webView.evaluateJavaScript(script, completionHandler: nil)
             webView.evaluateJavaScript(Self.modernUIOverridesJS, completionHandler: nil)
             webView.evaluateJavaScript(Self.streamIsolationJS, completionHandler: nil)
@@ -339,7 +339,13 @@ final class BetterXCloudInjector {
                   (200...299).contains(http.statusCode),
                   var source = String(data: data, encoding: .utf8),
                   source.count > 1000 else {
-                DispatchQueue.main.async { completion(self?.cachedScript) }
+                let snapshot: String? = {
+                    guard let self else { return nil }
+                    self.lock.lock()
+                    defer { self.lock.unlock() }
+                    return self.cachedScript
+                }()
+                DispatchQueue.main.async { completion(snapshot) }
                 return
             }
 
