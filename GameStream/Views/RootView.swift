@@ -63,15 +63,6 @@ struct RootView: View {
                         GameHubView()
                     case .search:
                         SearchHubView(isActive: true)
-                            .safeAreaInset(edge: .top, spacing: 0) {
-                                if session.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                                   let game = session.continueGame {
-                                    ContinuePlayingCard(game: game)
-                                        .padding(.horizontal, 20)
-                                        .padding(.top, 8)
-                                        .padding(.bottom, 4)
-                                }
-                            }
                     case .settings:
                         SettingsView(isActive: true)
                     }
