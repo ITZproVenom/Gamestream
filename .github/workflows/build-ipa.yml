@@ -140,7 +140,7 @@ jobs:
           print(f"Stamped {'BETA' if beta else 'STABLE'} build: version={short_version} build_id={build_number}")
           PY
           SUBJECT="$(git log -1 --pretty=%s)"
-          # Keep experimental/beta metadata aligned with the bundle identity.
+          # Keep experimental/beta metadata aligned with the bundle identity. This also marks beta-channel workflow fixes as beta releases.
           if printf '%s' "$SUBJECT" | grep -Eqi 'experimental.*controller|controller.*experimental|experimental.*rumble|rumble.*experimental|beta'; then
             python3 - <<'PY'
           from pathlib import Path
