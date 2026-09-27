@@ -14,15 +14,6 @@ targets:
       # forty source files drift out of the build while still living in the
       # repository, so fixes were made to code the app never compiled.
       - path: GameStream
-        excludes:
-          - "Resources/**"
-    resources:
-      - path: GameStream/Resources
-        includes:
-          - "**/*"
-        excludes:
-          - "**/.gitkeep"
-          - "**/*.md"
     info:
       path: GameStream/Info.plist
       properties:

@@ -31,6 +31,27 @@ struct XboxWebView: UIViewRepresentable {
         /// sheet cannot tear down a live stream and force a reconnect.
         var streamView: WKWebView?
         private init() {}
+
+        /// Ends the session for real.
+        ///
+        /// Because the player webview is deliberately kept alive between
+        /// presentations, leaving the stream is the only point at which it can
+        /// be stopped. Without this the page keeps running after exit, still
+        /// holding the Xbox session open and still pulling video.
+        func release() {
+            guard let view = streamView else { return }
+            streamView = nil
+            view.stopLoading()
+            view.navigationDelegate = nil
+            view.uiDelegate = nil
+            // Navigating away tears down the page's WebRTC session; simply
+            // dropping the reference does not, and the audio can outlive it.
+            view.loadHTMLString("", baseURL: nil)
+            let controller = view.configuration.userContentController
+            controller.removeAllUserScripts()
+            controller.removeScriptMessageHandler(forName: "gamestream")
+            view.removeFromSuperview()
+        }
     }
 
     func makeCoordinator() -> Coordinator {
@@ -42,6 +63,11 @@ struct XboxWebView: UIViewRepresentable {
             existing.navigationDelegate = context.coordinator
             existing.uiDelegate = context.coordinator
             context.coordinator.attach(to: existing)
+            // Adopt the current request state, otherwise the first update
+            // after re-presenting looks like a change and reloads the page
+            // that is already playing.
+            context.coordinator.loadedURL = existing.url ?? url
+            context.coordinator.reloadToken = reloadToken
             if existing.url == nil { existing.load(URLRequest(url: url)) }
             return existing
         }

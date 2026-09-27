@@ -21,8 +21,12 @@ final class Catalog: ObservableObject {
         string: "https://catalog.gamepass.com/sigls/v2"
         + "?id=29a81209-df6f-41fd-a528-2ae6b91f719c&language=en-us&market=US"
     )!
-    private static let cacheKey = "catalog.games.v1"
-    private static let cacheDateKey = "catalog.updatedAt.v1"
+    /// The catalog runs to a few hundred entries with artwork URLs, which is
+    /// far too large for UserDefaults; that store is loaded whole on launch.
+    private static let cacheURL: URL = {
+        let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        return base.appendingPathComponent("catalog-v1.json")
+    }()
     private static let pageSize = 40
 
     private var task: Task<Void, Never>?
@@ -31,10 +35,11 @@ final class Catalog: ObservableObject {
     private init() {
         // Show the previous catalog immediately; a cold start should never be
         // an empty screen just because the network is slow.
-        if let data = UserDefaults.standard.data(forKey: Self.cacheKey),
+        if let data = try? Data(contentsOf: Self.cacheURL),
            let cached = try? JSONDecoder().decode([Game].self, from: data) {
             games = cached
-            updatedAt = UserDefaults.standard.object(forKey: Self.cacheDateKey) as? Date
+            updatedAt = (try? Self.cacheURL.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate
         }
     }
 
@@ -72,11 +77,6 @@ final class Catalog: ObservableObject {
         await task.value
     }
 
-    func refreshInBackground() {
-        guard task == nil || task?.isCancelled == true else { return }
-        task = Task { await load() }
-    }
-
     private func load() async {
         isLoading = true
         errorMessage = nil
@@ -92,8 +92,7 @@ final class Catalog: ObservableObject {
             games = fetched
             updatedAt = Date()
             if let data = try? JSONEncoder().encode(fetched) {
-                UserDefaults.standard.set(data, forKey: Self.cacheKey)
-                UserDefaults.standard.set(updatedAt, forKey: Self.cacheDateKey)
+                try? data.write(to: Self.cacheURL, options: .atomic)
             }
             log.info("catalog", "loaded \(fetched.count) games")
         } catch is CancellationError {

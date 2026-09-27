@@ -70,6 +70,9 @@ final class StreamCoordinator: ObservableObject {
         watchdog?.cancel()
         watchdog = nil
         ControllerRumble.shared.stop()
+        // The player webview is kept alive across presentations, so this is
+        // the point where the page has to actually be shut down.
+        XboxWebView.Registry.shared.release()
         UIApplication.shared.isIdleTimerDisabled = AppSettings.shared.keepAwake
 
         if let game, let startedAt {

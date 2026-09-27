@@ -48,8 +48,13 @@ final class XboxAuth: NSObject, ObservableObject {
 
     /// A document on the xbox.com origin is required to read the site's
     /// localStorage. robots.txt is a real same-origin document and costs a
-    /// fraction of what loading the full single-page app would.
-    private static let probeURL = URL(string: "https://www.xbox.com/robots.txt")!
+    /// fraction of what loading the full single-page app would, but a
+    /// `text/plain` document is not guaranteed to expose storage, so the full
+    /// page is kept as a fallback rather than assumed unnecessary.
+    private static let probeCandidates: [URL] = [
+        URL(string: "https://www.xbox.com/robots.txt")!,
+        URL(string: "https://www.xbox.com/play")!
+    ]
     static let playURL = URL(string: "https://www.xbox.com/play")!
 
     /// Matches mobile Safari, because Xbox's edge rejects the stock WebView
@@ -59,9 +64,21 @@ final class XboxAuth: NSObject, ObservableObject {
 
     private var probeView: WKWebView?
     private var probeLoaded = false
-    private var pendingProbe: CheckedContinuation<Void, Never>?
+    private var probeIndex = 0
+    private var probeLoading = false
+    /// Every caller waiting on the current load. A single continuation slot
+    /// would be overwritten when two checks overlap, and the overwritten one
+    /// would never resume, hanging the app on "Checking your Xbox session".
+    private var probeWaiters: [CheckedContinuation<Void, Never>] = []
+    /// The in-flight check, so overlapping callers share one result instead of
+    /// racing each other through the same webview.
+    private var refreshTask: Task<State, Never>?
     private var watchTask: Task<Void, Never>?
     private let log = AppLog.shared
+
+    private var probeURL: URL {
+        Self.probeCandidates[min(probeIndex, Self.probeCandidates.count - 1)]
+    }
 
     private override init() {
         super.init()
@@ -93,13 +110,38 @@ final class XboxAuth: NSObject, ObservableObject {
     // MARK: - Checking
 
     /// Re-read the token. Safe to call often; it reuses one hidden webview.
+    ///
+    /// Calls made while a check is running join that check. Launch, the scene
+    /// becoming active and the sign-in watcher all fire at once, and letting
+    /// them each drive the probe independently is what makes the shared
+    /// continuation slot collide.
     @discardableResult
     func refresh(reason: String) async -> State {
+        if let existing = refreshTask {
+            log.debug("auth", "joining the check already running (\(reason))")
+            return await existing.value
+        }
+        let task = Task { [weak self] () -> State in
+            guard let self else { return .unknown }
+            return await self.performRefresh(reason: reason)
+        }
+        refreshTask = task
+        let result = await task.value
+        refreshTask = nil
+        return result
+    }
+
+    private func performRefresh(reason: String) async -> State {
         isChecking = true
         defer { isChecking = false }
         log.debug("auth", "checking (\(reason))")
 
         await ensureProbeLoaded()
+        // A document that never loaded cannot be asked anything, so move to
+        // the next probe URL before giving up on the session.
+        if !probeLoaded, advanceProbeCandidate() {
+            await ensureProbeLoaded()
+        }
 
         guard let probeView else {
             lastError = "Could not create the authentication probe."
@@ -108,9 +150,15 @@ final class XboxAuth: NSObject, ObservableObject {
             return state
         }
 
-        let result: Any?
+        var result: Any?
         do {
             result = try await probeView.evaluateJavaScript(WebScripts.authProbeJS)
+            // A document with no reachable storage answers with an error
+            // rather than a verdict; the full page always has storage.
+            if storageUnavailable(in: result), advanceProbeCandidate() {
+                await ensureProbeLoaded()
+                result = try await probeView.evaluateJavaScript(WebScripts.authProbeJS)
+            }
         } catch {
             lastError = error.localizedDescription
             log.error("auth", "probe failed: \(error.localizedDescription)")
@@ -194,7 +242,7 @@ final class XboxAuth: NSObject, ObservableObject {
         await store.removeData(ofTypes: types, for: matching)
 
         probeLoaded = false
-        probeView?.load(URLRequest(url: Self.probeURL))
+        probeView?.load(URLRequest(url: probeURL))
         log.info("auth", "cleared \(matching.count) website data record(s)")
     }
 
@@ -203,6 +251,27 @@ final class XboxAuth: NSObject, ObservableObject {
     private func apply(_ next: State) {
         guard state != next else { return }
         state = next
+    }
+
+    /// True when the probe answered "I could not read storage" instead of
+    /// "there is no token", which are very different things.
+    private func storageUnavailable(in result: Any?) -> Bool {
+        guard let json = result as? String,
+              let data = json.data(using: .utf8),
+              let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              payload["signedIn"] as? Bool != true,
+              let error = payload["error"] as? String, !error.isEmpty else { return false }
+        let detail = error.lowercased()
+        return detail.contains("security") || detail.contains("storage")
+            || detail.contains("denied") || detail.contains("access")
+    }
+
+    private func advanceProbeCandidate() -> Bool {
+        guard probeIndex + 1 < Self.probeCandidates.count else { return false }
+        probeIndex += 1
+        probeLoaded = false
+        log.warn("auth", "session probe falling back to \(probeURL.path)")
+        return true
     }
 
     // MARK: - Probe webview
@@ -225,15 +294,16 @@ final class XboxAuth: NSObject, ObservableObject {
         guard !probeLoaded, let probeView else { return }
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            pendingProbe = continuation
-            probeView.load(URLRequest(url: Self.probeURL))
+            probeWaiters.append(continuation)
+            guard !probeLoading else { return }
+            probeLoading = true
+            probeView.load(URLRequest(url: probeURL))
             // Never let a hung network request block the UI forever.
             Task { [weak self] in
                 try? await Task.sleep(for: .seconds(12))
-                guard let self, let pending = self.pendingProbe else { return }
-                self.pendingProbe = nil
+                guard let self, self.probeLoading else { return }
                 self.log.warn("auth", "probe load timed out")
-                pending.resume()
+                self.finishProbeLoad(success: false, detail: "timed out")
             }
         }
     }
@@ -249,10 +319,13 @@ final class XboxAuth: NSObject, ObservableObject {
     }
 
     private func finishProbeLoad(success: Bool, detail: String) {
+        guard probeLoading else { return }
+        probeLoading = false
         probeLoaded = success
         if !success { log.warn("auth", "probe load failed: \(detail)") }
-        pendingProbe?.resume()
-        pendingProbe = nil
+        let waiters = probeWaiters
+        probeWaiters.removeAll()
+        for waiter in waiters { waiter.resume() }
     }
 }
 

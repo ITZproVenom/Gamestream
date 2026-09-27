@@ -4,10 +4,11 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    tags: ["v*"]
+    # Only Android changes. The shared scripts folder used to be listed here,
+    # which meant an iOS-only commit kicked off an Android build and moved the
+    # stable Android release pointer.
     paths:
       - "android/**"
-      - "scripts/**"
       - ".github/workflows/build-apk.yml"
 
 permissions:

@@ -181,7 +181,8 @@ final class ControllerRumble: ObservableObject {
     /// was parsed and then thrown away, so the haptic loop ran until a zero
     /// packet happened to arrive. If the game stopped sending — which happens
     /// whenever a session drops — the controller simply buzzed forever.
-    private var stopWorkItem: Task<Void, Never>?
+    private var stopTimer: Task<Void, Never>?
+    private var stopDeadline: Date?
 
     private let log = AppLog.shared
     private static let loopDuration: TimeInterval = 1
@@ -222,20 +223,35 @@ final class ControllerRumble: ObservableObject {
         let sharpness = min(max(magnitudeLeft * 0.75 + magnitudeRight * 0.25, 0), 1) * 2 - 1
         apply(intensity: intensity, sharpness: sharpness)
 
-        stopWorkItem?.cancel()
         // A zero duration means "until further notice"; clamp anything longer
         // than a couple of seconds so a lost packet cannot strand the motors.
         let seconds = durationMs > 0 ? min(durationMs / 1000, 2.5) : 2.5
-        stopWorkItem = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(seconds))
-            guard !Task.isCancelled else { return }
-            self?.stop()
+        // A deadline that one long-lived timer watches. Creating a task per
+        // packet meant sixty allocations and cancellations a second during
+        // heavy rumble.
+        stopDeadline = Date().addingTimeInterval(seconds)
+        startStopTimer()
+    }
+
+    private func startStopTimer() {
+        guard stopTimer == nil else { return }
+        stopTimer = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(80))
+                guard !Task.isCancelled, let self else { return }
+                guard let deadline = self.stopDeadline else { return }
+                if Date() >= deadline {
+                    self.stop()
+                    return
+                }
+            }
         }
     }
 
     func stop() {
-        stopWorkItem?.cancel()
-        stopWorkItem = nil
+        stopTimer?.cancel()
+        stopTimer = nil
+        stopDeadline = nil
         guard isPlaying else { return }
         try? player?.stop(atTime: CHHapticTimeImmediate)
         isPlaying = false
