@@ -201,7 +201,8 @@ struct SettingsView: View {
                 Spacer(minLength: 0)
                 Image(systemName: rumble.controllerName == nil
                       ? "gamecontroller" : "gamecontroller.fill")
-                    .foregroundStyle(rumble.controllerName == nil ? .secondary : .tint)
+                    .foregroundStyle(rumble.controllerName == nil
+                                     ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
             }
 
             SettingsDivider()

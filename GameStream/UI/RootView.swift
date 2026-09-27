@@ -6,10 +6,12 @@ struct RootView: View {
     @EnvironmentObject private var stream: StreamCoordinator
     @EnvironmentObject private var library: LibraryStore
 
-    @State private var tab: Tab = .home
+    @State private var tab: MainTab = .home
     @State private var showingBrowser = false
 
-    enum Tab: Hashable { case home, library, search, stats, settings }
+    /// Named MainTab, not Tab: SwiftUI's own `Tab` view is used below, and a
+    /// nested type with the same name shadows it.
+    enum MainTab: Hashable { case home, library, search, stats, settings }
 
     var body: some View {
         Group {
