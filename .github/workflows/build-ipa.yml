@@ -72,7 +72,11 @@ jobs:
           BASE_PATCH="$(echo "$BASE" | cut -d. -f3)"
           BASE_PATCH="${BASE_PATCH:-0}"
 
-          BASE_COMMIT="$(git log -1 --format=%H -S'CFBundleShortVersionString' -- project.yml || true)"
+          # -G, not -S: editing the version changes the line but not how many
+          # times the key appears, so a pickaxe on the key name finds the
+          # commit that introduced it years of commits ago and the patch
+          # number comes out as 633.
+          BASE_COMMIT="$(git log -1 --format=%H -G'CFBundleShortVersionString: "' -- project.yml || true)"
           if [ -n "$BASE_COMMIT" ]; then
             SINCE="$(git rev-list --count "${BASE_COMMIT}..HEAD")"
           else
