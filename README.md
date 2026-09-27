@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios-beta"><img alt="iOS Beta 2.0" src="https://img.shields.io/badge/iOS-Beta%202.0-6E56CF?style=for-the-badge&logo=apple" /></a>
   <a href="https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios"><img alt="iOS Stable" src="https://img.shields.io/badge/iOS-Stable%20(1.x)-111111?style=for-the-badge&logo=apple" /></a>
-  <a href="https://github.com/ITZproVenom/Gamestream/releases/tag/latest-android"><img alt="Android" src="https://img.shields.io/badge/Android-Latest-3DDC84?style=for-the-badge&logo=android&logoColor=111111" /></a>
+  <a href="https://github.com/ITZproVenom/Gamestream/releases/tag/latest-android-beta"><img alt="Android" src="https://img.shields.io/badge/Android-Beta-3DDC84?style=for-the-badge&logo=android&logoColor=111111" /></a>
 </p>
 
 <p align="center">
@@ -58,7 +58,8 @@ Choose the channel you want. **Stable and Beta are intentionally separate.**
 | --- | --- | --- |
 | 📱 **iOS Stable** | [Latest iOS](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios) | Normal day-to-day build |
 | 🧪 **iOS Beta** | [Latest iOS Beta](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios-beta) | Experimental and in-development changes |
-| 🤖 **Android** | [Latest Android](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-android) | Current Android APK |
+| 🤖 **Android Stable** | [Latest Android](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-android) | Last stable APK, frozen |
+| 🧪 **Android Beta** | [Latest Android Beta](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-android-beta) | Current Android builds |
 
 > ⚠️ **Experimental software:** GameStream is still an experimental project. Even the **Stable** channel can contain significant bugs, crashes, broken features, incomplete integrations, and regressions. “Stable” only identifies the normal release channel, not production readiness.
 >

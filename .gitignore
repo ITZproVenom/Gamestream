@@ -40,3 +40,8 @@ Package.resolved
 GameStream/Assets.xcassets/AppIcon.appiconset/*.png
 android/app/src/main/res/mipmap-*/ic_launcher.png
 docs/gamestream-icon.png
+
+# Signing material lives in repository secrets, never in git.
+android/keystore/*.jks
+android/keystore/*.jks.b64
+android/keystore/keystore.properties

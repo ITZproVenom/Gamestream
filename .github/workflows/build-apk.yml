@@ -57,18 +57,33 @@ jobs:
               sys.exit("invalid source icon")
           PY
 
-      - name: Decode release keystore
+      - name: Restore release keystore from secrets
         working-directory: .
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          import base64
-          src = Path("android/keystore/gamestream-release.jks.b64")
-          dest = Path("android/keystore/gamestream-release.jks")
-          dest.write_bytes(base64.b64decode(src.read_text()))
-          print(f"wrote {dest} ({dest.stat().st_size} bytes)")
-          PY
+          # The keystore and its passwords used to be committed to this public
+          # repository. They now live in repository secrets and are written to
+          # disk only for the length of this job.
+          if [ -z "${KEYSTORE_B64:-}" ]; then
+            echo "::error::ANDROID_KEYSTORE_B64 secret is missing; refusing to publish an unsigned APK."
+            exit 1
+          fi
+          mkdir -p android/keystore
+          printf '%s' "$KEYSTORE_B64" | base64 -d > android/keystore/gamestream-release.jks
+          test -s android/keystore/gamestream-release.jks
+          umask 077
+          {
+            echo "storeFile=gamestream-release.jks"
+            echo "storePassword=${KEYSTORE_PASSWORD}"
+            echo "keyAlias=${KEY_ALIAS}"
+            echo "keyPassword=${KEY_PASSWORD}"
+          } > android/keystore/keystore.properties
+          echo "keystore restored ($(stat -c%s android/keystore/gamestream-release.jks) bytes)"
 
       - name: Build release APK
         run: |
@@ -121,8 +136,8 @@ jobs:
           DATE_UTC="$(date -u +'%Y-%m-%d %H:%M UTC')"
           STAMP="$(date -u +'%Y%m%d-%H%M')"
           RUN="${{ github.run_number }}"
-          echo "tag=android-build-${STAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "name=🤖 Android · GameStream #${RUN} (${SHORT_SHA})" >> "$GITHUB_OUTPUT"
+          echo "tag=android-beta-${STAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "name=🤖 Android Beta · GameStream #${RUN} (${SHORT_SHA})" >> "$GITHUB_OUTPUT"
 
           python3 - "$SHORT_SHA" "$DATE_UTC" "$EVENT_NAME" <<'PY'
           import subprocess, sys
@@ -131,7 +146,7 @@ jobs:
           short, date, event = sys.argv[1], sys.argv[2], sys.argv[3]
 
           prev = subprocess.check_output(
-              ["git", "tag", "-l", "android-build-*", "--sort=-creatordate"],
+              ["git", "tag", "-l", "android-beta-*", "--sort=-creatordate"],
               text=True,
           ).strip().splitlines()
           prev = prev[0] if prev else None
@@ -172,10 +187,10 @@ jobs:
 
           since = f" since `{prev}`" if prev else ""
           body = "\n".join([
-              "## 🤖 Android build",
+              "## 🤖 Android beta build",
               "",
               f"**Platform:** Android only · **Build:** `{short}` · **{date}**",
-              f"**iOS builds:** use tag [`latest-ios`](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios) — not this release.{since}",
+              f"**iOS builds:** use tag [`latest-ios-beta`](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios-beta) — not this release.{since}",
               "",
               "### What's changed (Android)",
               "",
@@ -187,7 +202,7 @@ jobs:
               "Download **GameStream-release.apk** (allow unknown sources).",
               "Signed with the persistent GameStream release keystore.",
               "",
-              "Always-current link: [`latest-android`](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-android)",
+              "Always-current link: [`latest-android-beta`](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-android-beta)",
               "",
           ])
           Path("android_release_notes.md").write_text(body)
@@ -212,7 +227,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Refresh latest-android pointer
+      - name: Refresh latest-android-beta pointer
         if: >-
           steps.meta.outputs.should_release == 'true' &&
           (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
@@ -221,18 +236,12 @@ jobs:
         working-directory: .
         run: |
           set -euo pipefail
-          gh release delete latest-android --yes --cleanup-tag 2>/dev/null || true
-          gh release create latest-android \
+          # Beta pointer only. The stable latest-android release is never
+          # touched by CI.
+          gh release delete latest-android-beta --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest-android-beta \
             GameStream-release.apk \
-            --title "🤖 Android · Latest APK" \
+            --title "🤖 Android Beta · Latest APK" \
             --notes "$(cat android_release_notes.md)" \
             --prerelease
 
-      - name: Publish versioned release APK
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: GameStream-release.apk
-          fail_on_unmatched_files: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

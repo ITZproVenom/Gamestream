@@ -4,11 +4,13 @@ import android.app.Application
 import android.content.Context
 import android.webkit.CookieManager
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 
 class SessionStore(app: Application) : AndroidViewModel(app) {
     private val prefs = app.getSharedPreferences("gamestream", Context.MODE_PRIVATE)
@@ -114,7 +116,10 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         if (didConsumeLaunchResume) return
         didConsumeLaunchResume = true
         if (!resumeLastOnOpen || !isSignedIn || isStreaming) return
-        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main.immediate) {
+        // The view model's own scope, so the resume is cancelled with the
+        // screen instead of outliving it. delay() also needs a coroutine
+        // scope at all, which is why this file did not compile.
+        viewModelScope.launch {
             delay(1200)
             if (resumeLastOnOpen && isSignedIn && !isStreaming) {
                 resumeLastStream()
