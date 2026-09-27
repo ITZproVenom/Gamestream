@@ -1,11 +1,27 @@
 import Foundation
 import GameController
 import CoreHaptics
+import UIKit
 
-/// The JavaScript half of controller rumble, plus the hand-off to native code.
+/// The JavaScript half of rumble, plus the hand-off to native code.
 ///
 /// Xbox Cloud sends FourMotorRumble packets over the WebRTC data channel named
-/// "input". The packet layout below matches Better xCloud's parser.
+/// "input". The packet layout below matches the one the web client uses.
+///
+/// There are two ways those packets can reach a controller on iOS, and which
+/// one works depends entirely on the hardware:
+///
+///  * `GCDeviceHaptics` — Apple's own controller haptics. Present for
+///    DualSense, DualShock 4 and MFi pads. **Absent on Xbox controllers**,
+///    which is why 1.x and early 2.0 detected the pad, reported it happily
+///    and then never vibrated: the engine could not be created at all.
+///  * The page's own `GamepadHapticActuator` — `playEffect("dual-rumble")`.
+///    This runs inside the stream page, where the browser owns the gamepad,
+///    and is the only route that can reach an Xbox pad here.
+///
+/// So the packets are played in the page when an actuator exists, natively
+/// when Apple's haptics exist, and as a last resort on the phone itself.
+/// Capability is detected at runtime and reported, never assumed.
 enum RumbleBridge {
     static let javaScript = #"""
     (function() {
@@ -13,18 +29,106 @@ enum RumbleBridge {
         window.__gsRumble = true;
 
         var hooked = typeof WeakSet !== "undefined" ? new WeakSet() : null;
+        // Set from native: "page" plays through the gamepad actuator here,
+        // "native" only forwards packets, "off" does neither.
+        window.__gsRumbleMode = window.__gsRumbleMode || "page";
+        window.__gsRumbleScale = window.__gsRumbleScale || 1;
+
+        function post(payload) {
+            try {
+                window.webkit.messageHandlers.gamestream.postMessage(payload);
+            } catch (e) {}
+        }
+
+        function actuatorGamepad() {
+            var pads = navigator.getGamepads ? navigator.getGamepads() : [];
+            for (var i = 0; i < pads.length; i++) {
+                var pad = pads[i];
+                if (pad && pad.connected && pad.vibrationActuator) return pad;
+            }
+            return null;
+        }
+
+        /// Tell the app what this page can actually do, so Settings can say
+        /// so instead of implying rumble works when it cannot.
+        var reported = "";
+        function reportCapability() {
+            var pads = navigator.getGamepads ? navigator.getGamepads() : [];
+            var names = [];
+            var actuator = false;
+            for (var i = 0; i < pads.length; i++) {
+                if (!pads[i] || !pads[i].connected) continue;
+                names.push(String(pads[i].id).slice(0, 48));
+                if (pads[i].vibrationActuator) actuator = true;
+            }
+            var summary = actuator + "|" + names.join(",");
+            if (summary === reported) return;
+            reported = summary;
+            post({ type: "rumbleCaps", actuator: actuator, gamepads: names.join(", ") });
+        }
+
+        window.addEventListener("gamepadconnected", reportCapability);
+        window.addEventListener("gamepaddisconnected", reportCapability);
+        setInterval(reportCapability, 4000);
+        reportCapability();
+
+        function playInPage(data) {
+            if (window.__gsRumbleMode !== "page") return false;
+            var pad = actuatorGamepad();
+            if (!pad) return false;
+
+            var scale = Number(window.__gsRumbleScale) || 1;
+            function level(value) {
+                var raw = Number(value) || 0;
+                if (raw > 1) raw = raw / 100;
+                return Math.max(0, Math.min(1, raw * scale));
+            }
+
+            var strong = Math.max(level(data.leftMotorPercent),
+                                  level(data.leftTriggerMotorPercent));
+            var weak = Math.max(level(data.rightMotorPercent),
+                                level(data.rightTriggerMotorPercent));
+            var duration = Number(data.durationMs) || 0;
+            // A zero duration means "until further notice". Keep the effect
+            // short and let the next packet renew it, so a dropped session
+            // cannot leave the motors running.
+            if (duration <= 0) duration = 250;
+            duration = Math.max(20, Math.min(duration, 1000));
+
+            try {
+                if (strong <= 0.001 && weak <= 0.001) {
+                    pad.vibrationActuator.reset && pad.vibrationActuator.reset();
+                    return true;
+                }
+                pad.vibrationActuator.playEffect("dual-rumble", {
+                    startDelay: 0,
+                    duration: duration,
+                    strongMagnitude: strong,
+                    weakMagnitude: weak
+                });
+                return true;
+            } catch (e) {
+                post({ type: "rumbleCaps", actuator: false, gamepads: "playEffect failed: " + e });
+                return false;
+            }
+        }
 
         function send(data) {
-            try {
-                window.webkit.messageHandlers.gamestream.postMessage({
-                    type: "rumble",
-                    left: Number(data.leftMotorPercent) || 0,
-                    right: Number(data.rightMotorPercent) || 0,
-                    leftTrigger: Number(data.leftTriggerMotorPercent) || 0,
-                    rightTrigger: Number(data.rightTriggerMotorPercent) || 0,
-                    durationMs: Number(data.durationMs) || 0
-                });
-            } catch (e) {}
+            post({
+                type: "rumble",
+                left: Number(data.leftMotorPercent) || 0,
+                right: Number(data.rightMotorPercent) || 0,
+                leftTrigger: Number(data.leftTriggerMotorPercent) || 0,
+                rightTrigger: Number(data.rightTriggerMotorPercent) || 0,
+                durationMs: Number(data.durationMs) || 0
+            });
+        }
+
+        function deliver(data) {
+            // Playing in the page is preferred when possible: it is the only
+            // path that reaches an Xbox pad, and it skips a round trip.
+            var played = playInPage(data);
+            if (!played) send(data);
         }
 
         function parse(buffer) {
@@ -61,7 +165,7 @@ enum RumbleBridge {
                         : view.getUint8(offset);
                     offset += width;
                 }
-                send(data);
+                deliver(data);
             } catch (e) {}
         }
 
@@ -78,76 +182,55 @@ enum RumbleBridge {
 
         function hook(channel) {
             try {
-                if (!channel || channel.label !== "input") return;
-                if (hooked) {
-                    if (hooked.has(channel)) return;
-                    hooked.add(channel);
-                }
+                if (!channel || (hooked && hooked.has(channel))) return;
+                if (channel.label !== "input") return;
+                hooked && hooked.add(channel);
                 channel.addEventListener("message", onMessage);
             } catch (e) {}
         }
 
-        try {
-            var create = RTCPeerConnection.prototype.createDataChannel;
-            RTCPeerConnection.prototype.createDataChannel = function() {
-                var channel = create.apply(this, arguments);
+        // The rumble packets arrive on a data channel the page creates, so
+        // createDataChannel has to be wrapped before the session opens.
+        var Native = window.RTCPeerConnection;
+        if (Native && Native.prototype && Native.prototype.createDataChannel) {
+            var original = Native.prototype.createDataChannel;
+            Native.prototype.createDataChannel = function() {
+                var channel = original.apply(this, arguments);
                 hook(channel);
                 return channel;
             };
-        } catch (e) {}
-
-        try {
-            var addListener = RTCPeerConnection.prototype.addEventListener;
-            RTCPeerConnection.prototype.addEventListener = function(type, listener, options) {
-                if (type === "datachannel" && typeof listener === "function") {
-                    var wrapped = function(event) {
-                        try { if (event && event.channel) hook(event.channel); } catch (e) {}
-                        return listener.apply(this, arguments);
-                    };
-                    return addListener.call(this, type, wrapped, options);
-                }
-                return addListener.call(this, type, listener, options);
+        }
+        if (Native && Native.prototype) {
+            var originalSetRemote = Native.prototype.setRemoteDescription;
+            Native.prototype.setRemoteDescription = function() {
+                try {
+                    this.addEventListener("datachannel", function(event) {
+                        hook(event.channel);
+                    });
+                } catch (e) {}
+                return originalSetRemote.apply(this, arguments);
             };
-        } catch (e) {}
+        }
 
-        // Ask the service to enable vibration in the stream configuration.
-        try {
-            var nativeFetch = window.fetch.bind(window);
-            window.fetch = function(resource, init) {
-                var url = typeof resource === "string" ? resource : (resource && resource.url) || "";
-                var pending = nativeFetch(resource, init);
-                if (!/\/configuration(\?|$)/.test(url)) return pending;
-                return pending.then(function(response) {
-                    return response.clone().text().then(function(text) {
-                        try {
-                            var body = JSON.parse(text);
-                            var overrides = {};
-                            try {
-                                overrides = JSON.parse(body.clientStreamingConfigOverrides || "{}") || {};
-                            } catch (e) { overrides = {}; }
-                            overrides.inputConfiguration = overrides.inputConfiguration || {};
-                            overrides.inputConfiguration.enableVibration = true;
-                            body.clientStreamingConfigOverrides = JSON.stringify(overrides);
-                            return new Response(JSON.stringify(body), {
-                                status: response.status,
-                                statusText: response.statusText,
-                                headers: response.headers
-                            });
-                        } catch (e) {
-                            return response;
-                        }
-                    }).catch(function() { return response; });
-                });
-            };
-        } catch (e) {}
+        /// Used by the Settings test button while a stream is on screen.
+        window.__gsRumbleTest = function(strong, weak, duration) {
+            return playInPage({
+                leftMotorPercent: strong,
+                rightMotorPercent: weak,
+                leftTriggerMotorPercent: 0,
+                rightTriggerMotorPercent: 0,
+                durationMs: duration
+            });
+        };
     })();
     """#
 
+    /// Forwarded packets, for the paths the page cannot play itself.
     @MainActor
     static func handle(payload: [String: Any]) {
         func number(_ key: String) -> Float {
-            if let value = payload[key] as? NSNumber { return value.floatValue }
             if let value = payload[key] as? Double { return Float(value) }
+            if let value = payload[key] as? Int { return Float(value) }
             return 0
         }
         ControllerRumble.shared.play(
@@ -158,29 +241,59 @@ enum RumbleBridge {
             durationMs: Double(number("durationMs"))
         )
     }
+
+    @MainActor
+    static func handleCapabilities(payload: [String: Any]) {
+        ControllerRumble.shared.notePageCapability(
+            actuator: payload["actuator"] as? Bool ?? false,
+            detail: payload["gamepads"] as? String ?? ""
+        )
+    }
 }
 
-/// Drives a physical controller's haptics from stream rumble packets.
+/// Plays rumble on whichever route this hardware actually supports.
 @MainActor
 final class ControllerRumble: ObservableObject {
     static let shared = ControllerRumble()
 
+    /// Where rumble is coming from. Shown in Settings, because "rumble is on"
+    /// is not useful when the hardware cannot do it.
+    enum Path: String {
+        case controller     // Apple's controller haptics
+        case page           // the stream page's gamepad actuator
+        case device         // the phone itself
+        case unavailable
+
+        var title: String {
+            switch self {
+            case .controller: return "Controller haptics"
+            case .page: return "Controller, through the stream"
+            case .device: return "Phone vibration"
+            case .unavailable: return "Unavailable"
+            }
+        }
+    }
+
     @Published private(set) var controllerName: String?
+    /// True only when Apple's own controller haptics exist for this pad.
     @Published private(set) var supportsHaptics = false
+    @Published private(set) var pageActuator = false
+    @Published private(set) var pageDetail = ""
+    @Published private(set) var path: Path = .unavailable
+
+    private enum EngineKind: Equatable {
+        case controller(ObjectIdentifier)
+        case device
+    }
 
     private var engine: CHHapticEngine?
     private var player: CHHapticAdvancedPatternPlayer?
-    private var controllerID: ObjectIdentifier?
+    private var engineKind: EngineKind?
     private var isPlaying = false
     private var observers: [NSObjectProtocol] = []
     private var started = false
+    private var warnedUnavailable = false
 
-    /// Stops the motors when the packet's own duration elapses.
-    ///
-    /// This is the fix for rumble that never ended in 1.x: the duration field
-    /// was parsed and then thrown away, so the haptic loop ran until a zero
-    /// packet happened to arrive. If the game stopped sending — which happens
-    /// whenever a session drops — the controller simply buzzed forever.
     private var stopTimer: Task<Void, Never>?
     private var stopDeadline: Date?
 
@@ -188,6 +301,8 @@ final class ControllerRumble: ObservableObject {
     private static let loopDuration: TimeInterval = 1
 
     private init() {}
+
+    // MARK: - Lifecycle
 
     func start() {
         guard !started else { return }
@@ -206,6 +321,20 @@ final class ControllerRumble: ObservableObject {
         refreshController(reason: "start")
     }
 
+    /// The page reporting what it can do with the gamepad it can see.
+    func notePageCapability(actuator: Bool, detail: String) {
+        let changed = actuator != pageActuator || detail != pageDetail
+        pageActuator = actuator
+        pageDetail = detail
+        if changed {
+            log.info("rumble", "page reports actuator \(actuator ? "available" : "missing")"
+                     + (detail.isEmpty ? "" : " for \(detail)"))
+            updatePath(reason: "page report")
+        }
+    }
+
+    // MARK: - Playing
+
     func play(left: Float, right: Float, leftTrigger: Float = 0,
               rightTrigger: Float = 0, durationMs: Double, force: Bool = false) {
         guard force || AppSettings.shared.rumbleEnabled else { return }
@@ -218,7 +347,15 @@ final class ControllerRumble: ObservableObject {
             stop()
             return
         }
-        guard prepareEngine() else { return }
+
+        guard let kind = engineKindForPlayback() else {
+            if !warnedUnavailable {
+                warnedUnavailable = true
+                log.warn("rumble", "nothing can play rumble: \(diagnosis)")
+            }
+            return
+        }
+        guard prepareEngine(kind) else { return }
 
         let sharpness = min(max(magnitudeLeft * 0.75 + magnitudeRight * 0.25, 0), 1) * 2 - 1
         apply(intensity: intensity, sharpness: sharpness)
@@ -226,26 +363,8 @@ final class ControllerRumble: ObservableObject {
         // A zero duration means "until further notice"; clamp anything longer
         // than a couple of seconds so a lost packet cannot strand the motors.
         let seconds = durationMs > 0 ? min(durationMs / 1000, 2.5) : 2.5
-        // A deadline that one long-lived timer watches. Creating a task per
-        // packet meant sixty allocations and cancellations a second during
-        // heavy rumble.
         stopDeadline = Date().addingTimeInterval(seconds)
         startStopTimer()
-    }
-
-    private func startStopTimer() {
-        guard stopTimer == nil else { return }
-        stopTimer = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(80))
-                guard !Task.isCancelled, let self else { return }
-                guard let deadline = self.stopDeadline else { return }
-                if Date() >= deadline {
-                    self.stop()
-                    return
-                }
-            }
-        }
     }
 
     func stop() {
@@ -262,33 +381,106 @@ final class ControllerRumble: ObservableObject {
         engine?.stop(completionHandler: nil)
         engine = nil
         player = nil
-        controllerID = nil
+        engineKind = nil
     }
 
-    // MARK: - Test patterns used by Settings
-
-    func testLeft() { play(left: 1, right: 0, durationMs: 400, force: true) }
-    func testRight() { play(left: 0, right: 1, durationMs: 400, force: true) }
-
-    func testBoth() {
-        testLeft()
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(600))
-            testRight()
-            try? await Task.sleep(for: .milliseconds(600))
-            play(left: 1, right: 1, durationMs: 350, force: true)
+    /// Settings' test button. Uses whichever route is live, and says what it
+    /// did, so a silent controller is explained rather than mysterious.
+    func test() {
+        switch path {
+        case .page:
+            let scaleValue = AppSettings.shared.rumbleIntensity
+            XboxWebView.Registry.shared.run(
+                "window.__gsRumbleScale = \(scaleValue);"
+                + "window.__gsRumbleTest && window.__gsRumbleTest(90, 90, 500);"
+            )
+            log.info("rumble", "test sent to the stream page")
+        case .controller, .device:
+            play(left: 0.9, right: 0.9, durationMs: 500, force: true)
+            log.info("rumble", "test played through \(path.title.lowercased())")
+        case .unavailable:
+            log.warn("rumble", "test skipped: \(diagnosis)")
         }
     }
 
-    // MARK: - Engine
+    /// Plain-language reason there is no rumble, for Settings and the log.
+    var diagnosis: String {
+        if supportsHaptics { return "controller haptics are available" }
+        if pageActuator { return "the stream page can vibrate the controller" }
+
+        var reasons: [String] = []
+        if controllerName == nil {
+            reasons.append("no controller is connected")
+        } else {
+            reasons.append("this controller does not expose haptics to iOS")
+            reasons.append("the stream page reports no vibration actuator")
+        }
+        if !Self.deviceHapticsSupported {
+            reasons.append("this device has no haptic engine")
+        } else if !AppSettings.shared.phoneRumbleFallback {
+            reasons.append("phone vibration is switched off")
+        }
+        return reasons.joined(separator: "; ")
+    }
+
+    // MARK: - Routing
+
+    private static var deviceHapticsSupported: Bool {
+        CHHapticEngine.capabilitiesForHardware().supportsHaptics
+    }
+
+    private func updatePath(reason: String) {
+        let next: Path
+        if supportsHaptics {
+            next = .controller
+        } else if pageActuator {
+            next = .page
+        } else if Self.deviceHapticsSupported && AppSettings.shared.phoneRumbleFallback {
+            next = .device
+        } else {
+            next = .unavailable
+        }
+        guard next != path else { return }
+        path = next
+        warnedUnavailable = false
+        // A route change means the old engine belongs to the wrong target.
+        teardown()
+        log.info("rumble", "path is now \(next.rawValue) (\(reason))")
+    }
+
+    /// Recomputed when the phone-vibration preference changes.
+    func settingsChanged() {
+        updatePath(reason: "settings")
+    }
+
+    private func engineKindForPlayback() -> EngineKind? {
+        switch path {
+        case .controller:
+            guard let controller = activeController(), controller.haptics != nil else { return nil }
+            return .controller(ObjectIdentifier(controller))
+        case .device:
+            return .device
+        case .page:
+            // The page plays these itself; forwarded packets only arrive when
+            // it could not, so fall back to the phone if that is allowed.
+            guard Self.deviceHapticsSupported,
+                  AppSettings.shared.phoneRumbleFallback else { return nil }
+            return .device
+        case .unavailable:
+            return nil
+        }
+    }
 
     private func refreshController(reason: String) {
         let controller = activeController()
         controllerName = controller?.vendorName
         supportsHaptics = controller?.haptics != nil
         log.info("rumble", "\(reason): \(controllerName ?? "no controller")"
-                 + (supportsHaptics ? " with haptics" : " without haptics"))
+                 + (supportsHaptics
+                    ? " with Apple haptics"
+                    : " without Apple haptics (normal for Xbox pads)"))
         if controller == nil { teardown() }
+        updatePath(reason: reason)
     }
 
     private func activeController() -> GCController? {
@@ -297,20 +489,25 @@ final class ControllerRumble: ObservableObject {
         return all.first { $0.haptics != nil } ?? all.first
     }
 
-    private func prepareEngine() -> Bool {
-        guard let controller = activeController(), let haptics = controller.haptics else {
-            return false
-        }
-        let id = ObjectIdentifier(controller)
-        if controllerID == id, player != nil { return true }
+    // MARK: - Engine
 
+    private func prepareEngine(_ kind: EngineKind) -> Bool {
+        if engineKind == kind, player != nil { return true }
         teardown()
-        controllerID = id
 
-        guard let engine = haptics.createEngine(withLocality: .default) else {
-            log.error("rumble", "could not create a haptic engine for \(controller.vendorName ?? "controller")")
+        let created: CHHapticEngine?
+        switch kind {
+        case .controller:
+            created = activeController()?.haptics?.createEngine(withLocality: .default)
+        case .device:
+            created = try? CHHapticEngine()
+        }
+        guard let engine = created else {
+            log.error("rumble", "could not create a haptic engine for \(kind)")
             return false
         }
+
+        engineKind = kind
         engine.playsHapticsOnly = true
         engine.isAutoShutdownEnabled = false
         engine.stoppedHandler = { _ in
@@ -338,13 +535,14 @@ final class ControllerRumble: ObservableObject {
 
             self.engine = engine
             self.player = advanced
-            log.info("rumble", "haptics ready on \(controller.vendorName ?? "controller")")
+            log.info("rumble", "haptic engine ready (\(path.rawValue))")
             return true
         } catch {
             log.error("rumble", "haptic setup failed: \(error.localizedDescription)")
+            engine.stop(completionHandler: nil)
             self.engine = nil
             self.player = nil
-            controllerID = nil
+            engineKind = nil
             return false
         }
     }
@@ -353,7 +551,7 @@ final class ControllerRumble: ObservableObject {
         isPlaying = false
         player = nil
         engine = nil
-        controllerID = nil
+        engineKind = nil
     }
 
     private func apply(intensity: Float, sharpness: Float) {
@@ -373,6 +571,21 @@ final class ControllerRumble: ObservableObject {
         } catch {
             log.warn("rumble", "playback failed: \(error.localizedDescription)")
             engineDidStop()
+        }
+    }
+
+    private func startStopTimer() {
+        guard stopTimer == nil else { return }
+        stopTimer = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(80))
+                guard !Task.isCancelled, let self else { return }
+                guard let deadline = self.stopDeadline else { return }
+                if Date() >= deadline {
+                    self.stop()
+                    return
+                }
+            }
         }
     }
 

@@ -209,9 +209,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(rumble.controllerName ?? "No controller connected")
                         .font(.subheadline.weight(.semibold))
-                    Text(rumble.supportsHaptics
-                         ? "Haptics available"
-                         : "Haptics unavailable on this controller")
+                    Text("Rumble route: \(rumble.path.title)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -222,11 +220,29 @@ struct SettingsView: View {
                                      ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
             }
 
+            if rumble.path == .unavailable {
+                Text("No rumble is possible right now: \(rumble.diagnosis).")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else if rumble.path == .page {
+                Text("Xbox controllers do not expose haptics to iOS, so rumble is "
+                     + "played by the stream page through the gamepad it can see. "
+                     + "Test it while a game is running.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             SettingsDivider()
 
             Toggle("Rumble", isOn: $settings.rumbleEnabled)
 
             if settings.rumbleEnabled {
+                SettingsDivider()
+                Toggle("Vibrate the phone when the controller cannot",
+                       isOn: $settings.phoneRumbleFallback)
+
                 SettingsDivider()
                 VStack(alignment: .leading, spacing: 7) {
                     HStack {
@@ -242,12 +258,12 @@ struct SettingsView: View {
                 SettingsDivider()
 
                 Button {
-                    rumble.play(left: 0.85, right: 0.85, durationMs: 420, force: true)
+                    rumble.test()
                 } label: {
                     SettingsRowLabel(title: "Test rumble", icon: "waveform")
                 }
                 .buttonStyle(.plain)
-                .disabled(rumble.controllerName == nil)
+                .disabled(rumble.path == .unavailable)
             }
         }
     }

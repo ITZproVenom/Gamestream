@@ -120,6 +120,7 @@ final class AppSettings: ObservableObject {
         static let autoStart = "settings.autoStart"
         static let showStats = "settings.showStats"
         static let matchStreamStyle = "settings.matchStreamStyle"
+        static let phoneRumbleFallback = "settings.phoneRumbleFallback"
     }
 
     @Published var theme: Theme { didSet { store(theme.rawValue, Key.theme) } }
@@ -132,6 +133,13 @@ final class AppSettings: ObservableObject {
     @Published var rumbleIntensity: Float { didSet { store(Double(rumbleIntensity), Key.rumbleIntensity) } }
     @Published var autoStart: Bool { didSet { store(autoStart, Key.autoStart) } }
     @Published var showStreamStats: Bool { didSet { store(showStreamStats, Key.showStats) } }
+    /// Vibrate the phone when no controller route can rumble.
+    @Published var phoneRumbleFallback: Bool {
+        didSet {
+            store(phoneRumbleFallback, Key.phoneRumbleFallback)
+            ControllerRumble.shared.settingsChanged()
+        }
+    }
     /// Restyle the streaming enhancement's own web menus to match the app.
     @Published var matchStreamStyle: Bool { didSet { store(matchStreamStyle, Key.matchStreamStyle) } }
 
@@ -150,16 +158,22 @@ final class AppSettings: ObservableObject {
         autoStart = defaults.object(forKey: Key.autoStart) as? Bool ?? true
         showStreamStats = defaults.object(forKey: Key.showStats) as? Bool ?? false
         matchStreamStyle = defaults.object(forKey: Key.matchStreamStyle) as? Bool ?? true
+        phoneRumbleFallback = defaults.object(forKey: Key.phoneRumbleFallback) as? Bool ?? true
     }
 
     /// The preferences handed to Better xCloud before it boots.
     func betterXCloudPreferences() -> [String: String] {
         var values: [String: String] = [
             "stream.video.resolution": quality.betterXCloudValue,
-            "controller.vibration": rumbleEnabled ? "true" : "false",
-            "native-mfi-controller.vibration": rumbleEnabled ? "true" : "false",
-            "deviceVibration.mode": rumbleEnabled ? "on" : "off",
-            "deviceVibration.intensity": "100",
+            // GameStream owns rumble now. Its bridge reads the packets off the
+            // data channel, applies the intensity setting and plays them, so
+            // the enhancement's own handling is switched off: two owners
+            // playing the same packets produces doubled effects.
+            "controller.vibration": "false",
+            "native-mfi-controller.vibration": "false",
+            // Its phone-vibration path uses navigator.vibrate, which WebKit
+            // does not implement; the native fallback covers that instead.
+            "deviceVibration.mode": "off",
             // Always off: GameStream draws its own statistics panel from the
             // peer connection, and two overlays reporting the same numbers in
             // different styles is worse than one.

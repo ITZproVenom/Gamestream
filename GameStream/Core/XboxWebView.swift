@@ -142,6 +142,12 @@ struct XboxWebView: UIViewRepresentable {
 
         // The rumble bridge must wrap createDataChannel before the page opens
         // its WebRTC session, so it has to run at document start.
+        let settings = AppSettings.shared
+        controller.addUserScript(WKUserScript(
+            source: "window.__gsRumbleMode = \"\(settings.rumbleEnabled ? "page" : "off")\";"
+                + "window.__gsRumbleScale = \(settings.rumbleIntensity);",
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: false))
         controller.addUserScript(WKUserScript(source: RumbleBridge.javaScript,
                                               injectionTime: .atDocumentStart,
                                               forMainFrameOnly: false))
@@ -225,6 +231,8 @@ struct XboxWebView: UIViewRepresentable {
                          + "\(body["detail"] as? String ?? "")")
             case "rumble":
                 RumbleBridge.handle(payload: body)
+            case "rumbleCaps":
+                RumbleBridge.handleCapabilities(payload: body)
             default:
                 break
             }
