@@ -307,6 +307,7 @@ final class ControllerRumble: ObservableObject {
     private var stopDeadline: Date?
     private var tapticTask: Task<Void, Never>?
     private var tapticGenerator: UIImpactFeedbackGenerator?
+    private var tapticStyle: UIImpactFeedbackGenerator.FeedbackStyle?
 
     private let log = AppLog.shared
     private static let loopDuration: TimeInterval = 1
@@ -513,7 +514,8 @@ final class ControllerRumble: ObservableObject {
             guard Self.deviceHapticsSupported, !deviceHapticsBroken,
                   AppSettings.shared.phoneRumbleFallback else { return nil }
             return .device
-        case .unavailable:
+        case .taptics, .unavailable:
+            // Taptics need no engine; play() handles that route directly.
             return nil
         }
     }
@@ -689,9 +691,10 @@ final class ControllerRumble: ObservableObject {
     private func playTaptics(intensity: Float, durationMs: Double) {
         let style: UIImpactFeedbackGenerator.FeedbackStyle =
             intensity > 0.66 ? .heavy : (intensity > 0.33 ? .medium : .light)
-        let generator = tapticGenerator.flatMap { $0.style == style ? $0 : nil }
+        let generator = (tapticStyle == style ? tapticGenerator : nil)
             ?? UIImpactFeedbackGenerator(style: style)
         tapticGenerator = generator
+        tapticStyle = style
         generator.prepare()
         generator.impactOccurred(intensity: CGFloat(min(max(intensity, 0.1), 1)))
 
