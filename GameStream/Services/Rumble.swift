@@ -293,6 +293,13 @@ final class ControllerRumble: ObservableObject {
     private var observers: [NSObjectProtocol] = []
     private var started = false
     private var warnedUnavailable = false
+    /// Set when a controller advertises haptics and then cannot produce a
+    /// working engine. An XBOX 360 For Windows pad does exactly that: iOS
+    /// reports haptics for it and then fails with "couldn't communicate with
+    /// a helper application". Believing the advertisement over the failure is
+    /// what kept rumble silent with no way out.
+    private var controllerHapticsBroken = false
+    private var deviceHapticsBroken = false
 
     private var stopTimer: Task<Void, Never>?
     private var stopDeadline: Date?
@@ -335,9 +342,10 @@ final class ControllerRumble: ObservableObject {
 
     // MARK: - Playing
 
+    @discardableResult
     func play(left: Float, right: Float, leftTrigger: Float = 0,
-              rightTrigger: Float = 0, durationMs: Double, force: Bool = false) {
-        guard force || AppSettings.shared.rumbleEnabled else { return }
+              rightTrigger: Float = 0, durationMs: Double, force: Bool = false) -> Bool {
+        guard force || AppSettings.shared.rumbleEnabled else { return false }
 
         let magnitudeLeft = scale(max(normalise(left), normalise(leftTrigger)))
         let magnitudeRight = scale(max(normalise(right), normalise(rightTrigger)))
@@ -345,26 +353,33 @@ final class ControllerRumble: ObservableObject {
 
         guard intensity > 0.001 else {
             stop()
-            return
+            return false
         }
-
-        guard let kind = engineKindForPlayback() else {
-            if !warnedUnavailable {
-                warnedUnavailable = true
-                log.warn("rumble", "nothing can play rumble: \(diagnosis)")
-            }
-            return
-        }
-        guard prepareEngine(kind) else { return }
 
         let sharpness = min(max(magnitudeLeft * 0.75 + magnitudeRight * 0.25, 0), 1) * 2 - 1
-        apply(intensity: intensity, sharpness: sharpness)
 
-        // A zero duration means "until further notice"; clamp anything longer
-        // than a couple of seconds so a lost packet cannot strand the motors.
-        let seconds = durationMs > 0 ? min(durationMs / 1000, 2.5) : 2.5
-        stopDeadline = Date().addingTimeInterval(seconds)
-        startStopTimer()
+        // Two attempts: a failed engine marks its route unusable and picks the
+        // next one, so a lying controller costs one silent packet, not rumble
+        // for the rest of the session.
+        for _ in 0..<2 {
+            guard let kind = engineKindForPlayback() else { break }
+            guard prepareEngine(kind) else { continue }
+
+            apply(intensity: intensity, sharpness: sharpness)
+            // A zero duration means "until further notice"; clamp anything
+            // longer than a couple of seconds so a lost packet cannot strand
+            // the motors.
+            let seconds = durationMs > 0 ? min(durationMs / 1000, 2.5) : 2.5
+            stopDeadline = Date().addingTimeInterval(seconds)
+            startStopTimer()
+            return true
+        }
+
+        if !warnedUnavailable {
+            warnedUnavailable = true
+            log.warn("rumble", "nothing can play rumble: \(diagnosis)")
+        }
+        return false
     }
 
     func stop() {
@@ -387,30 +402,38 @@ final class ControllerRumble: ObservableObject {
     /// Settings' test button. Uses whichever route is live, and says what it
     /// did, so a silent controller is explained rather than mysterious.
     func test() {
-        switch path {
-        case .page:
+        if path == .page, XboxWebView.Registry.shared.streamView != nil {
             let scaleValue = AppSettings.shared.rumbleIntensity
             XboxWebView.Registry.shared.run(
                 "window.__gsRumbleScale = \(scaleValue);"
                 + "window.__gsRumbleTest && window.__gsRumbleTest(90, 90, 500);"
             )
             log.info("rumble", "test sent to the stream page")
-        case .controller, .device:
-            play(left: 0.9, right: 0.9, durationMs: 500, force: true)
+            return
+        }
+
+        let route = path
+        let played = play(left: 0.9, right: 0.9, durationMs: 500, force: true)
+        if played {
             log.info("rumble", "test played through \(path.title.lowercased())")
-        case .unavailable:
-            log.warn("rumble", "test skipped: \(diagnosis)")
+        } else {
+            log.warn("rumble", "test produced nothing via \(route.rawValue): \(diagnosis)")
         }
     }
 
     /// Plain-language reason there is no rumble, for Settings and the log.
     var diagnosis: String {
-        if supportsHaptics { return "controller haptics are available" }
+        if supportsHaptics && !controllerHapticsBroken {
+            return "controller haptics are available"
+        }
         if pageActuator { return "the stream page can vibrate the controller" }
 
         var reasons: [String] = []
         if controllerName == nil {
             reasons.append("no controller is connected")
+        } else if controllerHapticsBroken {
+            reasons.append("this controller reports haptics but iOS cannot drive them")
+            reasons.append("the stream page reports no vibration actuator")
         } else {
             reasons.append("this controller does not expose haptics to iOS")
             reasons.append("the stream page reports no vibration actuator")
@@ -431,11 +454,12 @@ final class ControllerRumble: ObservableObject {
 
     private func updatePath(reason: String) {
         let next: Path
-        if supportsHaptics {
+        if supportsHaptics && !controllerHapticsBroken {
             next = .controller
         } else if pageActuator {
             next = .page
-        } else if Self.deviceHapticsSupported && AppSettings.shared.phoneRumbleFallback {
+        } else if Self.deviceHapticsSupported, !deviceHapticsBroken,
+                  AppSettings.shared.phoneRumbleFallback {
             next = .device
         } else {
             next = .unavailable
@@ -459,11 +483,12 @@ final class ControllerRumble: ObservableObject {
             guard let controller = activeController(), controller.haptics != nil else { return nil }
             return .controller(ObjectIdentifier(controller))
         case .device:
+            guard !deviceHapticsBroken else { return nil }
             return .device
         case .page:
             // The page plays these itself; forwarded packets only arrive when
             // it could not, so fall back to the phone if that is allowed.
-            guard Self.deviceHapticsSupported,
+            guard Self.deviceHapticsSupported, !deviceHapticsBroken,
                   AppSettings.shared.phoneRumbleFallback else { return nil }
             return .device
         case .unavailable:
@@ -473,8 +498,10 @@ final class ControllerRumble: ObservableObject {
 
     private func refreshController(reason: String) {
         let controller = activeController()
+        let changed = controller?.vendorName != controllerName
         controllerName = controller?.vendorName
         supportsHaptics = controller?.haptics != nil
+        if changed { controllerHapticsBroken = false }
         log.info("rumble", "\(reason): \(controllerName ?? "no controller")"
                  + (supportsHaptics
                     ? " with Apple haptics"
@@ -504,6 +531,7 @@ final class ControllerRumble: ObservableObject {
         }
         guard let engine = created else {
             log.error("rumble", "could not create a haptic engine for \(kind)")
+            markBroken(kind, reason: "no engine could be created")
             return false
         }
 
@@ -543,8 +571,25 @@ final class ControllerRumble: ObservableObject {
             self.engine = nil
             self.player = nil
             engineKind = nil
+            markBroken(kind, reason: error.localizedDescription)
             return false
         }
+    }
+
+    /// A route that cannot start is not a route. Record that and move on.
+    private func markBroken(_ kind: EngineKind, reason: String) {
+        switch kind {
+        case .controller:
+            guard !controllerHapticsBroken else { return }
+            controllerHapticsBroken = true
+            log.warn("rumble", "\(controllerName ?? "this controller") advertises haptics "
+                     + "but iOS cannot start an engine for it (\(reason)); trying another route")
+        case .device:
+            guard !deviceHapticsBroken else { return }
+            deviceHapticsBroken = true
+            log.warn("rumble", "the phone's haptic engine will not start (\(reason))")
+        }
+        updatePath(reason: "engine failure")
     }
 
     private func engineDidStop() {
