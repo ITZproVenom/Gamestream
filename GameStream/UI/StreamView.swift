@@ -147,7 +147,7 @@ struct StreamView: View {
                         qualityBadge(stats)
                     }
 
-                    hudIcon("xbox.logo", label: "Xbox guide", id: "guide") {
+                    hudIcon("logo.xbox", label: "Xbox guide", id: "guide") {
                         stream.pressGuide()
                     }
 
