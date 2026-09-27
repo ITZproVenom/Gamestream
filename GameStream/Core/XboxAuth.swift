@@ -74,6 +74,7 @@ final class XboxAuth: NSObject, ObservableObject {
     /// racing each other through the same webview.
     private var refreshTask: Task<State, Never>?
     private var watchTask: Task<Void, Never>?
+    private var lastRedirectNote: Date?
     private let log = AppLog.shared
 
     private var probeURL: URL {
@@ -217,7 +218,13 @@ final class XboxAuth: NSObject, ObservableObject {
     }
 
     /// Called when a webview reports it reached the site's post-login redirect.
+    ///
+    /// The site bounces through /auth/msa repeatedly while it settles, so this
+    /// arrives in bursts. Checking on every one of them fills the diagnostics
+    /// log with duplicates without ever learning anything new.
     func noteAuthRedirect() {
+        if let last = lastRedirectNote, Date().timeIntervalSince(last) < 1.5 { return }
+        lastRedirectNote = Date()
         log.info("auth", "site completed its Microsoft sign-in redirect")
         Task { await refresh(reason: "auth redirect") }
     }

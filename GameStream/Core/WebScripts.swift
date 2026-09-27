@@ -28,6 +28,21 @@ enum WebScripts {
             return typeof token === "string" && token.length > 20;
         }
 
+        // The XSTS token itself carries the gamertag in its display claims,
+        // which is the only place it appears once the site stores tokens under
+        // Auth.User.* keys. Without this the app showed "Xbox account".
+        function fromClaims(data) {
+            if (!data || typeof data !== "object") return "";
+            var claims = data.displayClaims || data.DisplayClaims;
+            var xui = claims && (claims.xui || claims.Xui || claims.XUI);
+            if (xui && xui.length) {
+                var entry = xui[0] || {};
+                var tag = entry.gtg || entry.Gtg || entry.gamertag || entry.umg;
+                if (typeof tag === "string" && tag.length) return tag;
+            }
+            return "";
+        }
+
         function readGamertag(info) {
             if (!info || typeof info !== "object") return "";
             var candidates = [info.gamertag, info.Gamertag, info.displayName,
@@ -55,6 +70,7 @@ enum WebScripts {
                         out.signedIn = true;
                         out.source = "xboxcom_xbl_user_info";
                         out.expires = direct.expiration || "";
+                        if (!out.gamertag) out.gamertag = fromClaims(direct);
                     }
                 }
             } catch (e) {}
@@ -86,9 +102,21 @@ enum WebScripts {
                         out.signedIn = true;
                         out.source = key;
                         out.expires = data.expiration || "";
+                        if (!out.gamertag) out.gamertag = fromClaims(data) || fromClaims(entry);
                         break;
                     }
                     if (out.signedIn) break;
+                }
+            }
+            // Last resort: the claim is written somewhere in storage even when
+            // the containing shape is one this build has never seen.
+            if (out.signedIn && !out.gamertag) {
+                for (var k = 0; k < localStorage.length; k++) {
+                    var anyKey = localStorage.key(k);
+                    if (!anyKey) continue;
+                    var value = localStorage.getItem(anyKey) || "";
+                    var found = /"(?:gtg|Gtg|gamertag)"\s*:\s*"([^"]{1,32})"/.exec(value);
+                    if (found) { out.gamertag = found[1]; break; }
                 }
             }
         } catch (e) {
