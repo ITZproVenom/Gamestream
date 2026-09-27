@@ -98,6 +98,9 @@ final class StreamCoordinator: ObservableObject {
         phase = .connecting("Starting \(game.title)")
         LibraryStore.shared.noteLaunch(game)
         UIApplication.shared.isIdleTimerDisabled = true
+        // A new session deserves a clean attempt at every rumble route, even
+        // one that refused to start earlier.
+        ControllerRumble.shared.retryAllRoutes(reason: "stream start")
         startWatchdog()
     }
 

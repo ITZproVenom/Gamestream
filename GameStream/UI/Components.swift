@@ -9,21 +9,29 @@ struct GameArtwork: View {
     @State private var image: UIImage?
 
     var body: some View {
-        ZStack {
-            Rectangle().fill(.quaternary)
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .transition(.opacity)
-            } else {
-                Image(systemName: "gamecontroller.fill")
-                    .font(.system(size: 24))
-                    .foregroundStyle(.tertiary)
+        // The artwork is an *overlay* on the placeholder, never a sibling in a
+        // stack. `scaledToFill` reports the filled size as its own, so an
+        // image in a stack makes the stack as wide as the image — 533pt for a
+        // 16:9 hero 300pt tall. `clipped()` hides the overflow but does not
+        // undo it, so the whole page inherited that width and sat off the
+        // left edge with the poster and the stat cards sliced. An overlay
+        // cannot change its host's size, which ends that class of bug.
+        Rectangle()
+            .fill(.quaternary)
+            .overlay {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .transition(.opacity)
+                } else {
+                    Image(systemName: "gamecontroller.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(.tertiary)
+                }
             }
-        }
-        .clipped()
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .task(id: url) {
             image = nil
             guard let url else { return }

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
     @EnvironmentObject private var settings: AppSettings
@@ -13,6 +14,7 @@ struct SettingsView: View {
     @State private var showingDiagnostics = false
     @State private var showingSignOut = false
     @State private var refreshingScript = false
+    @State private var copiedReport = false
 
     var body: some View {
         NavigationStack {
@@ -220,27 +222,11 @@ struct SettingsView: View {
                                      ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
             }
 
-            if rumble.path == .unavailable {
-                Text("No rumble is possible right now: \(rumble.diagnosis).")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else if rumble.path == .taptics {
-                Text("This controller reports haptics to iOS but cannot actually be "
-                     + "driven, so the phone taps instead. Other iOS cloud-gaming "
-                     + "clients do the same thing — what you feel in them is the "
-                     + "phone, not the pad.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else if rumble.path == .page {
-                Text("Xbox controllers do not expose haptics to iOS, so rumble is "
-                     + "played by the stream page through the gamepad it can see. "
-                     + "Test it while a game is running.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            Text(rumble.diagnosis.prefix(1).uppercased() + rumble.diagnosis.dropFirst() + ".")
+                .font(.caption)
+                .foregroundStyle(rumble.path == .unavailable
+                                 ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             SettingsDivider()
 
@@ -272,6 +258,18 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(rumble.path == .unavailable)
+
+                SettingsDivider()
+
+                Button {
+                    UIPasteboard.general.string = rumble.report
+                    copiedReport = true
+                } label: {
+                    SettingsRowLabel(title: copiedReport ? "Report copied"
+                                     : "Copy controller report",
+                                     icon: copiedReport ? "checkmark" : "doc.on.doc")
+                }
+                .buttonStyle(.plain)
             }
         }
     }
