@@ -33,6 +33,19 @@ final class AppSettings: ObservableObject {
         case purple, blue, green, orange, pink
         var id: String { rawValue }
         var title: String { rawValue.capitalized }
+        /// The same colour as CSS needs it, for styling the in-stream menus.
+        /// Better xCloud reads its button colours from comma-separated RGB
+        /// custom properties, not from hex.
+        var rgbTriple: String {
+            switch self {
+            case .purple: return "175,82,222"
+            case .blue: return "0,122,255"
+            case .green: return "52,199,89"
+            case .orange: return "255,149,0"
+            case .pink: return "255,45,85"
+            }
+        }
+
         var color: Color {
             switch self {
             case .purple: return .purple
@@ -106,6 +119,7 @@ final class AppSettings: ObservableObject {
         static let rumbleIntensity = "settings.rumbleIntensity"
         static let autoStart = "settings.autoStart"
         static let showStats = "settings.showStats"
+        static let matchStreamStyle = "settings.matchStreamStyle"
     }
 
     @Published var theme: Theme { didSet { store(theme.rawValue, Key.theme) } }
@@ -118,6 +132,8 @@ final class AppSettings: ObservableObject {
     @Published var rumbleIntensity: Float { didSet { store(Double(rumbleIntensity), Key.rumbleIntensity) } }
     @Published var autoStart: Bool { didSet { store(autoStart, Key.autoStart) } }
     @Published var showStreamStats: Bool { didSet { store(showStreamStats, Key.showStats) } }
+    /// Restyle the streaming enhancement's own web menus to match the app.
+    @Published var matchStreamStyle: Bool { didSet { store(matchStreamStyle, Key.matchStreamStyle) } }
 
     private let defaults = UserDefaults.standard
 
@@ -133,6 +149,7 @@ final class AppSettings: ObservableObject {
         rumbleIntensity = Float(defaults.object(forKey: Key.rumbleIntensity) as? Double ?? 1.6)
         autoStart = defaults.object(forKey: Key.autoStart) as? Bool ?? true
         showStreamStats = defaults.object(forKey: Key.showStats) as? Bool ?? false
+        matchStreamStyle = defaults.object(forKey: Key.matchStreamStyle) as? Bool ?? true
     }
 
     /// The preferences handed to Better xCloud before it boots.
@@ -145,6 +162,12 @@ final class AppSettings: ObservableObject {
             "deviceVibration.intensity": "100",
             "stream.stats.showWhenPlaying": showStreamStats ? "true" : "false"
         ]
+        if matchStreamStyle {
+            // The dark base is the only one of its themes that a translucent
+            // skin can sit on without fighting a light panel underneath.
+            values["ui.theme"] = "dark-oled"
+            values["ui.streamMenu.simplify"] = "true"
+        }
         if !region.betterXCloudValue.isEmpty {
             values["server.region"] = region.betterXCloudValue
         }

@@ -294,6 +294,144 @@ enum WebScripts {
     })();
     """#
 
+    /// Restyles Better xCloud's own web interface to match the app.
+    ///
+    /// Better xCloud is a userscript: its menus are HTML rendered inside the
+    /// player, so none of the native Liquid Glass work reaches them. It does
+    /// however read every button colour, font and control height from CSS
+    /// custom properties, so its whole interface can be re-skinned from the
+    /// outside without touching or forking the script. Panels get the same
+    /// translucent blur, radii and hairline border as the native cards, and
+    /// buttons pick up the accent colour chosen in Settings.
+    static func betterXCloudSkinJS(accentRGB: String) -> String {
+        let css = """
+        :root, body {
+            --bx-primary-button-rgb: \(accentRGB);
+            --bx-primary-button-hover-rgb: \(accentRGB);
+            --bx-primary-button-active-rgb: \(accentRGB);
+            --bx-primary-button-disabled-rgb: 120,120,128;
+            --bx-default-button-rgb: 118,118,128;
+            --bx-normal-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+            --bx-title-font: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+            --bx-title-font-semibold: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+            --bx-monospaced-font: ui-monospace, "SF Mono", Menlo, monospace;
+            --bx-button-height: 40px;
+        }
+
+        /* Panels: the glass equivalent of the app's cards. */
+        .bx-settings-dialog,
+        .bx-centered-dialog,
+        .bx-navigation-dialog,
+        .bx-key-binding-dialog,
+        .bx-game-bar-container,
+        .bx-stream-settings-selection {
+            background-color: rgba(18, 18, 20, 0.62) !important;
+            -webkit-backdrop-filter: saturate(170%) blur(30px) !important;
+            backdrop-filter: saturate(170%) blur(30px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.14) !important;
+            border-radius: 22px !important;
+            box-shadow: 0 20px 52px rgba(0, 0, 0, 0.5) !important;
+            color: #fff !important;
+        }
+
+        .bx-settings-tabs {
+            background-color: rgba(255, 255, 255, 0.07) !important;
+            border-radius: 18px !important;
+        }
+
+        .bx-settings-row {
+            border-radius: 14px !important;
+            border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+        }
+
+        /* Controls: capsules and soft rectangles, as in the native interface. */
+        .bx-button {
+            border-radius: 999px !important;
+            font-weight: 600 !important;
+            transition: transform 0.15s ease, filter 0.15s ease !important;
+        }
+        .bx-button:active { transform: scale(0.97) !important; }
+
+        .bx-select,
+        .bx-number-stepper,
+        .bx-dual-number-stepper,
+        .bx-binding-button {
+            border-radius: 12px !important;
+            background-color: rgba(255, 255, 255, 0.1) !important;
+            border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        }
+
+        .bx-focusable:focus,
+        .bx-focusable:focus-visible {
+            outline: 2px solid rgb(\(accentRGB)) !important;
+            outline-offset: 2px !important;
+            border-radius: 12px !important;
+        }
+
+        /* Read-outs that sit over the video. */
+        .bx-stats-bar {
+            background-color: rgba(0, 0, 0, 0.42) !important;
+            -webkit-backdrop-filter: blur(22px) !important;
+            backdrop-filter: blur(22px) !important;
+            border-radius: 16px !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            font-variant-numeric: tabular-nums !important;
+            padding: 6px 12px !important;
+        }
+        .bx-stats-bar label { color: rgba(255, 255, 255, 0.6) !important; }
+
+        .bx-toast {
+            background-color: rgba(18, 18, 20, 0.7) !important;
+            -webkit-backdrop-filter: blur(26px) !important;
+            backdrop-filter: blur(26px) !important;
+            border-radius: 18px !important;
+            border: 1px solid rgba(255, 255, 255, 0.14) !important;
+        }
+
+        .bx-game-bar-container { padding: 4px !important; }
+        """
+
+        return #"""
+        (function() {
+            if (window.__gsSkin) return;
+            window.__gsSkin = true;
+
+            var ID = "gamestream-bx-skin";
+            var CSS = "__CSS__";
+
+            function apply() {
+                var node = document.getElementById(ID);
+                if (!node) {
+                    node = document.createElement("style");
+                    node.id = ID;
+                    node.textContent = CSS;
+                    (document.head || document.documentElement).appendChild(node);
+                    return;
+                }
+                // Better xCloud rebuilds <head> on some navigations, and the
+                // element has to be last to win against its own stylesheet.
+                if (node.parentNode && node.parentNode.lastChild !== node) {
+                    node.parentNode.appendChild(node);
+                }
+            }
+
+            apply();
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", apply);
+            }
+            setInterval(apply, 1500);
+        })();
+        """#.replacingOccurrences(of: "__CSS__", with: Self.escapedForJS(css))
+    }
+
+    /// A CSS payload safe to embed in a JavaScript string literal.
+    private static func escapedForJS(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+    }
+
     /// Presses the site's own Play button on a launch page.
     ///
     /// 1.x clicked anything labelled "play", "ok", "continue" or "start"

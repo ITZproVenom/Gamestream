@@ -158,6 +158,15 @@ struct SettingsView: View {
             SettingsDivider()
             Toggle("Show the stream statistics overlay", isOn: $settings.showStreamStats)
             SettingsDivider()
+            VStack(alignment: .leading, spacing: 5) {
+                Toggle("Match the in-stream menus to GameStream", isOn: $settings.matchStreamStyle)
+                Text("Restyles the streaming enhancement's own menus with the app's "
+                     + "accent colour, translucency and type. Takes effect the next "
+                     + "time a game starts.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            SettingsDivider()
             Toggle("Keep the screen awake", isOn: $settings.keepAwake)
             SettingsDivider()
 

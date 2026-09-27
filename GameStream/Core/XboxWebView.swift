@@ -140,6 +140,17 @@ struct XboxWebView: UIViewRepresentable {
                                                   injectionTime: .atDocumentStart,
                                                   forMainFrameOnly: true))
         }
+        // The skin has to land after Better xCloud's own stylesheet, so it
+        // goes in at document end like the rest of the page dressing.
+        if AppSettings.shared.matchStreamStyle {
+            controller.addUserScript(WKUserScript(
+                source: WebScripts.betterXCloudSkinJS(
+                    accentRGB: AppSettings.shared.accent.rgbTriple
+                ),
+                injectionTime: .atDocumentEnd,
+                forMainFrameOnly: true))
+        }
+
         for source in [WebScripts.streamStateJS, WebScripts.streamChromeJS, WebScripts.autoStartJS] {
             controller.addUserScript(WKUserScript(source: source,
                                                   injectionTime: .atDocumentEnd,
