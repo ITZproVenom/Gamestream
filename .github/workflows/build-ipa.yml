@@ -1,16 +1,14 @@
-name: Build Unsigned IPA
+name: Build iOS Beta IPA
+
+# Every build from this workflow publishes to the BETA channel only.
+# The stable pointer (latest-ios) is never created, moved, or deleted here.
+# 1.x decided the channel by grepping the commit subject for words like
+# "beta" or "rumble", so an unrelated commit could publish itself as stable.
 
 on:
   workflow_dispatch:
-    inputs:
-      bundle_injection:
-        description: "Inject bundled resources/icons into the .app (default 'none' == last-working 2a31e1f packaging; 'full' reproduces the crash-era d31852d packaging for diagnosis)"
-        type: choice
-        options: ["full", "none"]
-        default: "none"
   push:
     branches: [main]
-    tags: ["v*"]
     paths:
       - "GameStream/**"
       - "project.yml"
@@ -19,6 +17,10 @@ on:
 
 permissions:
   contents: write
+
+concurrency:
+  group: ios-beta
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -30,133 +32,72 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Cache Homebrew XcodeGen
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/Library/Caches/Homebrew
-            /opt/homebrew/Cellar/xcodegen
-            /usr/local/Cellar/xcodegen
-          key: brew-xcodegen-${{ runner.os }}-v2
-
       - name: Install XcodeGen
         run: |
           set -euo pipefail
           if ! command -v xcodegen >/dev/null 2>&1; then
-            brew install xcodegen || true
-            brew link --overwrite --force xcodegen || true
+            brew install xcodegen
           fi
-          if ! command -v xcodegen >/dev/null 2>&1; then
-            for bin in /opt/homebrew/opt/xcodegen/bin/xcodegen /usr/local/opt/xcodegen/bin/xcodegen; do
-              if [ -x "$bin" ]; then
-                echo "$PATH" | grep -q "$(dirname "$bin")" || echo "$(dirname "$bin")" >> "$GITHUB_PATH"
-                sudo ln -sf "$bin" /usr/local/bin/xcodegen || ln -sf "$bin" "$HOME/bin/xcodegen" || true
-              fi
-            done
-            mkdir -p "$HOME/bin"
-            echo "$HOME/bin" >> "$GITHUB_PATH"
-          fi
-          hash -r || true
-          command -v xcodegen
           xcodegen --version
 
       - name: App icon
         run: |
           set -euo pipefail
           python3 -m venv .icon-venv
-          .icon-venv/bin/pip install --upgrade pip
-          .icon-venv/bin/pip install 'pillow>=10'
+          .icon-venv/bin/pip install --quiet --upgrade pip
+          .icon-venv/bin/pip install --quiet 'pillow>=10'
           .icon-venv/bin/python scripts/install_icons.py
-          ICON="GameStream/Assets.xcassets/AppIcon.appiconset/icon-1024.png"
-          test -f "$ICON"
           python3 - <<'PY'
           import struct, sys
-          p = "GameStream/Assets.xcassets/AppIcon.appiconset/icon-1024.png"
-          data = open(p, "rb").read()
-          assert data[:8] == b"\x89PNG\r\n\x1a\n", "not a PNG"
-          w, h = struct.unpack(">II", data[16:24])
-          print(f"icon {p}: {w}x{h}, {len(data)} bytes")
-          if (w, h) != (1024, 1024) or len(data) < 20000:
-              sys.exit("invalid App Icon - refusing to continue")
+          path = "GameStream/Assets.xcassets/AppIcon.appiconset/icon-1024.png"
+          data = open(path, "rb").read()
+          assert data[:8] == b"\x89PNG\r\n\x1a\n", "app icon is not a PNG"
+          width, height = struct.unpack(">II", data[16:24])
+          print(f"icon {width}x{height}, {len(data)} bytes")
+          if (width, height) != (1024, 1024) or len(data) < 20000:
+              sys.exit("invalid app icon - refusing to continue")
           PY
 
-      - name: Bundle Better xCloud (no sound pack)
-        if: ${{ github.event.inputs.bundle_injection == 'full' }}
+      - name: Stamp beta version
+        id: version
         run: |
           set -euo pipefail
-          mkdir -p GameStream/Resources
-          curl -fsSL -o GameStream/Resources/better-xcloud.user.js \
-            "https://github.com/redphx/better-xcloud/releases/latest/download/better-xcloud.user.js"
-          test -s GameStream/Resources/better-xcloud.user.js
-          BYTES=$(wc -c < GameStream/Resources/better-xcloud.user.js | tr -d ' ')
-          echo "Bundled BX script: ${BYTES} bytes"
-          if [ "$BYTES" -lt 50000 ]; then
-            echo "Better xCloud script too small" >&2
-            exit 1
-          fi
-          echo "Sound pack generation disabled for crash isolation"
-
-      - name: Verify Resources on disk
-        if: ${{ github.event.inputs.bundle_injection == 'full' }}
-        run: |
-          set -euo pipefail
-          echo "Resources tree:"
-          find GameStream/Resources -type f -exec ls -la {} \;
-          test -s GameStream/Resources/better-xcloud.user.js
-          echo "Sounds not required for crash-isolation builds"
-          BYTES=$(wc -c < GameStream/Resources/better-xcloud.user.js | tr -d ' ')
-          echo "Pre-xcodegen BX bytes=${BYTES}"
-
-      - name: Generate Xcode project
-        run: |
-          set -euo pipefail
-          RUN="${{ github.run_number }}"
-          SUBJECT="$(git log -1 --pretty=%s)"
-          BETA=false
-          if printf '%s' "$SUBJECT" | grep -Eqi 'experimental.*controller|controller.*experimental|experimental.*rumble|rumble.*experimental|beta'; then
-            BETA=true
-          elif git diff-tree --no-commit-id --name-only -r HEAD | grep -Eq '(^GameStream/Services/ExperimentalControllerInput\\.swift$|^GameStream/Services/ControllerRumble\\.swift$|^GameStream/Views/StreamPlayerView\\.swift$)'; then
-            BETA=true
-          fi
-          python3 - "$RUN" "$BETA" <<'PY'
+          SHORT_VERSION="$(grep -m1 'CFBundleShortVersionString:' project.yml | sed -E 's/.*"([^"]+)".*/\1/')"
+          BUILD="${{ github.run_number }}"
+          python3 - "$SHORT_VERSION" "$BUILD" <<'PY'
           import re, sys
           from pathlib import Path
-          run, beta = sys.argv[1], sys.argv[2] == "true"
-          p = Path("project.yml")
-          text = p.read_text()
-          build_number = f"{2 if beta else 1}.{run}"
-          short_version = "2.0" if beta else "1.0"
-          text = re.sub(
-              r'CFBundleShortVersionString: "[^"]*"',
-              f'CFBundleShortVersionString: "{short_version}"',
-              text, count=1,
-          )
-          text = re.sub(
-              r'CFBundleVersion: "[^"]*"',
-              f'CFBundleVersion: "{build_number}"',
-              text, count=1,
-          )
-          p.write_text(text)
-          print(f"Stamped {'BETA' if beta else 'STABLE'} build: version={short_version} build_id={build_number}")
+          version, build = sys.argv[1], sys.argv[2]
+          path = Path("project.yml")
+          text = path.read_text()
+          text = re.sub(r'CFBundleVersion: "[^"]*"', f'CFBundleVersion: "{build}"', text, count=1)
+          path.write_text(text)
+          print(f"beta {version} build {build}")
           PY
-          SUBJECT="$(git log -1 --pretty=%s)"
-          # Keep experimental/beta metadata aligned with the bundle identity. This also marks beta-channel workflow fixes as beta releases.
-          if printf '%s' "$SUBJECT" | grep -Eqi 'experimental.*controller|controller.*experimental|experimental.*rumble|rumble.*experimental|beta'; then
-            python3 - <<'PY'
-          from pathlib import Path
-          p = Path("project.yml")
-          text = p.read_text()
-          text = text.replace('CFBundleDisplayName: GameStream', 'CFBundleDisplayName: "GameStream Experimental"', 1)
-          p.write_text(text)
-          PY
-            echo "EXPERIMENTAL_RUMBLE=true" >> "$GITHUB_ENV"
-            echo "Experimental controller backend build enabled"
-          else
-            echo "EXPERIMENTAL_RUMBLE=false" >> "$GITHUB_ENV"
+          echo "short=${SHORT_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "build=${BUILD}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Confirm every source file is in the target
+        run: |
+          set -euo pipefail
+          # The defining bug of 1.x was source files living in the repository
+          # but not in the build. Fail loudly rather than ship that again.
+          MISSING=0
+          while IFS= read -r file; do
+            name="$(basename "$file")"
+            if ! grep -q "$name" GameStream.xcodeproj/project.pbxproj; then
+              echo "NOT IN TARGET: $file" >&2
+              MISSING=1
+            fi
+          done < <(find GameStream -name '*.swift')
+          if [ "$MISSING" -ne 0 ]; then
+            echo "Some Swift files are not compiled by the app target." >&2
+            exit 1
           fi
-          xcodegen generate
-          echo "--- pbxproj resource refs ---"
-          rg -n "better-xcloud|Resources|embedded\\.json|\\.wav" GameStream.xcodeproj/project.pbxproj | head -40 || true
+          echo "All $(find GameStream -name '*.swift' | wc -l | tr -d ' ') Swift files are in the target."
 
       - name: Archive (unsigned)
         run: |
@@ -172,291 +113,123 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             COMPILER_INDEX_STORE_ENABLE=NO
 
-      - name: Inject Resources into app bundle
-        if: ${{ github.event.inputs.bundle_injection == 'full' }}
+      - name: Package IPA
         run: |
           set -euo pipefail
           APP="build/GameStream.xcarchive/Products/Applications/GameStream.app"
-          test -d "$APP"
-          mkdir -p "$APP/Resources"
-          if [ -f GameStream/Resources/better-xcloud.user.js ]; then
-            cp -f GameStream/Resources/better-xcloud.user.js "$APP/better-xcloud.user.js"
-            cp -f GameStream/Resources/better-xcloud.user.js "$APP/Resources/better-xcloud.user.js"
-          fi
-          echo "Skipping sound resource inject"
-          if [ -f GameStream/Resources/offline-stream.html ]; then
-            cp -f GameStream/Resources/offline-stream.html "$APP/offline-stream.html"
-            cp -f GameStream/Resources/offline-stream.html "$APP/Resources/offline-stream.html"
-          fi
-          ICONSET="GameStream/Assets.xcassets/AppIcon.appiconset"
-          if [ -f "$ICONSET/icon-60@2x.png" ]; then
-            cp -f "$ICONSET/icon-60@2x.png" "$APP/AppIcon60x60@2x.png"
-            cp -f "$ICONSET/icon-60@3x.png" "$APP/AppIcon60x60@3x.png" 2>/dev/null || true
-            cp -f "$ICONSET/icon-76@2x.png" "$APP/AppIcon76x76@2x~ipad.png" 2>/dev/null || true
-            cp -f "$ICONSET/icon-76.png" "$APP/AppIcon76x76~ipad.png" 2>/dev/null || true
-            cp -f "$ICONSET/icon-1024.png" "$APP/AppIcon1024x1024.png" 2>/dev/null || true
-            cp -f "$ICONSET/icon-60@2x.png" "$APP/Icon.png"
-            cp -f "$ICONSET/icon-60@2x.png" "$APP/icon.png"
-            echo "Injected standard PNG app icons from repo mark"
-            ls -la "$APP"/AppIcon*.png "$APP"/Icon.png 2>/dev/null || true
-            ICON_BYTES=$(stat -f%z "$APP/AppIcon60x60@2x.png")
-            echo "AppIcon60x60@2x.png size=${ICON_BYTES}"
-            if [ "$ICON_BYTES" -lt 1500 ]; then
-              echo "Injected icon too small" >&2
-              exit 1
-            fi
-            head -c 8 "$APP/AppIcon60x60@2x.png" | xxd | head -1
-          else
-            echo "WARNING: iconset missing - TrollStore may show blank icon" >&2
-          fi
-          echo "App bundle after resource inject:"
-          find "$APP" -type f | head -50
-          ls -la "$APP/better-xcloud.user.js" "$APP/Resources/better-xcloud.user.js"
-          BX=$(stat -f%z "$APP/better-xcloud.user.js")
-          echo "BX in app: ${BX} bytes"
-          if [ "$BX" -lt 50000 ]; then
-            echo "BX missing from app bundle" >&2
+          test -d "$APP" || { echo "archive produced no app" >&2; exit 1; }
+          test -f "$APP/GameStream" || { echo "app has no binary" >&2; exit 1; }
+
+          BIN_SIZE=$(stat -f%z "$APP/GameStream")
+          if [ "$BIN_SIZE" -lt 200000 ]; then
+            echo "binary is only ${BIN_SIZE} bytes - incomplete archive" >&2
             exit 1
           fi
 
-      - name: Package IPA
-        env:
-          BUNDLE_INJECTION: ${{ github.event.inputs.bundle_injection || 'none' }}
-        run: |
-          set -euo pipefail
-          APP="build/GameStream.xcarchive/Products/Applications/GameStream.app"
-          BIN="$APP/GameStream"
-          if [ ! -d "$APP" ]; then
-            echo "Missing GameStream.app in archive" >&2
-            find build -maxdepth 5 -print || true
-            exit 1
-          fi
-          if [ ! -f "$BIN" ]; then
-            echo "Missing GameStream binary inside GameStream.app" >&2
-            ls -la "$APP" || true
-            exit 1
-          fi
-          BIN_SIZE=$(stat -f%z "$BIN")
-          if [ "$BIN_SIZE" -lt 50000 ]; then
-            echo "GameStream binary is only ${BIN_SIZE} bytes - incomplete archive" >&2
-            exit 1
-          fi
           mkdir -p build/Payload
           rm -rf build/Payload/GameStream.app
           cp -R "$APP" build/Payload/
-          cd build && zip -qr GameStream-unsigned.ipa Payload
-          ls -lh GameStream-unsigned.ipa
-          echo "App payload:"
-          unzip -l GameStream-unsigned.ipa
-          IPA_SIZE=$(stat -f%z GameStream-unsigned.ipa)
-          if [ "$IPA_SIZE" -lt 400000 ] && [ "${BUNDLE_INJECTION:-none}" != "none" ]; then
-            echo "IPA is only ${IPA_SIZE} bytes - expected ~1MB+ with BX bundled" >&2
-            exit 1
-          fi
+          (cd build && zip -qr GameStream-unsigned.ipa Payload)
+          ls -lh build/GameStream-unsigned.ipa
+
           python3 - <<'PY'
-          import os, zipfile, sys
-          inject = os.environ.get("BUNDLE_INJECTION", "none") != "none"
-          z = zipfile.ZipFile("GameStream-unsigned.ipa")
-          names = z.namelist()
-          cars = [n for n in names if n.endswith("Assets.car")]
-          print("Assets.car entries:", cars)
-          if not cars:
-              sys.exit("IPA missing Assets.car - icon catalog not packaged")
-          car = z.read(cars[0])
-          print(f"Assets.car size={len(car)}")
-          if len(car) < 10000:
-              sys.exit("Assets.car too small - likely missing app icon")
-          bx = [n for n in names if "better-xcloud" in n.lower() or n.endswith(".user.js")]
-          print("BX entries:", bx)
-          if not bx and inject:
-              sys.exit("IPA missing better-xcloud.user.js - Resources not packaged")
-          if bx:
-              bx_data = z.read(bx[0])
-              print(f"BX size={len(bx_data)}")
-              if len(bx_data) < 50000 and inject:
-                  sys.exit("BX script too small in IPA")
-          icons = [n for n in names if "AppIcon" in n or n.endswith("Icon.png")]
-          print("Icon entries:", icons)
-          if not any("AppIcon60x60" in n for n in names):
-              sys.exit("IPA missing AppIcon60x60 PNG")
-          sounds = [n for n in names if "embedded.json" in n or n.endswith(".wav")]
-          print("Sound entries:", sounds)
+          import plistlib, sys, zipfile
+          archive = zipfile.ZipFile("build/GameStream-unsigned.ipa")
+          names = archive.namelist()
+          if not any(name.endswith("Assets.car") for name in names):
+              sys.exit("IPA has no asset catalog - the app icon would be blank")
+          plist = [n for n in names if n.endswith("GameStream.app/Info.plist")]
+          if not plist:
+              sys.exit("IPA has no Info.plist")
+          info = plistlib.loads(archive.read(plist[0]))
+          print("version", info.get("CFBundleShortVersionString"), "build", info.get("CFBundleVersion"))
+          if not info.get("CFBundleShortVersionString", "").startswith("2."):
+              sys.exit("unexpected version in the packaged app")
           PY
 
-      - name: Build changelog + release identity
-        id: meta
-        env:
-          EVENT_NAME: ${{ github.event_name }}
+      - name: Release notes
+        id: notes
         run: |
           set -euo pipefail
           SHORT_SHA="$(echo '${{ github.sha }}' | cut -c1-7)"
-          DATE_UTC="$(date -u +'%Y-%m-%d %H:%M UTC')"
           STAMP="$(date -u +'%Y%m%d-%H%M')"
-          RUN="${{ github.run_number }}"
-          SUBJECT="$(git log -1 --pretty=%s)"
-          EXPERIMENTAL_PATHS=false
-          if git diff-tree --no-commit-id --name-only -r HEAD | grep -Eq '(^GameStream/Services/ExperimentalControllerInput\\.swift$|^GameStream/Services/ControllerRumble\\.swift$|^GameStream/Views/StreamPlayerView\\.swift$)'; then
-            EXPERIMENTAL_PATHS=true
-          fi
-          if printf '%s' "$SUBJECT" | grep -Eqi 'experimental.*controller|controller.*experimental|experimental.*rumble|rumble.*experimental|beta' || [ "$EXPERIMENTAL_PATHS" = "true" ]; then
-            echo "tag=ios-beta-${STAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-            echo "name=🧪 iOS Beta · GameStream #${RUN} (${SHORT_SHA})" >> "$GITHUB_OUTPUT"
-            echo "experimental=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=ios-build-${STAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-            echo "name=📱 iOS · GameStream #${RUN} (${SHORT_SHA})" >> "$GITHUB_OUTPUT"
-            echo "experimental=false" >> "$GITHUB_OUTPUT"
-          fi
+          echo "tag=ios-beta-${STAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "name=iOS Beta ${{ steps.version.outputs.short }} (build ${{ steps.version.outputs.build }})" >> "$GITHUB_OUTPUT"
 
-          python3 - "$SHORT_SHA" "$DATE_UTC" "$EVENT_NAME" "$RUN" <<'PY'
+          python3 - "${{ steps.version.outputs.short }}" "${{ steps.version.outputs.build }}" "$SHORT_SHA" <<'PY'
           import subprocess, sys
           from pathlib import Path
 
-          short, date, event, run = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+          version, build, sha = sys.argv[1], sys.argv[2], sys.argv[3]
 
-          prev = subprocess.check_output(
-              ["git", "tag", "-l", "ios-build-*", "--sort=-creatordate"],
-              text=True,
-          ).strip().splitlines()
-          prev = prev[0] if prev else None
+          # Compare against the previous BETA tag. 1.x always compared against
+          # ios-build-* tags, so beta releases repeated the same changelog.
+          tags = subprocess.run(
+              ["git", "tag", "-l", "ios-beta-*", "--sort=-creatordate"],
+              capture_output=True, text=True,
+          ).stdout.split()
+          previous = tags[0] if tags else None
 
-          range_arg = f"{prev}..HEAD" if prev else "HEAD"
-          cmd = ["git", "log", range_arg, "--max-count=40", "--name-only",
-                 "--pretty=format:COMMIT\t%h\t%s", "--no-merges"]
-          raw = subprocess.check_output(cmd, text=True)
+          span = f"{previous}..HEAD" if previous else "-20"
+          commits = subprocess.run(
+              ["git", "log", span, "--no-merges", "--pretty=format:- %s (%h)"],
+              capture_output=True, text=True,
+          ).stdout.strip().splitlines()[:25]
+          if not commits:
+              commits = ["- No new commits since the previous beta."]
 
-          def is_ios_app_change(paths):
-              for p in paths:
-                  if p.startswith("GameStream/") or p == "project.yml":
-                      return True
-                  if p.startswith("scripts/") and "android" not in p.lower():
-                      return True
-              return False
-
-          items = []
-          sha = subject = None
-          files = []
-          for line in raw.splitlines():
-              if line.startswith("COMMIT\t"):
-                  if sha is not None and is_ios_app_change(files):
-                      items.append(f"- {subject} ({sha})")
-                  _, sha, subject = line.split("\t", 2)
-                  files = []
-              elif line.strip():
-                  files.append(line.strip())
-          if sha is not None and is_ios_app_change(files):
-              items.append(f"- {subject} ({sha})")
-
-          items = items[:20]
-          latest_subject = subprocess.check_output(["git", "log", "-1", "--pretty=%s"], text=True).strip().lower()
-          latest_files = subprocess.check_output(
-              ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
-              text=True,
-          )
-          is_beta = (
-              "experimental" in latest_subject
-              or "rumble" in latest_subject
-              or "beta" in latest_subject
-              or "ExperimentalControllerInput.swift" in latest_files
-              or "ControllerRumble.swift" in latest_files
-          )
-          should = event == "workflow_dispatch" or bool(items) or is_beta
-          Path("should_release.txt").write_text("true" if should else "false")
-
-          if not items:
-              items = ["- No new iOS app code since the previous iOS release (release skipped on push)."]
-
-          since = f" since `{prev}`" if prev else ""
           body = "\n".join([
-              "## 📱 iOS build",
+              f"## iOS Beta {version} (build {build})",
               "",
-              f"**Platform:** iOS only · **Build ID:** `{"BETA-" if is_beta else "STABLE-"}{run}` · **{date}**",
-              (f"**BETA BUILD:** Beta build ID `BETA-{run}`. Experimental and in-development, and does not replace the stable iOS release." if is_beta else f"**STABLE BUILD:** Build ID `STABLE-{run}`. This is still an experimental project release and may contain significant bugs, crashes, broken features, or regressions. Stable means the release channel, not production-ready software."),
-              f"**Android builds:** use tag [`latest-android`](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-android) — not this release.{since}",
+              "**This is a beta build.** It is published to the beta channel only and "
+              "does not replace any stable release.",
               "",
-              "### What's changed (iOS)",
+              "### Changes",
               "",
-              *items,
+              *commits,
               "",
               "---",
               "",
               "### Install",
-              "Download **GameStream-unsigned.ipa** (AltStore / Sideloadly / TrollStore).",
+              "Download **GameStream-unsigned.ipa** and sideload it with AltStore, "
+              "Sideloadly, or TrollStore.",
               "",
-              ("Beta channel: [`latest-ios-beta`](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios-beta)" if is_beta else "Stable channel: [`latest-ios`](https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios)"),
+              f"Always-current beta: [`latest-ios-beta`](https://github.com/{'${{ github.repository }}'}/releases/tag/latest-ios-beta)",
               "",
-              "_Unsigned - not App Store signed._",
-              "",
+              "_Unsigned. Not affiliated with Microsoft._",
           ])
           Path("release_notes.md").write_text(body)
           print(body)
           PY
 
-          echo "should_release=$(cat should_release.txt)" >> "$GITHUB_OUTPUT"
-
-      - name: Upload IPA artifact
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GameStream-unsigned-ipa
+          name: GameStream-beta-ipa
           path: build/GameStream-unsigned.ipa
           if-no-files-found: error
 
-      - name: Publish versioned release
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Publish beta release
         uses: softprops/action-gh-release@v2
         with:
-          files: build/GameStream-unsigned.ipa
+          tag_name: ${{ steps.notes.outputs.tag }}
+          name: ${{ steps.notes.outputs.name }}
           body_path: release_notes.md
-          fail_on_unmatched_files: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Publish new iOS build release
-        if: >-
-          steps.meta.outputs.should_release == 'true' &&
-          (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          name: ${{ steps.meta.outputs.name }}
+          files: build/GameStream-unsigned.ipa
           prerelease: true
           make_latest: false
-          body_path: release_notes.md
-          files: build/GameStream-unsigned.ipa
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Refresh latest-ios pointer
-        if: >-
-          steps.meta.outputs.should_release == 'true' &&
-          steps.meta.outputs.experimental != 'true' &&
-          (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+      - name: Move the latest-ios-beta pointer
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh release delete latest-ios --yes --cleanup-tag 2>/dev/null || true
-          gh release create latest-ios \
-            build/GameStream-unsigned.ipa \
-            --title "📱 iOS · Latest IPA" \
-            --notes "$(cat release_notes.md)" \
-            --prerelease
-
-      - name: Publish iOS beta pointer
-        if: >-
-          steps.meta.outputs.should_release == 'true' &&
-          steps.meta.outputs.experimental == 'true' &&
-          (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          # Retire the old standalone experimental pointer now that experiments live in beta.
-          gh release delete latest-ios-experimental-rumble --yes --cleanup-tag 2>/dev/null || true
           gh release delete latest-ios-beta --yes --cleanup-tag 2>/dev/null || true
           gh release create latest-ios-beta \
             build/GameStream-unsigned.ipa \
-            --title "🧪 iOS Beta · Latest IPA" \
-            --notes "$(cat release_notes.md)" \
+            --title "iOS Beta - latest" \
+            --notes-file release_notes.md \
             --prerelease

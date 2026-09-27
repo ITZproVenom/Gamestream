@@ -10,20 +10,12 @@ targets:
     type: application
     platform: iOS
     sources:
-      - path: GameStream/GameStreamApp.swift
-      - path: GameStream/Fresh
-      - path: GameStream/Assets.xcassets
-      - path: GameStream/Services/DiagnosticsStore.swift
-      - path: GameStream/Services/SessionStore.swift
-      - path: GameStream/Services/MicrosoftAuth.swift
-      - path: GameStream/Services/BetterXCloudInjector.swift
-      - path: GameStream/Services/ControllerRumble.swift
-      - path: GameStream/Services/ExperimentalControllerInput.swift
-      - path: GameStream/Services/HapticManager.swift
-      - path: GameStream/Services/SoundManager.swift
-      - path: GameStream/Services/EmbeddedSounds.swift
-      - path: GameStream/Views/SignInWebView.swift
-      - path: GameStream/Views/StreamPlayerView.swift
+      # The whole folder, deliberately. 1.x listed files one by one, which let
+      # forty source files drift out of the build while still living in the
+      # repository, so fixes were made to code the app never compiled.
+      - path: GameStream
+        excludes:
+          - "Resources/**"
     resources:
       - path: GameStream/Resources
         includes:
@@ -31,33 +23,28 @@ targets:
         excludes:
           - "**/.gitkeep"
           - "**/*.md"
-          - "Sounds/**"
-          - "**/*.wav"
-          - "**/*.wav.b64"
-          - "**/embedded.json"
     info:
       path: GameStream/Info.plist
       properties:
         CFBundleDisplayName: GameStream
         CFBundleName: GameStream
-        CFBundleShortVersionString: "1.5.8"
-        CFBundleVersion: "46"
+        CFBundleShortVersionString: "2.0.0"
+        CFBundleVersion: "1"
         UILaunchScreen: {}
         UIApplicationSceneManifest:
-          UIApplicationSupportsMultipleScenes: true
+          UIApplicationSupportsMultipleScenes: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        NSCameraUsageDescription: "Not used."
-        NSMicrophoneUsageDescription: "Used for in-session voice chat."
-        NSLocalNetworkUsageDescription: "Used to discover and connect to streaming sessions."
         UIApplicationSupportsIndirectInputEvents: true
         GCSupportsControllerUserInteraction: true
         GCSupportedGameControllers:
           - ProfileName: ExtendedGamepad
         UIRequiredDeviceCapabilities:
           - arm64
+        NSMicrophoneUsageDescription: "Used for in-game voice chat."
+        NSLocalNetworkUsageDescription: "Used to reach Xbox Cloud Gaming servers on your network."
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.gamestream.app

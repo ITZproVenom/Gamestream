@@ -13,9 +13,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.5.8</string>
+	<string>2.0.0</string>
 	<key>CFBundleVersion</key>
-	<string>46</string>
+	<string>1</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleDevelopmentRegion</key>
@@ -53,12 +53,12 @@
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
-		<true/>
+		<false/>
 	</dict>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Used for in-session voice chat.</string>
+	<string>Used for in-game voice chat.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Used to discover and connect to streaming sessions.</string>
 </dict>
