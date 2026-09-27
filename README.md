@@ -10,8 +10,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios"><img alt="iOS Stable" src="https://img.shields.io/badge/iOS-Stable-111111?style=for-the-badge&logo=apple" /></a>
-  <a href="https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios-beta"><img alt="iOS Beta" src="https://img.shields.io/badge/iOS-Beta-6E56CF?style=for-the-badge&logo=apple" /></a>
+  <a href="https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios-beta"><img alt="iOS Beta 2.0" src="https://img.shields.io/badge/iOS-Beta%202.0-6E56CF?style=for-the-badge&logo=apple" /></a>
+  <a href="https://github.com/ITZproVenom/Gamestream/releases/tag/latest-ios"><img alt="iOS Stable" src="https://img.shields.io/badge/iOS-Stable%20(1.x)-111111?style=for-the-badge&logo=apple" /></a>
   <a href="https://github.com/ITZproVenom/Gamestream/releases/tag/latest-android"><img alt="Android" src="https://img.shields.io/badge/Android-Latest-3DDC84?style=for-the-badge&logo=android&logoColor=111111" /></a>
 </p>
 
