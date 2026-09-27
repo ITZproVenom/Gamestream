@@ -225,6 +225,14 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .frame(maxWidth: .infinity, alignment: .leading)
+            } else if rumble.path == .taptics {
+                Text("This controller reports haptics to iOS but cannot actually be "
+                     + "driven, so the phone taps instead. Other iOS cloud-gaming "
+                     + "clients do the same thing — what you feel in them is the "
+                     + "phone, not the pad.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             } else if rumble.path == .page {
                 Text("Xbox controllers do not expose haptics to iOS, so rumble is "
                      + "played by the stream page through the gamepad it can see. "

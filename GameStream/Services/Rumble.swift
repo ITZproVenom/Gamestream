@@ -261,7 +261,8 @@ final class ControllerRumble: ObservableObject {
     enum Path: String {
         case controller     // Apple's controller haptics
         case page           // the stream page's gamepad actuator
-        case device         // the phone itself
+        case device         // the phone's haptic engine
+        case taptics        // UIFeedbackGenerator, which needs no engine
         case unavailable
 
         var title: String {
@@ -269,6 +270,7 @@ final class ControllerRumble: ObservableObject {
             case .controller: return "Controller haptics"
             case .page: return "Controller, through the stream"
             case .device: return "Phone vibration"
+            case .taptics: return "Phone taptics"
             case .unavailable: return "Unavailable"
             }
         }
@@ -303,6 +305,8 @@ final class ControllerRumble: ObservableObject {
 
     private var stopTimer: Task<Void, Never>?
     private var stopDeadline: Date?
+    private var tapticTask: Task<Void, Never>?
+    private var tapticGenerator: UIImpactFeedbackGenerator?
 
     private let log = AppLog.shared
     private static let loopDuration: TimeInterval = 1
@@ -358,6 +362,11 @@ final class ControllerRumble: ObservableObject {
 
         let sharpness = min(max(magnitudeLeft * 0.75 + magnitudeRight * 0.25, 0), 1) * 2 - 1
 
+        if path == .taptics {
+            playTaptics(intensity: intensity, durationMs: durationMs)
+            return true
+        }
+
         // Two attempts: a failed engine marks its route unusable and picks the
         // next one, so a lying controller costs one silent packet, not rumble
         // for the rest of the session.
@@ -386,6 +395,8 @@ final class ControllerRumble: ObservableObject {
         stopTimer?.cancel()
         stopTimer = nil
         stopDeadline = nil
+        tapticTask?.cancel()
+        tapticTask = nil
         guard isPlaying else { return }
         try? player?.stop(atTime: CHHapticTimeImmediate)
         isPlaying = false
@@ -413,7 +424,7 @@ final class ControllerRumble: ObservableObject {
         }
 
         let route = path
-        let played = play(left: 0.9, right: 0.9, durationMs: 500, force: true)
+        let played = play(left: 0.9, right: 0.9, durationMs: 600, force: true)
         if played {
             log.info("rumble", "test played through \(path.title.lowercased())")
         } else {
@@ -427,6 +438,9 @@ final class ControllerRumble: ObservableObject {
             return "controller haptics are available"
         }
         if pageActuator { return "the stream page can vibrate the controller" }
+        if path == .taptics {
+            return "this controller cannot be driven by iOS, so the phone taps instead"
+        }
 
         var reasons: [String] = []
         if controllerName == nil {
@@ -452,6 +466,10 @@ final class ControllerRumble: ObservableObject {
         CHHapticEngine.capabilitiesForHardware().supportsHaptics
     }
 
+    private static var tapticsAvailable: Bool {
+        UIDevice.current.userInterfaceIdiom == .phone
+    }
+
     private func updatePath(reason: String) {
         let next: Path
         if supportsHaptics && !controllerHapticsBroken {
@@ -461,6 +479,10 @@ final class ControllerRumble: ObservableObject {
         } else if Self.deviceHapticsSupported, !deviceHapticsBroken,
                   AppSettings.shared.phoneRumbleFallback {
             next = .device
+        } else if Self.tapticsAvailable, AppSettings.shared.phoneRumbleFallback {
+            // No engine required. This is what other iOS cloud-gaming clients
+            // actually fall back to, and it works when CoreHaptics will not.
+            next = .taptics
         } else {
             next = .unavailable
         }
@@ -525,7 +547,7 @@ final class ControllerRumble: ObservableObject {
         let created: CHHapticEngine?
         switch kind {
         case .controller:
-            created = activeController()?.haptics?.createEngine(withLocality: .default)
+            created = makeControllerEngine()
         case .device:
             created = try? CHHapticEngine()
         }
@@ -587,9 +609,45 @@ final class ControllerRumble: ObservableObject {
         case .device:
             guard !deviceHapticsBroken else { return }
             deviceHapticsBroken = true
-            log.warn("rumble", "the phone's haptic engine will not start (\(reason))")
+            log.warn("rumble", "the phone's haptic engine will not start (\(reason)); "
+                     + "falling back to taptics")
         }
         updatePath(reason: "engine failure")
+    }
+
+    /// Tries every locality the controller claims, not just the default one.
+    ///
+    /// `createEngine(withLocality: .default)` is what most clients use, and on
+    /// some pads it is the one locality that fails. Sweeping the advertised
+    /// set costs nothing and is the difference between rumble and silence on
+    /// hardware that only drives its handles or its triggers.
+    private func makeControllerEngine() -> CHHapticEngine? {
+        guard let haptics = activeController()?.haptics else { return nil }
+
+        let claimed = haptics.supportedLocalities
+        log.info("rumble", "controller advertises localities: "
+                 + (claimed.isEmpty ? "none" : claimed.map(\.rawValue).sorted().joined(separator: ", ")))
+
+        var order: [GCHapticsLocality] = [.default, .all, .handles, .leftHandle, .rightHandle,
+                                          .triggers, .leftTrigger, .rightTrigger]
+        order = order.filter { $0 == .default || claimed.contains($0) }
+
+        for locality in order {
+            guard let engine = haptics.createEngine(withLocality: locality) else {
+                log.debug("rumble", "no engine for locality \(locality.rawValue)")
+                continue
+            }
+            do {
+                try engine.start()
+                log.info("rumble", "haptic engine started on locality \(locality.rawValue)")
+                return engine
+            } catch {
+                log.debug("rumble", "locality \(locality.rawValue) refused to start: "
+                          + error.localizedDescription)
+                engine.stop(completionHandler: nil)
+            }
+        }
+        return nil
     }
 
     private func engineDidStop() {
@@ -609,13 +667,45 @@ final class ControllerRumble: ObservableObject {
         ]
         do {
             if !isPlaying {
+                // Start silent, apply the real intensity, then unmute, so the
+                // first packet does not arrive as a click at full strength.
+                player.isMuted = true
                 try player.start(atTime: CHHapticTimeImmediate)
+                try player.sendParameters(parameters, atTime: CHHapticTimeImmediate)
+                player.isMuted = false
                 isPlaying = true
+                return
             }
             try player.sendParameters(parameters, atTime: CHHapticTimeImmediate)
         } catch {
             log.warn("rumble", "playback failed: \(error.localizedDescription)")
             engineDidStop()
+        }
+    }
+
+    /// Taptics have no continuous mode, so a rumble becomes a short train of
+    /// impacts. It is not a motor, and it is not pretending to be one, but it
+    /// is feedback where CoreHaptics can produce none.
+    private func playTaptics(intensity: Float, durationMs: Double) {
+        let style: UIImpactFeedbackGenerator.FeedbackStyle =
+            intensity > 0.66 ? .heavy : (intensity > 0.33 ? .medium : .light)
+        let generator = tapticGenerator.flatMap { $0.style == style ? $0 : nil }
+            ?? UIImpactFeedbackGenerator(style: style)
+        tapticGenerator = generator
+        generator.prepare()
+        generator.impactOccurred(intensity: CGFloat(min(max(intensity, 0.1), 1)))
+
+        let seconds = durationMs > 0 ? min(durationMs / 1000, 2.5) : 0.25
+        guard seconds > 0.14 else { return }
+
+        tapticTask?.cancel()
+        tapticTask = Task { [weak self] in
+            let deadline = Date().addingTimeInterval(seconds)
+            while !Task.isCancelled, Date() < deadline {
+                try? await Task.sleep(for: .milliseconds(90))
+                guard !Task.isCancelled, let self else { return }
+                self.tapticGenerator?.impactOccurred(intensity: CGFloat(min(max(intensity, 0.1), 1)))
+            }
         }
     }
 

@@ -37,9 +37,9 @@ struct GameDetailView: View {
                 }
             }
             .padding(.bottom, 40)
-            // The page is exactly as wide as the screen. A nested horizontal
-            // shelf must never be able to stretch it.
-            .frame(maxWidth: .infinity)
+            // The page is exactly as wide as the screen, whatever a child
+            // would prefer.
+            .containerRelativeFrame(.horizontal)
         }
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
         .background { AuroraBackground() }
@@ -114,7 +114,10 @@ struct GameDetailView: View {
     // MARK: - Actions
 
     private var actions: some View {
-        GlassEffectContainer(spacing: 14) {
+        // A plain stack. GlassEffectContainer has no intrinsic width here and
+        // stretched the scroll view's content past the screen, which is what
+        // pushed this page off its left edge.
+        Group {
             HStack(spacing: 13) {
                 Button {
                     stream.play(game)
