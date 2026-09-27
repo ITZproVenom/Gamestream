@@ -21,6 +21,9 @@ targets:
         CFBundleName: GameStream
         CFBundleShortVersionString: "2.0.0"
         CFBundleVersion: "1"
+        # Stamped by CI. "dev" means a locally generated project.
+        GSCommit: "dev"
+        GSChannel: "beta"
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false

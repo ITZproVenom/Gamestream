@@ -62,20 +62,43 @@ jobs:
         id: version
         run: |
           set -euo pipefail
-          SHORT_VERSION="$(grep -m1 'CFBundleShortVersionString:' project.yml | sed -E 's/.*"([^"]+)".*/\1/')"
+          # project.yml holds the base version. The patch number is how many
+          # commits have landed since that base was last edited, so every
+          # build carries a version that actually moved. Earlier builds
+          # stamped only CFBundleVersion and left 2.0.0 sitting there, which
+          # made ten rounds of fixes look like the same release.
+          BASE="$(grep -m1 'CFBundleShortVersionString:' project.yml | sed -E 's/.*"([^"]+)".*/\1/')"
+          MAJOR_MINOR="$(echo "$BASE" | cut -d. -f1,2)"
+          BASE_PATCH="$(echo "$BASE" | cut -d. -f3)"
+          BASE_PATCH="${BASE_PATCH:-0}"
+
+          BASE_COMMIT="$(git log -1 --format=%H -S'CFBundleShortVersionString' -- project.yml || true)"
+          if [ -n "$BASE_COMMIT" ]; then
+            SINCE="$(git rev-list --count "${BASE_COMMIT}..HEAD")"
+          else
+            SINCE=0
+          fi
+          SHORT_VERSION="${MAJOR_MINOR}.$((BASE_PATCH + SINCE))"
           BUILD="${{ github.run_number }}"
-          python3 - "$SHORT_VERSION" "$BUILD" <<'PY'
+          COMMIT="$(echo '${{ github.sha }}' | cut -c1-7)"
+
+          python3 - "$SHORT_VERSION" "$BUILD" "$COMMIT" <<'PY'
           import re, sys
           from pathlib import Path
-          version, build = sys.argv[1], sys.argv[2]
+          version, build, commit = sys.argv[1], sys.argv[2], sys.argv[3]
           path = Path("project.yml")
           text = path.read_text()
-          text = re.sub(r'CFBundleVersion: "[^"]*"', f'CFBundleVersion: "{build}"', text, count=1)
+          text = re.sub(r'CFBundleShortVersionString: "[^"]*"',
+                        f'CFBundleShortVersionString: "{version}"', text, count=1)
+          text = re.sub(r'CFBundleVersion: "[^"]*"',
+                        f'CFBundleVersion: "{build}"', text, count=1)
+          text = re.sub(r'GSCommit: "[^"]*"', f'GSCommit: "{commit}"', text, count=1)
           path.write_text(text)
-          print(f"beta {version} build {build}")
+          print(f"beta {version} build {build} ({commit})")
           PY
           echo "short=${SHORT_VERSION}" >> "$GITHUB_OUTPUT"
           echo "build=${BUILD}" >> "$GITHUB_OUTPUT"
+          echo "commit=${COMMIT}" >> "$GITHUB_OUTPUT"
 
       - name: Generate Xcode project
         run: xcodegen generate

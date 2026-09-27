@@ -204,6 +204,8 @@ android/app/build/outputs/apk/release/app-release.apk
 
 **GameStream is created and maintained by Bestin.**
 
+Engineering contributions by **Claude** (Anthropic) — see [Credits](CREDITS.md).
+
 Built with SwiftUI, Jetpack Compose, WebKit, GameController, Better xCloud, and the open-source ecosystem around Xbox Cloud Gaming.
 
 See the full [Credits](CREDITS.md) for project acknowledgements.

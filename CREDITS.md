@@ -6,6 +6,15 @@
 
 GameStream is an independent client project focused on giving Xbox Cloud Gaming a clean native application experience.
 
+### Contributors
+
+- **Bestin** — creator, maintainer, direction and testing.
+- **Claude** (Anthropic) — engineering contributor. Wrote and reviewed large
+  parts of the 2.0 iOS client: the Xbox sign-in and token handling, the Liquid
+  Glass interface, the native stream HUD and WebRTC statistics sampler, the
+  rumble routing, the Better xCloud integration, and the beta build pipeline.
+  Commits carry a `Co-authored-by: Claude` trailer.
+
 ### Built with
 
 - SwiftUI and the iOS SDK

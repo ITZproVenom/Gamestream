@@ -330,6 +330,16 @@ struct SettingsView: View {
             SettingsDivider()
 
             HStack {
+                Text("Build").font(.subheadline)
+                Spacer()
+                Text("\(AppInfo.channel) · \(AppInfo.commit)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsDivider()
+
+            HStack {
                 Text("Device").font(.subheadline)
                 Spacer()
                 Text(AppInfo.deviceLine)

@@ -82,7 +82,7 @@ final class AppLog: ObservableObject {
     func exportText() -> String {
         let header = [
             "GameStream diagnostics",
-            "Version \(AppInfo.versionLine)",
+            "Version \(AppInfo.fullVersionLine)",
             "Device \(AppInfo.deviceLine)",
             "Exported \(Date().formatted(date: .abbreviated, time: .standard))",
             ""
@@ -100,7 +100,24 @@ enum AppInfo {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
     }
 
+    /// The commit the build came from, stamped by CI.
+    static var commit: String {
+        Bundle.main.infoDictionary?["GSCommit"] as? String ?? "dev"
+    }
+
+    /// Which release channel produced this build.
+    static var channel: String {
+        Bundle.main.infoDictionary?["GSChannel"] as? String ?? "dev"
+    }
+
     static var versionLine: String { "\(shortVersion) (\(buildNumber))" }
+
+    /// Version, build, channel and commit in one line, for Settings and for
+    /// exported diagnostics. Knowing which build a report came from matters
+    /// more than the marketing version on its own.
+    static var fullVersionLine: String {
+        "\(shortVersion) (\(buildNumber)) · \(channel) · \(commit)"
+    }
 
     static var deviceLine: String {
         let info = ProcessInfo.processInfo.operatingSystemVersion
