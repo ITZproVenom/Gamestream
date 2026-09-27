@@ -1,260 +1,227 @@
 import SwiftUI
 
 struct GameDetailView: View {
+    let game: Game
+
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var catalog: Catalog
     @EnvironmentObject private var stream: StreamCoordinator
 
-    let game: Game
-
     @State private var showingLists = false
-
-    private var playtime: TimeInterval { library.playtime(forGameID: game.id) }
-    private var related: [Game] {
-        catalog.games(inGenre: game.genre).filter { !$0.matches(id: game.id) }.prefix(10).map { $0 }
-    }
+    @Namespace private var glass
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                GameArtwork(url: game.heroURL ?? game.posterURL, cornerRadius: 20)
-                    .aspectRatio(16 / 9, contentMode: .fit)
+                hero
+                actions
+                facts
 
-                VStack(alignment: .leading, spacing: 9) {
-                    Text(game.title)
-                        .font(.title.weight(.bold))
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    HStack(spacing: 8) {
-                        Pill(text: game.genre)
-                        Pill(text: "Cloud")
-                        if playtime > 0 {
-                            Pill(text: Format.duration(playtime) + " played")
-                        }
-                    }
-
-                    if !game.tagline.isEmpty {
+                if !game.tagline.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("About").font(.headline)
                         Text(game.tagline)
-                            .font(.body)
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    .padding(.horizontal, Theme.pageInset)
                 }
-
-                actions
 
                 if !related.isEmpty {
-                    // Safe to push another detail screen: the destination for
-                    // Game is declared once, at the root of the stack.
-                    SectionHeader(title: "More \(game.genre)")
-                    HorizontalGameRow(games: related)
+                    VStack(alignment: .leading, spacing: 13) {
+                        SectionHeader(title: "More \(game.genre)")
+                            .padding(.horizontal, Theme.pageInset)
+                        GameShelf(games: related)
+                    }
                 }
             }
-            .padding(20)
+            .padding(.bottom, 40)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background { AuroraBackground() }
         .navigationTitle(game.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        showingLists = true
+                    } label: {
+                        Label("Add to list", systemImage: "folder.badge.plus")
+                    }
+                    if let url = game.storeURL {
+                        Link(destination: url) {
+                            Label("Open on xbox.com", systemImage: "safari")
+                        }
+                        ShareLink(item: url) {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                }
+                .accessibilityLabel("More actions")
+            }
+        }
         .sheet(isPresented: $showingLists) {
             ListPickerView(game: game)
         }
     }
 
+    // MARK: - Hero
+
+    private var hero: some View {
+        ZStack(alignment: .bottomLeading) {
+            GameArtwork(url: game.heroURL ?? game.posterURL, cornerRadius: 0)
+                .frame(height: 300)
+                // Liquid Glass: the artwork bleeds past the safe area and
+                // under the bar instead of stopping at a hard edge.
+                .backgroundExtensionEffect()
+                .overlay {
+                    LinearGradient(
+                        stops: [.init(color: .black.opacity(0), location: 0.35),
+                                .init(color: .black.opacity(0.85), location: 1)],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                }
+
+            HStack(alignment: .bottom, spacing: 14) {
+                GameArtwork(url: game.posterURL, cornerRadius: 14)
+                    .frame(width: 86, height: 115)
+                    .shadow(color: .black.opacity(0.35), radius: 12, y: 6)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(game.title)
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(3)
+                    Text(game.genre)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+            }
+            .padding(Theme.pageInset)
+        }
+    }
+
+    // MARK: - Actions
+
     private var actions: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
+        GlassEffectContainer(spacing: 14) {
+            HStack(spacing: 13) {
                 Button {
                     stream.play(game)
                 } label: {
                     Label("Play", systemImage: "play.fill")
+                        .font(.headline)
                         .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                .buttonStyle(.glassProminent)
+                .buttonBorderShape(.capsule)
+                .glassEffectID("play", in: glass)
 
-                Button {
-                    library.toggleFavorite(game)
-                } label: {
-                    Image(systemName: library.isFavorite(game) ? "star.fill" : "star")
-                        .frame(width: 46, height: 46)
+                GlassIconButton(systemImage: library.isFavorite(game) ? "heart.fill" : "heart",
+                                label: library.isFavorite(game) ? "Remove favorite" : "Add favorite") {
+                    withAnimation(.smooth) { library.toggleFavorite(game) }
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .accessibilityLabel(library.isFavorite(game) ? "Remove from favorites" : "Add to favorites")
-            }
+                .glassEffectID("favorite", in: glass)
 
-            HStack(spacing: 12) {
-                Button {
-                    library.toggleQueue(game)
-                } label: {
-                    Label(library.isQueued(game) ? "In Up Next" : "Add to Up Next",
-                          systemImage: library.isQueued(game) ? "checkmark" : "text.badge.plus")
-                        .frame(maxWidth: .infinity)
+                GlassIconButton(systemImage: library.isQueued(game)
+                                ? "text.badge.minus" : "text.badge.plus",
+                                label: library.isQueued(game) ? "Remove from Up next" : "Add to Up next") {
+                    withAnimation(.smooth) { library.toggleQueue(game) }
                 }
-                .buttonStyle(.bordered)
-
-                Button {
-                    showingLists = true
-                } label: {
-                    Label("Lists", systemImage: "square.stack")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
+                .glassEffectID("queue", in: glass)
             }
         }
+        .padding(.horizontal, Theme.pageInset)
+    }
+
+    // MARK: - Facts
+
+    private var facts: some View {
+        HStack(spacing: 12) {
+            StatChip(value: playtime > 0 ? Format.duration(playtime) : "—",
+                     caption: "Your playtime",
+                     systemImage: "clock.fill")
+            StatChip(value: "\(sessions)",
+                     caption: sessions == 1 ? "Session" : "Sessions",
+                     systemImage: "play.rectangle.fill")
+            StatChip(value: library.isQueued(game) ? "Queued" : "Ready",
+                     caption: "Status",
+                     systemImage: "cloud.fill")
+        }
+        .padding(.horizontal, Theme.pageInset)
+    }
+
+    private var playtime: TimeInterval { library.playtime(forGameID: game.id) }
+    private var sessions: Int { library.sessions(forGameID: game.id) }
+
+    private var related: [Game] {
+        catalog.games(inGenre: game.genre)
+            .filter { !$0.matches(id: game.id) }
+            .prefix(12)
+            .map { $0 }
     }
 }
 
+/// Choose which lists a game belongs to.
 struct ListPickerView: View {
-    @EnvironmentObject private var library: LibraryStore
-    @Environment(\.dismiss) private var dismiss
     let game: Game
 
-    @State private var newName = ""
-    @State private var creating = false
+    @EnvironmentObject private var library: LibraryStore
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var newListName = ""
 
     var body: some View {
         NavigationStack {
             List {
-                if library.lists.isEmpty {
-                    ContentUnavailableView(
-                        "No lists yet",
-                        systemImage: "square.stack",
-                        description: Text("Create one to group games however you like.")
-                    )
-                } else {
+                Section {
                     ForEach(library.lists) { list in
                         Button {
                             library.toggle(game: game, inListWithID: list.id)
                         } label: {
                             HStack {
-                                Text(list.name).foregroundStyle(.primary)
+                                Text(list.name)
                                 Spacer()
                                 if library.contains(game: game, inListWithID: list.id) {
-                                    Image(systemName: "checkmark").foregroundStyle(.tint)
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(.tint)
+                                        .fontWeight(.semibold)
                                 }
                             }
                         }
+                        .buttonStyle(.plain)
+                    }
+                } header: {
+                    Text(library.lists.isEmpty ? "" : "Your lists")
+                }
+
+                Section("New list") {
+                    HStack {
+                        TextField("Name", text: $newListName)
+                        Button("Add") {
+                            library.createList(named: newListName)
+                            newListName = ""
+                        }
+                        .disabled(newListName.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
                 }
             }
             .navigationTitle("Add to list")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button("New") { newName = ""; creating = true }
-                }
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
             }
-            .alert("New list", isPresented: $creating) {
-                TextField("List name", text: $newName)
-                Button("Create") { library.createList(named: newName) }
-                Button("Cancel", role: .cancel) {}
-            }
         }
     }
 }
 
-struct ListsView: View {
-    @EnvironmentObject private var library: LibraryStore
-    @EnvironmentObject private var catalog: Catalog
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var newName = ""
-    @State private var creating = false
-
-    var body: some View {
-        NavigationStack {
-            List {
-                if library.lists.isEmpty {
-                    ContentUnavailableView(
-                        "No lists yet",
-                        systemImage: "square.stack",
-                        description: Text("Lists are a way to group games for later.")
-                    )
-                } else {
-                    ForEach(library.lists) { list in
-                        NavigationLink {
-                            ListDetailView(listID: list.id)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(list.name).font(.headline)
-                                Text("\(list.gameIDs.count) game\(list.gameIDs.count == 1 ? "" : "s")")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .onDelete { offsets in
-                        for index in offsets { library.deleteList(library.lists[index]) }
-                    }
-                }
-            }
-            .navigationTitle("Lists")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
-                ToolbarItem(placement: .primaryAction) {
-                    Button { newName = ""; creating = true } label: { Image(systemName: "plus") }
-                }
-            }
-            .alert("New list", isPresented: $creating) {
-                TextField("List name", text: $newName)
-                Button("Create") { library.createList(named: newName) }
-                Button("Cancel", role: .cancel) {}
-            }
-        }
-    }
-}
-
-struct ListDetailView: View {
-    @EnvironmentObject private var library: LibraryStore
-    @EnvironmentObject private var catalog: Catalog
-    @EnvironmentObject private var stream: StreamCoordinator
-    let listID: UUID
-
-    private var list: GameList? { library.list(withID: listID) }
-
-    var body: some View {
-        List {
-            if let list {
-                let games = library.games(in: list, catalog: catalog)
-                if games.isEmpty {
-                    ContentUnavailableView(
-                        "This list is empty",
-                        systemImage: "square.stack",
-                        description: Text("Add games from any game's page.")
-                    )
-                } else {
-                    ForEach(games) { game in
-                        HStack {
-                            GameRow(game: game)
-                            Button {
-                                stream.play(game)
-                            } label: {
-                                Image(systemName: "play.fill")
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .accessibilityLabel("Play \(game.title)")
-                        }
-                        .swipeActions {
-                            Button(role: .destructive) {
-                                library.toggle(game: game, inListWithID: listID)
-                            } label: {
-                                Label("Remove", systemImage: "minus.circle")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        .navigationTitle(list?.name ?? "List")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
+/// Every logged session, newest first.
 struct ActivityView: View {
     @EnvironmentObject private var library: LibraryStore
     @Environment(\.dismiss) private var dismiss
@@ -263,28 +230,25 @@ struct ActivityView: View {
         NavigationStack {
             List {
                 if library.activity.isEmpty {
-                    ContentUnavailableView(
-                        "No activity yet",
-                        systemImage: "clock",
-                        description: Text("Play a game and your sessions appear here.")
-                    )
+                    EmptyNotice(systemImage: "list.bullet.rectangle",
+                                title: "No sessions yet",
+                                message: "Sessions longer than fifteen seconds are recorded here.")
+                        .listRowBackground(Color.clear)
                 } else {
-                    Section {
-                        LabeledContent("Total", value: Format.duration(library.totalPlaytime))
-                        LabeledContent("Sessions", value: "\(library.activity.count)")
-                    }
-                    Section("Sessions") {
-                        ForEach(library.activity) { record in
+                    ForEach(library.activity) { record in
+                        HStack {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(record.title).font(.subheadline.weight(.semibold))
+                                Text(record.title)
+                                    .font(.subheadline.weight(.semibold))
+                                    .lineLimit(2)
                                 Text(record.startedAt.formatted(date: .abbreviated, time: .shortened))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                Text(Format.duration(record.seconds))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
                             }
-                            .padding(.vertical, 2)
+                            Spacer(minLength: 8)
+                            Text(Format.duration(record.seconds))
+                                .font(.footnote.weight(.semibold).monospacedDigit())
+                                .foregroundStyle(.tint)
                         }
                     }
                 }
@@ -292,7 +256,9 @@ struct ActivityView: View {
             .navigationTitle("Activity")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
                 if !library.activity.isEmpty {
                     ToolbarItem(placement: .primaryAction) {
                         Button("Clear", role: .destructive) { library.clearActivity() }

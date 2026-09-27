@@ -4,13 +4,13 @@ import UIKit
 /// Artwork that loads through the shared cache and never blocks the interface.
 struct GameArtwork: View {
     let url: URL?
-    var cornerRadius: CGFloat = 14
+    var cornerRadius: CGFloat = Theme.tileRadius
 
     @State private var image: UIImage?
 
     var body: some View {
         ZStack {
-            Rectangle().fill(Color(uiColor: .tertiarySystemFill))
+            Rectangle().fill(.quaternary)
             if let image {
                 Image(uiImage: image)
                     .resizable()
@@ -18,7 +18,7 @@ struct GameArtwork: View {
                     .transition(.opacity)
             } else {
                 Image(systemName: "gamecontroller.fill")
-                    .font(.system(size: 26))
+                    .font(.system(size: 24))
                     .foregroundStyle(.tertiary)
             }
         }
@@ -29,7 +29,7 @@ struct GameArtwork: View {
             guard let url else { return }
             let loaded = await PosterCache.shared.image(for: url)
             guard !Task.isCancelled else { return }
-            withAnimation(.easeOut(duration: 0.18)) { image = loaded }
+            withAnimation(.easeOut(duration: 0.2)) { image = loaded }
         }
     }
 }
@@ -41,39 +41,54 @@ struct GameArtwork: View {
 /// receive taps, which is how a "play" button ends up opening a detail page.
 struct GameTile: View {
     let game: Game
+    var showsPlayButton = true
     let play: () -> Void
 
+    @EnvironmentObject private var library: LibraryStore
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 9) {
             ZStack(alignment: .bottomTrailing) {
                 NavigationLink(value: game) {
-                    GameArtwork(url: game.posterURL, cornerRadius: 16)
+                    GameArtwork(url: game.posterURL)
                         .aspectRatio(3 / 4, contentMode: .fit)
+                        .overlay(alignment: .topLeading) {
+                            if library.isFavorite(game) {
+                                Image(systemName: "heart.fill")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(.pink)
+                                    .padding(7)
+                                    .glassEffect(.regular, in: Circle())
+                                    .padding(8)
+                            }
+                        }
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(game.title)
 
-                Button(action: play) {
-                    Image(systemName: "play.fill")
-                        .font(.footnote.weight(.bold))
-                        .foregroundStyle(.black)
-                        .frame(width: 34, height: 34)
-                        .background(.white.opacity(0.92), in: Circle())
+                if showsPlayButton {
+                    Button(action: play) {
+                        Image(systemName: "play.fill")
+                            .font(.footnote.weight(.bold))
+                            .frame(width: 36, height: 36)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .buttonBorderShape(.circle)
+                    .padding(9)
+                    .accessibilityLabel("Play \(game.title)")
                 }
-                .buttonStyle(.plain)
-                .padding(8)
-                .accessibilityLabel("Play \(game.title)")
             }
 
-            Text(game.title)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            Text(game.genre)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(game.title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
+                Text(game.genre)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
@@ -81,6 +96,8 @@ struct GameTile: View {
 /// The smaller card used in horizontal rows.
 struct GameCard: View {
     let game: Game
+    var width: CGFloat = 128
+    var caption: String?
 
     var body: some View {
         NavigationLink(value: game) {
@@ -91,7 +108,14 @@ struct GameCard: View {
                     .font(.footnote.weight(.semibold))
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                if let caption {
+                    Text(caption)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
+            .frame(width: width)
         }
         .buttonStyle(.plain)
     }
@@ -99,52 +123,50 @@ struct GameCard: View {
 
 struct GameRow: View {
     let game: Game
+    var caption: String?
 
     var body: some View {
-        HStack(spacing: 12) {
-            GameArtwork(url: game.posterURL, cornerRadius: 9)
+        HStack(spacing: 13) {
+            GameArtwork(url: game.posterURL, cornerRadius: 10)
                 .frame(width: 46, height: 62)
             VStack(alignment: .leading, spacing: 3) {
                 Text(game.title)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(2)
-                Text(game.genre)
+                Text(caption ?? game.genre)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
             Spacer(minLength: 0)
         }
     }
 }
 
-struct SectionHeader: View {
-    let title: String
-    var actionTitle: String?
-    var action: (() -> Void)?
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title).font(.title3.weight(.bold))
-            Spacer()
-            if let actionTitle, let action {
-                Button(actionTitle, action: action).font(.subheadline.weight(.semibold))
-            }
-        }
-    }
-}
-
-struct HorizontalGameRow: View {
+/// A horizontally scrolling shelf of cards, with snapping.
+struct GameShelf: View {
     let games: [Game]
+    var width: CGFloat = 128
+    var caption: (Game) -> String? = { _ in nil }
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(alignment: .top, spacing: 13) {
+        ScrollView(.horizontal) {
+            LazyHStack(alignment: .top, spacing: 14) {
                 ForEach(games) { game in
-                    GameCard(game: game).frame(width: 124)
+                    GameCard(game: game, width: width, caption: caption(game))
+                        .scrollTransition(axis: .horizontal) { content, phase in
+                            content
+                                .opacity(phase.isIdentity ? 1 : 0.7)
+                                .scaleEffect(phase.isIdentity ? 1 : 0.94)
+                        }
                 }
             }
-            .padding(.horizontal, 1)
+            .scrollTargetLayout()
+            .padding(.horizontal, Theme.pageInset)
         }
+        .scrollIndicators(.hidden)
+        .scrollTargetBehavior(.viewAligned)
+        .scrollClipDisabled()
     }
 }
 
@@ -156,22 +178,21 @@ struct ErrorNotice: View {
     let retry: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 11) {
-            Label(title, systemImage: "exclamationmark.triangle.fill")
-                .font(.headline)
-                .foregroundStyle(.orange)
-            Text(message)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Button(retryTitle, action: retry)
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
+        GlassCard {
+            VStack(alignment: .leading, spacing: 11) {
+                Label(title, systemImage: "exclamationmark.triangle.fill")
+                    .font(.headline)
+                    .foregroundStyle(.orange)
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button(retryTitle, action: retry)
+                    .buttonStyle(.glassProminent)
+                    .buttonBorderShape(.capsule)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
-        .background(Color(uiColor: .secondarySystemGroupedBackground),
-                    in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
 
@@ -179,24 +200,61 @@ struct LoadingNotice: View {
     var title = "Loading the Xbox catalog…"
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 13) {
             ProgressView()
             Text(title).font(.subheadline).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
+        .padding(.vertical, 56)
+    }
+}
+
+/// Shown where a list would otherwise be blank, with the action that fills it.
+struct EmptyNotice: View {
+    let systemImage: String
+    let title: String
+    let message: String
+    var actionTitle: String?
+    var action: (() -> Void)?
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.system(size: 34, weight: .semibold))
+                .foregroundStyle(.tint)
+            Text(title).font(.headline)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .buttonStyle(.glassProminent)
+                    .buttonBorderShape(.capsule)
+                    .padding(.top, 2)
+            }
+        }
+        .frame(maxWidth: 360)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 46)
     }
 }
 
 struct Pill: View {
     let text: String
+    var systemImage: String?
 
     var body: some View {
-        Text(text)
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
-            .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
+        Label {
+            Text(text)
+        } icon: {
+            if let systemImage { Image(systemName: systemImage) }
+        }
+        .font(.caption.weight(.semibold))
+        .padding(.horizontal, 11)
+        .padding(.vertical, 6)
+        .glassEffect(.regular, in: Capsule())
     }
 }
 
@@ -207,6 +265,18 @@ enum Format {
         if minutes < 1 { return "<1m" }
         if minutes < 60 { return "\(minutes)m" }
         return "\(minutes / 60)h \(minutes % 60)m"
+    }
+
+    /// "1:04:12" — for a timer that is ticking in front of the user.
+    static func clock(_ seconds: TimeInterval) -> String {
+        let total = max(Int(seconds), 0)
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let secs = total % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, secs)
+        }
+        return String(format: "%d:%02d", minutes, secs)
     }
 
     static func bytes(_ count: Int) -> String {

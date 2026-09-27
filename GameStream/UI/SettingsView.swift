@@ -1,229 +1,412 @@
-import UIKit
 import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var auth: XboxAuth
-    @EnvironmentObject private var catalog: Catalog
     @EnvironmentObject private var library: LibraryStore
+    @EnvironmentObject private var catalog: Catalog
     @EnvironmentObject private var rumble: ControllerRumble
 
     @Binding var showingBrowser: Bool
 
+    @State private var cacheSize = 0
     @State private var showingDiagnostics = false
     @State private var showingSignOut = false
-    @State private var cacheSize = 0
+    @State private var refreshingScript = false
 
     var body: some View {
         NavigationStack {
-            Form {
-                accountSection
-                appearanceSection
-                streamingSection
-                controllerSection
-                librarySection
-                dataSection
-                aboutSection
+            ScrollView {
+                VStack(spacing: 18) {
+                    account
+                    appearance
+                    streaming
+                    controller
+                    storage
+                    about
+                }
+                .padding(.horizontal, Theme.pageInset)
+                .padding(.top, 8)
+                .padding(.bottom, 36)
             }
+            .scrollEdgeEffectStyle(.soft, for: .top)
+            .background { AuroraBackground() }
             .navigationTitle("Settings")
+            .task { await measureCache() }
             .sheet(isPresented: $showingDiagnostics) { DiagnosticsView() }
-            .task { cacheSize = await PosterCache.shared.diskUsage() }
             .confirmationDialog("Sign out of Xbox?", isPresented: $showingSignOut,
                                 titleVisibility: .visible) {
                 Button("Sign out", role: .destructive) {
                     Task { await auth.signOut() }
                 }
-                Button("Cancel", role: .cancel) {}
             } message: {
-                Text("This clears the Microsoft session stored on this device.")
+                Text("This clears the Xbox and Microsoft cookies stored in the app. "
+                     + "Your favorites, lists and activity stay.")
             }
         }
     }
 
     // MARK: - Sections
 
-    private var accountSection: some View {
-        Section("Account") {
-            LabeledContent("Signed in as", value: auth.state.gamertag ?? "Xbox account")
-            Button("Open xbox.com") { showingBrowser = true }
-            Button("Sign out", role: .destructive) { showingSignOut = true }
+    private var account: some View {
+        SettingsGroup("Account", icon: "person.crop.circle.fill") {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle().fill(.tint.opacity(0.18)).frame(width: 46, height: 46)
+                    Image(systemName: "person.fill").foregroundStyle(.tint)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(auth.state.gamertag ?? "Signed in")
+                        .font(.headline)
+                    Text(auth.state.isSignedIn
+                         ? "Cloud gaming token present"
+                         : "No cloud gaming token")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                if auth.isChecking { ProgressView().controlSize(.small) }
+            }
+
+            SettingsDivider()
+
+            Button {
+                Task { await auth.refresh(reason: "settings") }
+            } label: {
+                SettingsRowLabel(title: "Check session now", icon: "arrow.clockwise")
+            }
+            .buttonStyle(.plain)
+
+            SettingsDivider()
+
+            Button {
+                showingBrowser = true
+            } label: {
+                SettingsRowLabel(title: "Open xbox.com", icon: "safari")
+            }
+            .buttonStyle(.plain)
+
+            SettingsDivider()
+
+            Button {
+                showingSignOut = true
+            } label: {
+                SettingsRowLabel(title: "Sign out", icon: "rectangle.portrait.and.arrow.right",
+                                 destructive: true)
+            }
+            .buttonStyle(.plain)
         }
     }
 
-    private var appearanceSection: some View {
-        Section("Appearance") {
+    private var appearance: some View {
+        SettingsGroup("Appearance", icon: "paintbrush.fill") {
             Picker("Theme", selection: $settings.theme) {
-                ForEach(AppSettings.Theme.allCases) { Text($0.title).tag($0) }
+                ForEach(AppSettings.Theme.allCases) { theme in
+                    Text(theme.title).tag(theme)
+                }
             }
-            Picker("Accent", selection: $settings.accent) {
-                ForEach(AppSettings.Accent.allCases) { Text($0.title).tag($0) }
+            .pickerStyle(.segmented)
+
+            SettingsDivider()
+
+            VStack(alignment: .leading, spacing: 11) {
+                Text("Accent").font(.subheadline.weight(.semibold))
+                HStack(spacing: 13) {
+                    ForEach(AppSettings.Accent.allCases) { accent in
+                        Button {
+                            withAnimation(.smooth) { settings.accent = accent }
+                        } label: {
+                            Circle()
+                                .fill(accent.color)
+                                .frame(width: 32, height: 32)
+                                .overlay {
+                                    if settings.accent == accent {
+                                        Image(systemName: "checkmark")
+                                            .font(.caption.weight(.bold))
+                                            .foregroundStyle(.white)
+                                    }
+                                }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(accent.title)
+                    }
+                    Spacer(minLength: 0)
+                }
             }
-            Toggle("Show activity on Home", isOn: $settings.showActivity)
         }
     }
 
-    private var streamingSection: some View {
-        Section {
-            // Bound straight to stored settings, so opening this screen cannot
-            // re-apply a value and reload a running stream, as 1.x did.
+    private var streaming: some View {
+        SettingsGroup("Streaming", icon: "cloud.fill") {
             Picker("Quality", selection: $settings.quality) {
-                ForEach(AppSettings.Quality.allCases) { Text($0.title).tag($0) }
+                ForEach(AppSettings.Quality.allCases) { quality in
+                    Text(quality.title).tag(quality)
+                }
             }
-            Picker("Server region", selection: $settings.region) {
-                ForEach(AppSettings.Region.allCases) { Text($0.title).tag($0) }
+
+            SettingsDivider()
+
+            Picker("Region", selection: $settings.region) {
+                ForEach(AppSettings.Region.allCases) { region in
+                    Text(region.title).tag(region)
+                }
             }
-            Toggle("Start games automatically", isOn: $settings.autoStart)
-            Toggle("Show stream statistics", isOn: $settings.showStreamStats)
-            Toggle("Keep screen awake", isOn: $settings.keepAwake)
-        } header: {
-            Text("Streaming")
-        } footer: {
-            Text("Quality and region are applied the next time a game starts.")
+
+            SettingsDivider()
+
+            Toggle("Start the game automatically", isOn: $settings.autoStart)
+            SettingsDivider()
+            Toggle("Show the stream statistics overlay", isOn: $settings.showStreamStats)
+            SettingsDivider()
+            Toggle("Keep the screen awake", isOn: $settings.keepAwake)
+            SettingsDivider()
+
+            Button {
+                Task {
+                    refreshingScript = true
+                    _ = await BetterXCloud.shared.refresh()
+                    refreshingScript = false
+                }
+            } label: {
+                HStack {
+                    SettingsRowLabel(title: "Update the streaming enhancements",
+                                     icon: "arrow.down.circle")
+                    if refreshingScript { ProgressView().controlSize(.small) }
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(refreshingScript)
+
+            Text(BetterXCloud.shared.lastFetched.map {
+                "Enhancements updated \($0.formatted(date: .abbreviated, time: .shortened))."
+            } ?? "Enhancements have not been downloaded yet.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
-    private var controllerSection: some View {
-        Section {
-            LabeledContent("Controller", value: rumble.controllerName ?? "Not connected")
-            if rumble.controllerName != nil && !rumble.supportsHaptics {
-                Text("This controller does not report haptics support, so rumble is unavailable.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+    private var controller: some View {
+        SettingsGroup("Controller", icon: "gamecontroller.fill") {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(rumble.controllerName ?? "No controller connected")
+                        .font(.subheadline.weight(.semibold))
+                    Text(rumble.supportsHaptics
+                         ? "Haptics available"
+                         : "Haptics unavailable on this controller")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: rumble.controllerName == nil
+                      ? "gamecontroller" : "gamecontroller.fill")
+                    .foregroundStyle(rumble.controllerName == nil ? .secondary : .tint)
             }
+
+            SettingsDivider()
 
             Toggle("Rumble", isOn: $settings.rumbleEnabled)
 
             if settings.rumbleEnabled {
-                VStack(alignment: .leading, spacing: 8) {
+                SettingsDivider()
+                VStack(alignment: .leading, spacing: 7) {
                     HStack {
-                        Text("Strength")
+                        Text("Intensity").font(.subheadline.weight(.semibold))
                         Spacer()
                         Text(String(format: "%.1f×", settings.rumbleIntensity))
+                            .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
-                            .monospacedDigit()
                     }
-                    Slider(value: $settings.rumbleIntensity, in: 0.5...3, step: 0.1)
+                    Slider(value: $settings.rumbleIntensity, in: 0.5...2.5, step: 0.1)
                 }
 
-                HStack(spacing: 10) {
-                    Button("Left") { rumble.testLeft() }
-                        .buttonStyle(.bordered)
-                        .frame(maxWidth: .infinity)
-                    Button("Right") { rumble.testRight() }
-                        .buttonStyle(.bordered)
-                        .frame(maxWidth: .infinity)
-                    Button("Both") { rumble.testBoth() }
-                        .buttonStyle(.borderedProminent)
-                        .frame(maxWidth: .infinity)
+                SettingsDivider()
+
+                Button {
+                    rumble.play(left: 0.85, right: 0.85, durationMs: 420, force: true)
+                } label: {
+                    SettingsRowLabel(title: "Test rumble", icon: "waveform")
                 }
+                .buttonStyle(.plain)
+                .disabled(rumble.controllerName == nil)
             }
-        } header: {
-            Text("Controller")
-        } footer: {
-            Text("Rumble follows the game's own vibration, and stops when the game stops sending it.")
         }
     }
 
-    private var librarySection: some View {
-        Section("Library") {
-            LabeledContent("Games in catalog", value: "\(catalog.games.count)")
-            LabeledContent("Favorites", value: "\(library.favorites.count)")
-            LabeledContent("Recently played", value: "\(library.recents.count)")
-            LabeledContent("Up next", value: "\(library.queue.count)")
-            LabeledContent("Lists", value: "\(library.lists.count)")
-            Button("Clear favorites", role: .destructive) { library.clearFavorites() }
-            Button("Clear recently played", role: .destructive) { library.clearRecents() }
-        }
-    }
-
-    private var dataSection: some View {
-        Section("Data") {
-            Button("Refresh catalog") { Task { await catalog.refresh() } }
-            Button("Update Better xCloud") {
-                Task { await BetterXCloud.shared.refresh() }
+    private var storage: some View {
+        SettingsGroup("Storage", icon: "internaldrive.fill") {
+            HStack {
+                Text("Artwork cache").font(.subheadline)
+                Spacer()
+                Text(Format.bytes(cacheSize))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
             }
-            LabeledContent("Artwork cache", value: Format.bytes(cacheSize))
-            Button("Clear artwork cache", role: .destructive) {
+
+            SettingsDivider()
+
+            Button {
                 Task {
                     await PosterCache.shared.clear()
-                    cacheSize = await PosterCache.shared.diskUsage()
+                    await measureCache()
                 }
+            } label: {
+                SettingsRowLabel(title: "Clear artwork cache", icon: "trash")
             }
+            .buttonStyle(.plain)
+
+            SettingsDivider()
+
+            Button {
+                library.clearRecents()
+            } label: {
+                SettingsRowLabel(title: "Clear recently played", icon: "clock.arrow.circlepath")
+            }
+            .buttonStyle(.plain)
+
+            SettingsDivider()
+
+            Button {
+                library.clearActivity()
+            } label: {
+                SettingsRowLabel(title: "Clear activity log", icon: "list.bullet.rectangle",
+                                 destructive: true)
+            }
+            .buttonStyle(.plain)
         }
     }
 
-    private var aboutSection: some View {
-        Section {
-            Button("Diagnostics") { showingDiagnostics = true }
-            LabeledContent("Version", value: AppInfo.versionLine)
-            Link("Better xCloud by redphx",
-                 destination: URL(string: "https://github.com/redphx/better-xcloud")!)
-        } header: {
-            Text("About")
-        } footer: {
-            Text("GameStream is an unofficial client for Xbox Cloud Gaming and is not "
-                 + "affiliated with Microsoft.")
+    private var about: some View {
+        SettingsGroup("About", icon: "info.circle.fill") {
+            HStack {
+                Text("Version").font(.subheadline)
+                Spacer()
+                Text(AppInfo.versionLine)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsDivider()
+
+            HStack {
+                Text("Device").font(.subheadline)
+                Spacer()
+                Text(AppInfo.deviceLine)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsDivider()
+
+            Button {
+                showingDiagnostics = true
+            } label: {
+                SettingsRowLabel(title: "Diagnostics", icon: "stethoscope")
+            }
+            .buttonStyle(.plain)
         }
+    }
+
+    private func measureCache() async {
+        cacheSize = await PosterCache.shared.diskUsage()
     }
 }
 
-/// Everything needed to explain a failure without a debugger attached.
+// MARK: - Settings building blocks
+
+/// A titled glass card, which is what replaces the grouped table in 2.0.
+struct SettingsGroup<Content: View>: View {
+    let title: String
+    let icon: String
+    @ViewBuilder var content: Content
+
+    init(_ title: String, icon: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.icon = icon
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Label(title, systemImage: icon)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(.tint)
+            content
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
+        .glassEffect(.regular, in: Theme.cardShape)
+    }
+}
+
+struct SettingsDivider: View {
+    var body: some View {
+        Divider().opacity(0.35)
+    }
+}
+
+struct SettingsRowLabel: View {
+    let title: String
+    let icon: String
+    var destructive = false
+
+    var body: some View {
+        HStack(spacing: 11) {
+            Image(systemName: icon)
+                .frame(width: 22)
+                .foregroundStyle(destructive ? Color.red : Color.accentColor)
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(destructive ? Color.red : Color.primary)
+            Spacer(minLength: 0)
+        }
+        .contentShape(Rectangle())
+    }
+}
+
+/// The log, with everything needed to explain a failure to someone else.
 struct DiagnosticsView: View {
     @EnvironmentObject private var auth: XboxAuth
-    @ObservedObject private var log = AppLog.shared
+    @StateObject private var log = AppLog.shared
     @Environment(\.dismiss) private var dismiss
-
-    @State private var copied = false
 
     var body: some View {
         NavigationStack {
             List {
-                Section("Xbox session") {
-                    LabeledContent("Status", value: statusText)
-                    if let gamertag = auth.state.gamertag {
-                        LabeledContent("Gamertag", value: gamertag)
+                Section("Session") {
+                    LabeledContent("State", value: auth.state.isSignedIn ? "Signed in" : "Signed out")
+                    if let tag = auth.state.gamertag {
+                        LabeledContent("Gamertag", value: tag)
                     }
-                    LabeledContent("Token found in",
-                                   value: auth.tokenSource.isEmpty ? "—" : auth.tokenSource)
-                    LabeledContent("Token expires",
-                                   value: auth.tokenExpires.isEmpty ? "—" : auth.tokenExpires)
-                    if let checked = auth.lastCheck {
-                        LabeledContent("Last checked",
-                                       value: checked.formatted(date: .omitted, time: .standard))
+                    if !auth.tokenSource.isEmpty {
+                        LabeledContent("Token source", value: auth.tokenSource)
+                    }
+                    if !auth.tokenExpires.isEmpty {
+                        LabeledContent("Token expires", value: auth.tokenExpires)
+                    }
+                    if let check = auth.lastCheck {
+                        LabeledContent("Last check",
+                                       value: check.formatted(date: .omitted, time: .standard))
                     }
                     if let error = auth.lastError {
-                        Text(error).font(.caption).foregroundStyle(.orange)
+                        LabeledContent("Last error", value: error)
                     }
-                    Button("Check again") {
-                        Task { await auth.refresh(reason: "diagnostics") }
-                    }
-                }
-
-                Section("Build") {
-                    LabeledContent("Version", value: AppInfo.versionLine)
-                    LabeledContent("System", value: AppInfo.deviceLine)
-                    LabeledContent("Better xCloud",
-                                   value: BetterXCloud.shared.cachedScript == nil
-                                       ? "Not downloaded" : "Ready")
                 }
 
                 Section("Log") {
                     if log.entries.isEmpty {
-                        Text("Nothing logged yet.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                        Text("Nothing logged yet.").foregroundStyle(.secondary)
                     } else {
                         ForEach(log.entries.reversed()) { entry in
-                            VStack(alignment: .leading, spacing: 2) {
-                                Label(entry.category, systemImage: entry.level.symbol)
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(colour(for: entry.level))
-                                Text(entry.message)
+                            HStack(alignment: .top, spacing: 9) {
+                                Image(systemName: entry.level.symbol)
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
+                                    .foregroundStyle(color(for: entry.level))
+                                Text(entry.line)
+                                    .font(.caption.monospaced())
+                                    .textSelection(.enabled)
                             }
-                            .padding(.vertical, 1)
                         }
                     }
                 }
@@ -231,46 +414,23 @@ struct DiagnosticsView: View {
             .navigationTitle("Diagnostics")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
                 ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button {
-                            UIPasteboard.general.string = log.exportText()
-                            copied = true
-                        } label: {
-                            Label("Copy log", systemImage: "doc.on.doc")
-                        }
-                        ShareLink(item: log.exportText()) {
-                            Label("Share log", systemImage: "square.and.arrow.up")
-                        }
-                        Button(role: .destructive) {
-                            log.clear()
-                        } label: {
-                            Label("Clear log", systemImage: "trash")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
+                    ShareLink(item: log.exportText()) {
+                        Image(systemName: "square.and.arrow.up")
                     }
+                    .accessibilityLabel("Share the log")
                 }
             }
-            .alert("Log copied", isPresented: $copied) {
-                Button("OK", role: .cancel) {}
-            }
         }
     }
 
-    private var statusText: String {
-        switch auth.state {
-        case .unknown: return "Not checked yet"
-        case .signedOut: return "No cloud-gaming token"
-        case .signedIn: return "Ready to stream"
-        }
-    }
-
-    private func colour(for level: AppLog.Level) -> Color {
+    private func color(for level: AppLog.Level) -> Color {
         switch level {
         case .debug: return .secondary
-        case .info: return .primary
+        case .info: return .blue
         case .warn: return .orange
         case .error: return .red
         }

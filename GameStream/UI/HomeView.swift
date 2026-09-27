@@ -8,157 +8,252 @@ struct HomeView: View {
     @EnvironmentObject private var auth: XboxAuth
 
     @Binding var showingBrowser: Bool
+
     @State private var showingActivity = false
+    @State private var genre: String?
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 26) {
-                    header
-
+                LazyVStack(alignment: .leading, spacing: Theme.sectionSpacing) {
                     if let error = catalog.errorMessage, catalog.games.isEmpty {
                         ErrorNotice(title: "Catalog unavailable", message: error) {
                             Task { await catalog.refresh() }
                         }
+                        .padding(.horizontal, Theme.pageInset)
                     } else if catalog.games.isEmpty && catalog.isLoading {
                         LoadingNotice()
                     }
 
-                    if let featured = catalog.games.first {
-                        FeaturedCard(game: featured) { stream.play(featured) }
+                    if !catalog.featured.isEmpty {
+                        heroCarousel
                     }
 
-                    // Recents and favourites come from the library itself, so
-                    // they are present even when the catalog request fails.
+                    quickActions
+
                     if !library.recents.isEmpty {
-                        SectionHeader(title: "Continue playing",
-                                      actionTitle: "Activity") { showingActivity = true }
-                        HorizontalGameRow(games: Array(library.recents.prefix(12)))
-                    }
-
-                    if !library.favorites.isEmpty {
-                        SectionHeader(title: "Favorites")
-                        HorizontalGameRow(games: Array(library.favorites.prefix(12)))
+                        section("Jump back in", subtitle: "Where you left off") {
+                            GameShelf(games: Array(library.recents.prefix(12))) { game in
+                                let played = library.playtime(forGameID: game.id)
+                                return played > 0 ? Format.duration(played) : nil
+                            }
+                        }
                     }
 
                     if !library.queue.isEmpty {
-                        SectionHeader(title: "Up next")
-                        HorizontalGameRow(games: library.queue)
+                        section("Up next", subtitle: "\(library.queue.count) queued") {
+                            GameShelf(games: library.queue)
+                        }
                     }
 
-                    if settings.showActivity && !library.activity.isEmpty {
-                        activitySummary
+                    if !library.favorites.isEmpty {
+                        section("Favorites") {
+                            GameShelf(games: Array(library.favorites.prefix(14)))
+                        }
+                    }
+
+                    if !catalog.genres.isEmpty {
+                        genreBrowser
                     }
 
                     if !catalog.games.isEmpty {
-                        SectionHeader(title: "Popular now")
-                        HorizontalGameRow(games: Array(catalog.games.prefix(20)))
+                        section(genre.map { "More in \($0)" } ?? "In the cloud",
+                                subtitle: "\(catalog.games.count) games ready to stream") {
+                            GameShelf(games: popular, width: 138)
+                        }
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 28)
+                .padding(.vertical, 8)
+                .padding(.bottom, 36)
             }
-            .background(Color(uiColor: .systemGroupedBackground))
+            .scrollEdgeEffectStyle(.soft, for: .top)
+            .background { AuroraBackground() }
             .refreshable { await catalog.refresh() }
+            .navigationTitle(greeting)
+            .toolbarTitleDisplayMode(.inlineLarge)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        surpriseMe()
+                    } label: {
+                        Image(systemName: "dice.fill")
+                    }
+                    .accessibilityLabel("Play something random")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingBrowser = true
+                    } label: {
+                        Image(systemName: "safari")
+                    }
+                    .accessibilityLabel("Open xbox.com")
+                }
+            }
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
             .sheet(isPresented: $showingActivity) { ActivityView() }
         }
     }
 
-    private var header: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(greeting).font(.largeTitle.weight(.bold))
-                Text(auth.state.gamertag ?? "Xbox Cloud Gaming")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+    // MARK: - Hero
+
+    private var heroCarousel: some View {
+        ScrollView(.horizontal) {
+            LazyHStack(spacing: 14) {
+                ForEach(catalog.featured) { game in
+                    HeroCard(game: game) { stream.play(game) }
+                        .containerRelativeFrame(.horizontal, count: 1, spacing: 14)
+                        .scrollTransition { content, phase in
+                            content
+                                .opacity(phase.isIdentity ? 1 : 0.55)
+                                .scaleEffect(phase.isIdentity ? 1 : 0.93)
+                        }
+                }
             }
-            Spacer()
-            Button {
-                showingBrowser = true
-            } label: {
-                Image(systemName: "safari")
-            }
-            .buttonStyle(.bordered)
-            .accessibilityLabel("Open xbox.com")
+            .scrollTargetLayout()
+            .padding(.horizontal, Theme.pageInset)
         }
-        .padding(.top, 8)
+        .scrollIndicators(.hidden)
+        .scrollTargetBehavior(.viewAligned)
+        .scrollClipDisabled()
     }
 
-    private var activitySummary: some View {
-        Button {
-            showingActivity = true
-        } label: {
-            VStack(alignment: .leading, spacing: 7) {
-                HStack {
-                    Text("Your activity").font(.headline)
-                    Spacer()
-                    Image(systemName: "chevron.right").foregroundStyle(.tertiary)
-                }
-                Text("\(Format.duration(library.totalPlaytime)) played across "
-                     + "\(library.activity.count) session\(library.activity.count == 1 ? "" : "s").")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+    // MARK: - Quick actions
+
+    private var quickActions: some View {
+        HStack(spacing: 12) {
+            StatChip(value: Format.duration(library.playtimeToday),
+                     caption: "Played today",
+                     systemImage: "clock.fill")
+
+            StatChip(value: "\(library.streakDays)",
+                     caption: "Day streak",
+                     systemImage: "flame.fill")
+
+            Button {
+                showingActivity = true
+            } label: {
+                StatChip(value: "\(library.activity.count)",
+                         caption: "Sessions logged",
+                         systemImage: "list.bullet.rectangle")
             }
-            .padding(17)
-            .background(Color(uiColor: .secondarySystemGroupedBackground),
-                        in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, Theme.pageInset)
+    }
+
+    // MARK: - Genres
+
+    private var genreBrowser: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            SectionHeader(title: "Browse", subtitle: "Filter the shelf below")
+                .padding(.horizontal, Theme.pageInset)
+
+            ScrollView(.horizontal) {
+                HStack(spacing: 9) {
+                    FilterChip(title: "All", isSelected: genre == nil) {
+                        withAnimation(.smooth) { genre = nil }
+                    }
+                    ForEach(catalog.genres, id: \.self) { name in
+                        FilterChip(title: name, isSelected: genre == name) {
+                            withAnimation(.smooth) { genre = (genre == name) ? nil : name }
+                        }
+                    }
+                }
+                .padding(.horizontal, Theme.pageInset)
+            }
+            .scrollIndicators(.hidden)
+        }
+    }
+
+    private var popular: [Game] {
+        let base = genre.map { catalog.games(inGenre: $0) } ?? catalog.games
+        return Array(base.prefix(24))
+    }
+
+    // MARK: - Helpers
+
+    @ViewBuilder
+    private func section<Content: View>(_ title: String, subtitle: String? = nil,
+                                        @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 13) {
+            SectionHeader(title: title, subtitle: subtitle)
+                .padding(.horizontal, Theme.pageInset)
+            content()
+        }
+    }
+
+    private func surpriseMe() {
+        guard let pick = catalog.randomGame() else { return }
+        AppLog.shared.info("home", "random pick: \(pick.title)")
+        stream.play(pick)
     }
 
     private var greeting: String {
+        let name = auth.state.gamertag
         switch Calendar.current.component(.hour, from: Date()) {
-        case ..<12: return "Good morning"
-        case ..<18: return "Good afternoon"
-        default: return "Good evening"
+        case ..<12: return name.map { "Morning, \($0)" } ?? "Good morning"
+        case ..<18: return name.map { "Afternoon, \($0)" } ?? "Good afternoon"
+        default: return name.map { "Evening, \($0)" } ?? "Good evening"
         }
     }
 }
 
-struct FeaturedCard: View {
+/// The full-width card at the top of Home.
+struct HeroCard: View {
     let game: Game
     let play: () -> Void
 
+    @Namespace private var glass
+
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            GameArtwork(url: game.heroURL ?? game.posterURL, cornerRadius: 22)
-                .frame(height: 220)
+            GameArtwork(url: game.heroURL ?? game.posterURL, cornerRadius: Theme.heroRadius)
+                .frame(height: 260)
                 .overlay {
                     LinearGradient(
-                        stops: [.init(color: .black.opacity(0), location: 0.35),
-                                .init(color: .black.opacity(0.75), location: 1)],
+                        stops: [.init(color: .black.opacity(0), location: 0.3),
+                                .init(color: .black.opacity(0.8), location: 1)],
                         startPoint: .top, endPoint: .bottom
                     )
-                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .clipShape(Theme.heroShape)
                 }
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text("FEATURED")
+            VStack(alignment: .leading, spacing: 11) {
+                Text(game.genre.uppercased())
                     .font(.caption2.weight(.bold))
-                    .tracking(1.3)
-                    .foregroundStyle(.white.opacity(0.8))
+                    .tracking(1.4)
+                    .foregroundStyle(.white.opacity(0.75))
+
                 Text(game.title)
                     .font(.title2.weight(.bold))
                     .foregroundStyle(.white)
                     .lineLimit(2)
-                HStack(spacing: 10) {
-                    Button(action: play) {
-                        Label("Play", systemImage: "play.fill")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.white)
-                    .foregroundStyle(.black)
 
-                    NavigationLink(value: game) {
-                        Text("Details")
+                // A glass container lets these two controls share one piece of
+                // glass and morph together instead of reading as two stickers.
+                GlassEffectContainer(spacing: 12) {
+                    HStack(spacing: 12) {
+                        Button(action: play) {
+                            Label("Play", systemImage: "play.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .padding(.horizontal, 6)
+                        }
+                        .buttonStyle(.glassProminent)
+                        .buttonBorderShape(.capsule)
+                        .glassEffectID("play", in: glass)
+
+                        NavigationLink(value: game) {
+                            Text("Details")
+                                .font(.subheadline.weight(.semibold))
+                                .padding(.horizontal, 6)
+                        }
+                        .buttonStyle(.glass)
+                        .buttonBorderShape(.capsule)
+                        .glassEffectID("details", in: glass)
                     }
-                    .buttonStyle(.bordered)
-                    .tint(.white)
                 }
             }
-            .padding(18)
+            .padding(20)
         }
     }
 }

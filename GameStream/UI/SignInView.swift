@@ -51,7 +51,7 @@ struct SignInView: View {
     }
 
     private var statusBar: some View {
-        HStack(spacing: 11) {
+        HStack(spacing: 12) {
             if auth.state.isSignedIn {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
             } else {
@@ -74,15 +74,14 @@ struct SignInView: View {
                 Task { await auth.refresh(reason: "manual check") }
             }
             .font(.footnote.weight(.semibold))
-            .buttonStyle(.bordered)
+            .buttonStyle(.glass)
+            .buttonBorderShape(.capsule)
         }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 11)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .glassEffect(.regular, in: Theme.cardShape)
         .padding(.horizontal, 14)
         .padding(.bottom, 12)
-        .shadow(color: .black.opacity(0.12), radius: 14, y: 6)
     }
 }
 
@@ -90,26 +89,24 @@ struct SignInView: View {
 struct WelcomeView: View {
     @EnvironmentObject private var auth: XboxAuth
     @State private var showingSignIn = false
+    @State private var appear = false
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [Color.accentColor.opacity(0.28), Color(uiColor: .systemBackground)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            AuroraBackground()
 
             VStack(alignment: .leading, spacing: 26) {
                 Spacer()
 
                 Image(systemName: "cloud.fill")
-                    .font(.system(size: 42, weight: .bold))
+                    .font(.system(size: 44, weight: .bold))
                     .foregroundStyle(.tint)
+                    .padding(18)
+                    .glassEffect(.regular, in: Circle())
 
-                VStack(alignment: .leading, spacing: 9) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text("GameStream")
-                        .font(.system(size: 44, weight: .bold, design: .rounded))
+                        .font(.system(size: 46, weight: .bold, design: .rounded))
                     Text("Xbox Cloud Gaming, without the clutter.")
                         .font(.title3)
                         .foregroundStyle(.secondary)
@@ -130,10 +127,10 @@ struct WelcomeView: View {
                         Image(systemName: "arrow.up.right")
                     }
                     .padding(.horizontal, 18)
-                    .padding(.vertical, 15)
+                    .padding(.vertical, 16)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                .buttonStyle(.glassProminent)
+                .buttonBorderShape(.capsule)
 
                 if auth.isChecking {
                     HStack(spacing: 8) {
@@ -148,6 +145,11 @@ struct WelcomeView: View {
             }
             .frame(maxWidth: 520)
             .padding(.horizontal, 28)
+            .opacity(appear ? 1 : 0)
+            .offset(y: appear ? 0 : 16)
+        }
+        .task {
+            withAnimation(.smooth(duration: 0.5)) { appear = true }
         }
         .sheet(isPresented: $showingSignIn) {
             SignInView().environmentObject(auth)

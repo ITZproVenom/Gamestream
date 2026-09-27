@@ -8,6 +8,10 @@ struct StreamView: View {
 
     @State private var showingControls = true
     @State private var hideTask: Task<Void, Never>?
+    @State private var elapsed: TimeInterval = 0
+    @State private var startedAt = Date()
+
+    @Namespace private var glass
 
     var body: some View {
         ZStack {
@@ -28,7 +32,7 @@ struct StreamView: View {
             }
 
             if stream.phase == .playing, showingControls {
-                controls.transition(.opacity)
+                hud.transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .statusBarHidden(stream.phase == .playing)
@@ -36,11 +40,22 @@ struct StreamView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             guard stream.phase == .playing else { return }
-            withAnimation(.easeOut(duration: 0.2)) { showingControls.toggle() }
+            withAnimation(.smooth(duration: 0.25)) { showingControls.toggle() }
             if showingControls { scheduleHide() }
         }
         .onChange(of: stream.phase) { _, phase in
-            if phase == .playing { scheduleHide() }
+            if phase == .playing {
+                startedAt = Date()
+                scheduleHide()
+            }
+        }
+        .task(id: stream.phase == .playing) {
+            guard stream.phase == .playing else { return }
+            // A visible session timer, ticking once a second and no faster.
+            while !Task.isCancelled {
+                elapsed = Date().timeIntervalSince(startedAt)
+                try? await Task.sleep(for: .seconds(1))
+            }
         }
         .onDisappear { hideTask?.cancel() }
     }
@@ -48,7 +63,7 @@ struct StreamView: View {
     // MARK: - States
 
     private func connecting(_ detail: String) -> some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 20) {
             ProgressView().controlSize(.large).tint(.white)
             Text(detail)
                 .font(.headline)
@@ -58,11 +73,12 @@ struct StreamView: View {
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.65))
             Button("Cancel") { stream.exit() }
-                .buttonStyle(.bordered)
+                .buttonStyle(.glass)
+                .buttonBorderShape(.capsule)
                 .tint(.white)
-                .padding(.top, 6)
+                .padding(.top, 4)
         }
-        .padding(30)
+        .padding(34)
     }
 
     private func failure(_ message: String) -> some View {
@@ -81,10 +97,12 @@ struct StreamView: View {
 
             HStack(spacing: 12) {
                 Button("Close") { stream.exit() }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.capsule)
                     .tint(.white)
                 Button("Try again") { stream.retry() }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
+                    .buttonBorderShape(.capsule)
             }
             .padding(.top, 6)
         }
@@ -92,57 +110,77 @@ struct StreamView: View {
         .frame(maxWidth: 460)
     }
 
-    private var controls: some View {
+    // MARK: - HUD
+
+    private var hud: some View {
         VStack {
-            HStack(spacing: 10) {
-                Button {
-                    stream.exit()
-                } label: {
-                    Label("Exit", systemImage: "xmark")
-                        .font(.footnote.weight(.semibold))
-                        .padding(.horizontal, 13)
-                        .padding(.vertical, 9)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.white)
-                .background(.black.opacity(0.55), in: Capsule())
-
-                if !library.queue.isEmpty {
+            GlassEffectContainer(spacing: 10) {
+                HStack(spacing: 10) {
                     Button {
-                        stream.playNextInQueue()
+                        stream.exit()
                     } label: {
-                        Label("Next", systemImage: "forward.end.fill")
+                        Label("Exit", systemImage: "xmark")
                             .font(.footnote.weight(.semibold))
-                            .padding(.horizontal, 13)
-                            .padding(.vertical, 9)
+                            .padding(.horizontal, 4)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.white)
-                    .background(.black.opacity(0.55), in: Capsule())
-                }
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.capsule)
+                    .glassEffectID("exit", in: glass)
 
-                Spacer()
+                    if !library.queue.isEmpty {
+                        Button {
+                            stream.playNextInQueue()
+                        } label: {
+                            Label("Next", systemImage: "forward.end.fill")
+                                .font(.footnote.weight(.semibold))
+                                .padding(.horizontal, 4)
+                        }
+                        .buttonStyle(.glass)
+                        .buttonBorderShape(.capsule)
+                        .glassEffectID("next", in: glass)
+                    }
 
-                if !stream.resolution.isEmpty {
-                    Text(stream.resolution)
+                    Button {
+                        stream.retry()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.footnote.weight(.semibold))
+                    }
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.capsule)
+                    .glassEffectID("reload", in: glass)
+                    .accessibilityLabel("Reconnect")
+
+                    Spacer(minLength: 0)
+
+                    Text(Format.clock(elapsed))
                         .font(.caption.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.85))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background(.black.opacity(0.5), in: Capsule())
-                }
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 8)
+                        .glassEffect(.regular, in: Capsule())
+                        .glassEffectID("timer", in: glass)
 
-                Image(systemName: rumble.supportsHaptics
-                      ? "gamecontroller.fill" : "gamecontroller")
-                    .font(.footnote)
-                    .foregroundStyle(rumble.controllerName == nil
-                                     ? .white.opacity(0.4) : .white)
-                    .padding(9)
-                    .background(.black.opacity(0.5), in: Circle())
-                    .accessibilityLabel(rumble.controllerName ?? "No controller connected")
+                    if !stream.resolution.isEmpty {
+                        Text(stream.resolution)
+                            .font(.caption.weight(.semibold).monospacedDigit())
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 8)
+                            .glassEffect(.regular, in: Capsule())
+                            .glassEffectID("resolution", in: glass)
+                    }
+
+                    Image(systemName: rumble.supportsHaptics
+                          ? "gamecontroller.fill" : "gamecontroller")
+                        .font(.footnote)
+                        .foregroundStyle(rumble.controllerName == nil ? .secondary : .primary)
+                        .padding(9)
+                        .glassEffect(.regular, in: Circle())
+                        .glassEffectID("controller", in: glass)
+                        .accessibilityLabel(rumble.controllerName ?? "No controller connected")
+                }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 10)
+            .padding(.top, 12)
 
             Spacer()
         }
@@ -154,7 +192,7 @@ struct StreamView: View {
         hideTask = Task {
             try? await Task.sleep(for: .seconds(4))
             guard !Task.isCancelled else { return }
-            withAnimation(.easeOut(duration: 0.3)) { showingControls = false }
+            withAnimation(.smooth(duration: 0.3)) { showingControls = false }
         }
     }
 }
