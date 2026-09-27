@@ -273,8 +273,15 @@ enum WebScripts {
             "video { width: 100% !important; height: 100% !important; object-fit: contain !important; background: #000 !important; }",
             // Nothing belonging to the enhancement may be clipped or buried.
             "[class^=\"bx-\"], [class*=\" bx-\"], [id^=\"bx-\"] { overflow: visible !important; }",
-            ".bx-settings-dialog, .bx-centered-dialog, .bx-navigation-dialog, .bx-key-binding-dialog { z-index: 2147483000 !important; display: flex !important; }",
-            "#bx-game-bar { z-index: 2147482000 !important; }"
+            ".bx-settings-dialog, .bx-centered-dialog, .bx-navigation-dialog, .bx-key-binding-dialog { z-index: 2147483000 !important; }",
+            "#bx-game-bar { z-index: 2147482000 !important; }",
+            // The script disables pointer events on its in-stream button
+            // while the HUD fades, and only restores them when the HUD
+            // reports left: 0px. In this webview that condition often never
+            // holds, so the button stays present and untappable. Forcing it
+            // back is scoped to that one button's subtree, which sits inside
+            // a HUD that is itself unclickable while hidden.
+            "[title=\"Better xCloud\"], [title=\"Better xCloud\"] * { pointer-events: auto !important; }"
         ].join("\n");
 
         function onLaunchPage() {
@@ -589,25 +596,50 @@ enum WebScripts {
             var target = null;
 
             if (command === "bxMenu") {
-                // Its own game-bar button first, then its entry in the site's
-                // guide, then anything else it has labelled.
+                // The in-stream button is a clone of the site's own HUD
+                // button with title="Better xCloud" on the inner <button>.
+                // Its click handler opens the settings dialog, so pressing
+                // that element is the supported route.
                 target = match([
-                    "#bx-game-bar .bx-game-bar-container button",
+                    "[title=\"Better xCloud\"]",
+                    "button[title*=\"Better xCloud\" i]",
+                    ".bx-header-settings-button",
                     ".bx-guide-home-buttons button",
-                    "button.bx-button[data-bx-settings]"
-                ], /better\s*xcloud|bx settings/);
+                    "#bx-game-bar .bx-game-bar-container button"
+                ], /better\s*xcloud/);
+
+                // Pointer events may have been left off by its own fade
+                // handling; clear that on the way up before clicking.
+                var node = target;
+                while (node && node !== document.body) {
+                    if (node.style && node.style.pointerEvents === "none") {
+                        node.style.pointerEvents = "auto";
+                    }
+                    node = node.parentElement;
+                }
             } else if (command === "guide") {
                 target = match([
                     "button[aria-label*=\"guide\" i]",
+                    "button[class*=\"GuideButton\"]",
                     "button[data-id=\"guide\"]"
-                ], /xbox guide|open guide|guide menu|stream menu|nexus/);
+                ], /xbox guide|open guide|guide menu|nexus/);
             }
 
             if (target && click(target)) {
                 note(command, "pressed " + describe(target));
                 return true;
             }
-            note(command, "no matching control found");
+
+            // A dead button with no explanation is what made this hard to
+            // fix the first time. Report what the page is actually offering.
+            var candidates = [];
+            var all = document.querySelectorAll("button, [role=\"button\"], [title]");
+            for (var i = 0; i < all.length && candidates.length < 8; i++) {
+                if (!visible(all[i])) continue;
+                var cls = (all[i].className || "").toString().slice(0, 30);
+                candidates.push(describe(all[i]) + " ." + cls);
+            }
+            note(command, "no match; visible controls: " + candidates.join(" | "));
             return false;
         };
     })();

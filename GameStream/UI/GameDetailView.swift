@@ -72,11 +72,14 @@ struct GameDetailView: View {
 
     private var hero: some View {
         ZStack(alignment: .bottomLeading) {
+            // No background extension effect here. It widens the view beyond
+            // the screen, and because everything below shares the scroll
+            // view's content width, the whole page ended up shifted off the
+            // left edge with the poster and stat cards cut in half.
             GameArtwork(url: game.heroURL ?? game.posterURL, cornerRadius: 0)
+                .frame(maxWidth: .infinity)
                 .frame(height: 300)
-                // Liquid Glass: the artwork bleeds past the safe area and
-                // under the bar instead of stopping at a hard edge.
-                .backgroundExtensionEffect()
+                .clipped()
                 .overlay {
                     LinearGradient(
                         stops: [.init(color: .black.opacity(0), location: 0.35),
