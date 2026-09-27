@@ -2,6 +2,48 @@ import Foundation
 import Combine
 import UIKit
 
+/// The live numbers for one moment of a stream, read from WebRTC.
+struct StreamStats: Equatable, Sendable {
+    var fps = 0
+    var bitrateKbps = 0
+    var rttMs = 0
+    var jitterMs = 0
+    var packetsLost = 0
+    var framesDropped = 0
+    var decodeMs = 0
+    var width = 0
+    var height = 0
+    var codec = ""
+
+    init() {}
+
+    init(payload: [String: Any]) {
+        func number(_ key: String) -> Int { payload[key] as? Int ?? 0 }
+        fps = number("fps")
+        bitrateKbps = number("bitrateKbps")
+        rttMs = number("rttMs")
+        jitterMs = number("jitterMs")
+        packetsLost = number("packetsLost")
+        framesDropped = number("framesDropped")
+        decodeMs = number("decodeMs")
+        width = number("width")
+        height = number("height")
+        codec = (payload["codec"] as? String ?? "").uppercased()
+    }
+
+    var resolution: String { width > 0 && height > 0 ? "\(width)×\(height)" : "" }
+
+    /// Connection quality, judged the way a player would: latency first,
+    /// then whether frames are actually arriving.
+    enum Quality { case good, fair, poor }
+
+    var quality: Quality {
+        if rttMs > 120 || fps < 30 { return .poor }
+        if rttMs > 70 || fps < 50 { return .fair }
+        return .good
+    }
+}
+
 /// Owns a play session from the moment Play is pressed until the stream ends.
 ///
 /// The phases exist so the interface can tell the truth about what is
@@ -26,6 +68,8 @@ final class StreamCoordinator: ObservableObject {
     @Published private(set) var resolution: String = ""
     /// Bumping this asks the player's webview to reload the launch page.
     @Published private(set) var reloadToken = 0
+    /// The live WebRTC numbers, or nil before the first sample arrives.
+    @Published private(set) var stats: StreamStats?
 
     private var startedAt: Date?
     private var watchdog: Task<Void, Never>?
@@ -90,6 +134,7 @@ final class StreamCoordinator: ObservableObject {
         self.startedAt = nil
         game = nil
         resolution = ""
+        stats = nil
         phase = .idle
     }
 
@@ -124,6 +169,27 @@ final class StreamCoordinator: ObservableObject {
             phase = .failed("Xbox asked for a sign-in. Your session may have expired.")
             Task { await XboxAuth.shared.refresh(reason: "stream bounced to login") }
         }
+    }
+
+    func statsUpdated(_ value: StreamStats) {
+        stats = value
+        // The page knows the true frame size; use it rather than whatever the
+        // launch page reported when the picture first appeared.
+        if !value.resolution.isEmpty, resolution != value.resolution {
+            resolution = value.resolution
+        }
+    }
+
+    /// Opens the streaming enhancement's own menu.
+    func openEnhancementMenu() {
+        log.info("stream", "opening the enhancement menu")
+        XboxWebView.Registry.shared.run("window.__gsCommand && window.__gsCommand('bxMenu');")
+    }
+
+    /// Presses the site's Xbox guide button.
+    func pressGuide() {
+        log.info("stream", "pressing the Xbox guide")
+        XboxWebView.Registry.shared.run("window.__gsCommand && window.__gsCommand('guide');")
     }
 
     func streamStarted(width: Int, height: Int) {

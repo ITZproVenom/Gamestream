@@ -32,6 +32,19 @@ struct XboxWebView: UIViewRepresentable {
         var streamView: WKWebView?
         private init() {}
 
+        /// Runs a snippet inside the live player page.
+        ///
+        /// The native HUD needs to press controls that belong to the site, and
+        /// this is the only handle on that webview once it is on screen.
+        func run(_ javaScript: String) {
+            guard let view = streamView else { return }
+            view.evaluateJavaScript(javaScript) { _, error in
+                if let error {
+                    AppLog.shared.warn("stream", "command failed: \(error.localizedDescription)")
+                }
+            }
+        }
+
         /// Ends the session for real.
         ///
         /// Because the player webview is deliberately kept alive between
@@ -151,7 +164,9 @@ struct XboxWebView: UIViewRepresentable {
                 forMainFrameOnly: true))
         }
 
-        for source in [WebScripts.streamStateJS, WebScripts.streamChromeJS, WebScripts.autoStartJS] {
+        for source in [WebScripts.streamStateJS, WebScripts.streamChromeJS,
+                       WebScripts.streamStatsJS, WebScripts.streamCommandsJS,
+                       WebScripts.autoStartJS] {
             controller.addUserScript(WKUserScript(source: source,
                                                   injectionTime: .atDocumentEnd,
                                                   forMainFrameOnly: true))
@@ -203,6 +218,11 @@ struct XboxWebView: UIViewRepresentable {
                 StreamCoordinator.shared.streamFailed(message: body["message"] as? String ?? "")
             case "autoStart":
                 log.info("stream", "pressed the site's \"\(body["label"] as? String ?? "")\" button")
+            case "stats":
+                StreamCoordinator.shared.statsUpdated(StreamStats(payload: body))
+            case "command":
+                log.info("stream", "\(body["command"] as? String ?? "command"): "
+                         + "\(body["detail"] as? String ?? "")")
             case "rumble":
                 RumbleBridge.handle(payload: body)
             default:

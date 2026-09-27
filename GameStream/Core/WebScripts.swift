@@ -263,11 +263,18 @@ enum WebScripts {
         window.__gsChrome = true;
 
         var STYLE_ID = "gamestream-stream-chrome";
+        // Deliberately narrow. The previous version hid every
+        // nav[aria-label] and clipped the body, which also hid the stream
+        // menu that Better xCloud adds its button to and clipped its
+        // dialogs — that is why its menu "would not open".
         var css = [
             "html, body { background: #000 !important; margin: 0 !important; padding: 0 !important; }",
-            "body { overflow: hidden !important; }",
-            "header[role=\"banner\"], footer[role=\"contentinfo\"], nav[aria-label] { display: none !important; }",
-            "video { width: 100% !important; height: 100% !important; object-fit: contain !important; background: #000 !important; }"
+            "header[role=\"banner\"], footer[role=\"contentinfo\"] { display: none !important; }",
+            "video { width: 100% !important; height: 100% !important; object-fit: contain !important; background: #000 !important; }",
+            // Nothing belonging to the enhancement may be clipped or buried.
+            "[class^=\"bx-\"], [class*=\" bx-\"], [id^=\"bx-\"] { overflow: visible !important; }",
+            ".bx-settings-dialog, .bx-centered-dialog, .bx-navigation-dialog, .bx-key-binding-dialog { z-index: 2147483000 !important; display: flex !important; }",
+            "#bx-game-bar { z-index: 2147482000 !important; }"
         ].join("\n");
 
         function onLaunchPage() {
@@ -431,6 +438,180 @@ enum WebScripts {
             .replacingOccurrences(of: "\"", with: "\\\"")
             .replacingOccurrences(of: "\n", with: "\\n")
     }
+
+    /// Reports the real WebRTC numbers to the app once a second.
+    ///
+    /// The figures come from the peer connection itself rather than from
+    /// scraping somebody else's overlay, so the native HUD keeps working
+    /// regardless of what the enhancement script does with its own stats bar.
+    static let streamStatsJS = #"""
+    (function() {
+        if (window.__gsStats) return;
+        window.__gsStats = true;
+
+        var connections = [];
+        var Native = window.RTCPeerConnection;
+        if (!Native) return;
+
+        window.RTCPeerConnection = function() {
+            var pc = new Native(arguments[0], arguments[1]);
+            connections.push(pc);
+            return pc;
+        };
+        window.RTCPeerConnection.prototype = Native.prototype;
+
+        var previous = {};
+
+        function report(payload) {
+            try {
+                window.webkit.messageHandlers.gamestream.postMessage(payload);
+            } catch (e) {}
+        }
+
+        async function sample() {
+            for (var i = 0; i < connections.length; i++) {
+                var pc = connections[i];
+                if (!pc || pc.connectionState === "closed") continue;
+
+                var report_ = null;
+                try { report_ = await pc.getStats(); } catch (e) { continue; }
+
+                var video = null, pair = null, codecName = "";
+                report_.forEach(function(entry) {
+                    if (entry.type === "inbound-rtp" && entry.kind === "video") video = entry;
+                    if (entry.type === "candidate-pair" && entry.nominated) pair = entry;
+                });
+                if (!video) continue;
+
+                report_.forEach(function(entry) {
+                    if (entry.type === "codec" && video && entry.id === video.codecId) {
+                        codecName = (entry.mimeType || "").replace("video/", "");
+                    }
+                });
+
+                var last = previous[video.id] || null;
+                var bitrate = 0;
+                if (last && video.timestamp > last.timestamp) {
+                    var seconds = (video.timestamp - last.timestamp) / 1000;
+                    bitrate = Math.max(0, Math.round(
+                        ((video.bytesReceived - last.bytesReceived) * 8) / seconds / 1000
+                    ));
+                }
+                previous[video.id] = {
+                    timestamp: video.timestamp,
+                    bytesReceived: video.bytesReceived || 0
+                };
+
+                report({
+                    type: "stats",
+                    fps: Math.round(video.framesPerSecond || 0),
+                    bitrateKbps: bitrate,
+                    rttMs: pair && pair.currentRoundTripTime
+                        ? Math.round(pair.currentRoundTripTime * 1000) : 0,
+                    jitterMs: video.jitter ? Math.round(video.jitter * 1000) : 0,
+                    packetsLost: video.packetsLost || 0,
+                    framesDropped: video.framesDropped || 0,
+                    decodeMs: video.totalDecodeTime && video.framesDecoded
+                        ? Math.round((video.totalDecodeTime / video.framesDecoded) * 1000)
+                        : 0,
+                    width: video.frameWidth || 0,
+                    height: video.frameHeight || 0,
+                    codec: codecName
+                });
+                return;
+            }
+        }
+
+        setInterval(sample, 1000);
+    })();
+    """#
+
+    /// Native HUD buttons, carried out inside the page.
+    ///
+    /// The enhancement's menu and the Xbox guide are the site's own controls,
+    /// so the only honest way to press them from a native button is to find
+    /// and click them. Every attempt reports what it matched, so a failure
+    /// shows up in Diagnostics instead of looking like a dead button.
+    static let streamCommandsJS = #"""
+    (function() {
+        if (window.__gsCommands) return;
+        window.__gsCommands = true;
+
+        function note(command, detail) {
+            try {
+                window.webkit.messageHandlers.gamestream.postMessage({
+                    type: "command", command: command, detail: detail
+                });
+            } catch (e) {}
+        }
+
+        function visible(node) {
+            if (!node) return false;
+            var box = node.getBoundingClientRect();
+            if (box.width < 4 || box.height < 4) return false;
+            var style = window.getComputedStyle(node);
+            return style.visibility !== "hidden" && style.display !== "none";
+        }
+
+        function click(node) {
+            try {
+                node.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+                node.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+                node.click();
+                return true;
+            } catch (e) { return false; }
+        }
+
+        function describe(node) {
+            var label = node.getAttribute("aria-label") || (node.textContent || "").trim();
+            return (node.tagName || "?").toLowerCase() + " \"" + label.slice(0, 40) + "\"";
+        }
+
+        function match(selectors, pattern) {
+            for (var i = 0; i < selectors.length; i++) {
+                var found = document.querySelectorAll(selectors[i]);
+                for (var j = 0; j < found.length; j++) {
+                    if (visible(found[j])) return found[j];
+                }
+            }
+            if (!pattern) return null;
+            var buttons = document.querySelectorAll("button, [role=\"button\"]");
+            for (var k = 0; k < buttons.length; k++) {
+                var node = buttons[k];
+                var text = ((node.getAttribute("aria-label") || "") + " "
+                            + (node.textContent || "")).toLowerCase();
+                if (pattern.test(text) && visible(node)) return node;
+            }
+            return null;
+        }
+
+        window.__gsCommand = function(command) {
+            var target = null;
+
+            if (command === "bxMenu") {
+                // Its own game-bar button first, then its entry in the site's
+                // guide, then anything else it has labelled.
+                target = match([
+                    "#bx-game-bar .bx-game-bar-container button",
+                    ".bx-guide-home-buttons button",
+                    "button.bx-button[data-bx-settings]"
+                ], /better\s*xcloud|bx settings/);
+            } else if (command === "guide") {
+                target = match([
+                    "button[aria-label*=\"guide\" i]",
+                    "button[data-id=\"guide\"]"
+                ], /xbox guide|open guide|guide menu|stream menu|nexus/);
+            }
+
+            if (target && click(target)) {
+                note(command, "pressed " + describe(target));
+                return true;
+            }
+            note(command, "no matching control found");
+            return false;
+        };
+    })();
+    """#
 
     /// Presses the site's own Play button on a launch page.
     ///

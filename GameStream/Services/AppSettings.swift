@@ -160,7 +160,10 @@ final class AppSettings: ObservableObject {
             "native-mfi-controller.vibration": rumbleEnabled ? "true" : "false",
             "deviceVibration.mode": rumbleEnabled ? "on" : "off",
             "deviceVibration.intensity": "100",
-            "stream.stats.showWhenPlaying": showStreamStats ? "true" : "false"
+            // Always off: GameStream draws its own statistics panel from the
+            // peer connection, and two overlays reporting the same numbers in
+            // different styles is worse than one.
+            "stream.stats.showWhenPlaying": "false"
         ]
         if matchStreamStyle {
             // The dark base is the only one of its themes that a translucent

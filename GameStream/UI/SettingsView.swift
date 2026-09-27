@@ -156,7 +156,15 @@ struct SettingsView: View {
 
             Toggle("Start the game automatically", isOn: $settings.autoStart)
             SettingsDivider()
-            Toggle("Show the stream statistics overlay", isOn: $settings.showStreamStats)
+            VStack(alignment: .leading, spacing: 5) {
+                Toggle("Open the statistics panel with the stream",
+                       isOn: $settings.showStreamStats)
+                Text("Frame rate, bitrate, latency, jitter, decode time and dropped "
+                     + "frames, read from the connection itself. It can also be "
+                     + "toggled from the player.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             SettingsDivider()
             VStack(alignment: .leading, spacing: 5) {
                 Toggle("Match the in-stream menus to GameStream", isOn: $settings.matchStreamStyle)
