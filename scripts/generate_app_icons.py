@@ -129,18 +129,6 @@ def main() -> None:
     path = os.path.join(OUT, "icon-1024.png")
     icon.save(path, "PNG", optimize=True)
 
-    sized = {
-        "fiona.g@example.net": 40,
-        "carlos.r@example.net": 60,
-        "icon-60@2x.png": 120,
-        "icon-60@3x.png": 180,
-        "icon-76.png": 76,
-        "icon-76@2x.png": 152,
-        "icon-83.5@2x.png": 167,
-    }
-    for name, sz in sized.items():
-        make_icon(sz).save(os.path.join(OUT, name), "PNG", optimize=True)
-
     docs = os.path.join(ROOT, "docs")
     os.makedirs(docs, exist_ok=True)
     make_icon(512).save(os.path.join(docs, "gamestream-icon.png"), "PNG", optimize=True)
@@ -158,24 +146,6 @@ def main() -> None:
             os.makedirs(out_dir, exist_ok=True)
             make_icon(sz).save(os.path.join(out_dir, "ic_launcher.png"), "PNG")
 
-    contents = {
-        "images": [
-            {"filename": "fiona.g@example.net", "idiom": "iphone", "scale": "2x", "size": "20x20"},
-            {"filename": "carlos.r@example.net", "idiom": "iphone", "scale": "3x", "size": "20x20"},
-            {"filename": "icon-60@2x.png", "idiom": "iphone", "scale": "2x", "size": "60x60"},
-            {"filename": "icon-60@3x.png", "idiom": "iphone", "scale": "3x", "size": "60x60"},
-            {"filename": "icon-76.png", "idiom": "ipad", "scale": "1x", "size": "76x76"},
-            {"filename": "icon-76@2x.png", "idiom": "ipad", "scale": "2x", "size": "76x76"},
-            {"filename": "icon-83.5@2x.png", "idiom": "ipad", "scale": "2x", "size": "83.5x83.5"},
-            {"filename": "icon-1024.png", "idiom": "ios-marketing", "scale": "1x", "size": "1024x1024"},
-            {"filename": "icon-1024.png", "idiom": "universal", "platform": "ios", "size": "1024x1024"},
-        ],
-        "info": {"author": "xcode", "version": 1},
-    }
-    with open(os.path.join(OUT, "Contents.json"), "w", encoding="utf-8") as f:
-        json.dump(contents, f, indent=2)
-        f.write("\n")
-
     import base64
     from pathlib import Path
 
@@ -183,7 +153,7 @@ def main() -> None:
     Path(os.path.join(ROOT, "scripts", "icon1024.b64")).write_text(
         base64.b64encode(raw).decode("ascii") + "\n"
     )
-    print(f"repo mark → {path} ({os.path.getsize(path)} bytes) + {len(sized)} sizes")
+    print(f"repo mark → {path} ({os.path.getsize(path)} bytes)")
     print(f"source design: {SVG}")
 
 

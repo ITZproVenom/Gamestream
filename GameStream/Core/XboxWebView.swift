@@ -139,11 +139,14 @@ struct XboxWebView: UIViewRepresentable {
 
         // MARK: Messages from the page
 
-        nonisolated func userContentController(_ controller: WKUserContentController,
-                                               didReceive message: WKScriptMessage) {
+        // WKScriptMessage is main-actor state, so read it there rather than
+        // reaching into it from a nonisolated context.
+        @MainActor
+        func userContentController(_ controller: WKUserContentController,
+                                   didReceive message: WKScriptMessage) {
             guard let body = message.body as? [String: Any],
                   let type = body["type"] as? String else { return }
-            Task { @MainActor in handle(type: type, body: body) }
+            handle(type: type, body: body)
         }
 
         private func handle(type: String, body: [String: Any]) {
@@ -170,20 +173,18 @@ struct XboxWebView: UIViewRepresentable {
 
         // MARK: Navigation
 
-        nonisolated func webView(_ webView: WKWebView,
-                                 didStartProvisionalNavigation navigation: WKNavigation!) {
-            Task { @MainActor in
-                if role == .stream { StreamCoordinator.shared.loadingChanged(true) }
-            }
+        @MainActor
+        func webView(_ webView: WKWebView,
+                     didStartProvisionalNavigation navigation: WKNavigation!) {
+            if role == .stream { StreamCoordinator.shared.loadingChanged(true) }
         }
 
-        nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        @MainActor
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             let href = webView.url?.absoluteString ?? ""
-            Task { @MainActor in
-                if role == .stream { StreamCoordinator.shared.loadingChanged(false) }
-                if href.lowercased().contains("/auth/msa") {
-                    XboxAuth.shared.noteAuthRedirect()
-                }
+            if role == .stream { StreamCoordinator.shared.loadingChanged(false) }
+            if href.lowercased().contains("/auth/msa") {
+                XboxAuth.shared.noteAuthRedirect()
             }
         }
 

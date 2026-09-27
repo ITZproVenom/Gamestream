@@ -35,3 +35,8 @@ Package.resolved
 .env
 *.mobileprovision
 *.p12
+
+# Generated app icons (scripts/install_icons.py regenerates these every build)
+GameStream/Assets.xcassets/AppIcon.appiconset/*.png
+android/app/src/main/res/mipmap-*/ic_launcher.png
+docs/gamestream-icon.png
