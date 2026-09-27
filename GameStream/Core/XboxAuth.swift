@@ -14,9 +14,14 @@ import WebKit
 final class XboxAuth: NSObject, ObservableObject {
     static let shared = XboxAuth()
 
+    /// Deliberately has no "checking" case.
+    ///
+    /// A re-check is not a different kind of session, and the root view picks
+    /// its screen from this value. When checking was a state, every poll while
+    /// the sign-in sheet was open swapped the screen out and back, which tore
+    /// down the view owning the sheet and made it close and reopen on a loop.
     enum State: Equatable {
         case unknown
-        case checking
         case signedOut
         case signedIn(gamertag: String)
 
@@ -32,6 +37,8 @@ final class XboxAuth: NSObject, ObservableObject {
     }
 
     @Published private(set) var state: State = .unknown
+    /// Progress, shown as an indicator. It never changes which screen is up.
+    @Published private(set) var isChecking = false
     /// Where the token was found, shown in Diagnostics so a failed sign-in can
     /// be explained instead of guessed at.
     @Published private(set) var tokenSource: String = ""
@@ -73,7 +80,9 @@ final class XboxAuth: NSObject, ObservableObject {
         configuration.allowsInlineMediaPlayback = true
         configuration.allowsPictureInPictureMediaPlayback = true
         configuration.mediaTypesRequiringUserActionForPlayback = []
-        configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
+        // Microsoft's sign-in may open its own window; the UI delegate keeps
+        // that navigation in the same webview rather than losing it.
+        configuration.preferences.javaScriptCanOpenWindowsAutomatically = true
 
         let pagePreferences = WKWebpagePreferences()
         pagePreferences.allowsContentJavaScript = true
@@ -86,15 +95,16 @@ final class XboxAuth: NSObject, ObservableObject {
     /// Re-read the token. Safe to call often; it reuses one hidden webview.
     @discardableResult
     func refresh(reason: String) async -> State {
-        if case .checking = state {} else { state = .checking }
+        isChecking = true
+        defer { isChecking = false }
         log.debug("auth", "checking (\(reason))")
 
         await ensureProbeLoaded()
 
         guard let probeView else {
-            state = .signedOut
             lastError = "Could not create the authentication probe."
             log.error("auth", "probe webview unavailable")
+            apply(.signedOut)
             return state
         }
 
@@ -104,8 +114,8 @@ final class XboxAuth: NSObject, ObservableObject {
         } catch {
             lastError = error.localizedDescription
             log.error("auth", "probe failed: \(error.localizedDescription)")
-            state = .signedOut
             lastCheck = Date()
+            apply(.signedOut)
             return state
         }
 
@@ -114,8 +124,8 @@ final class XboxAuth: NSObject, ObservableObject {
               let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             lastError = "The Xbox page returned an unreadable response."
             log.error("auth", "probe returned no usable payload")
-            state = .signedOut
             lastCheck = Date()
+            apply(.signedOut)
             return state
         }
 
@@ -130,8 +140,8 @@ final class XboxAuth: NSObject, ObservableObject {
             lastError = nil
         }
 
-        state = signedIn ? .signedIn(gamertag: gamertag) : .signedOut
         lastCheck = Date()
+        apply(signedIn ? .signedIn(gamertag: gamertag) : .signedOut)
         log.info("auth", signedIn
                  ? "signed in as \(gamertag.isEmpty ? "Xbox account" : gamertag) via \(tokenSource)"
                  : "no cloud-gaming token present")
@@ -169,7 +179,7 @@ final class XboxAuth: NSObject, ObservableObject {
     func signOut() async {
         log.info("auth", "signing out")
         endWatching()
-        state = .signedOut
+        apply(.signedOut)
         tokenSource = ""
         tokenExpires = ""
 
@@ -186,6 +196,13 @@ final class XboxAuth: NSObject, ObservableObject {
         probeLoaded = false
         probeView?.load(URLRequest(url: Self.probeURL))
         log.info("auth", "cleared \(matching.count) website data record(s)")
+    }
+
+    /// Publishes only genuine changes, so a repeated check does not churn the
+    /// view tree for no reason.
+    private func apply(_ next: State) {
+        guard state != next else { return }
+        state = next
     }
 
     // MARK: - Probe webview

@@ -13,7 +13,7 @@ struct RootView: View {
     var body: some View {
         Group {
             switch auth.state {
-            case .unknown, .checking:
+            case .unknown:
                 startupView
             case .signedOut:
                 WelcomeView()

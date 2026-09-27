@@ -261,8 +261,7 @@ struct DiagnosticsView: View {
 
     private var statusText: String {
         switch auth.state {
-        case .unknown: return "Unknown"
-        case .checking: return "Checking"
+        case .unknown: return "Not checked yet"
         case .signedOut: return "No cloud-gaming token"
         case .signedIn: return "Ready to stream"
         }

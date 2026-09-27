@@ -40,6 +40,7 @@ struct XboxWebView: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         if role == .stream, let existing = Registry.shared.streamView {
             existing.navigationDelegate = context.coordinator
+            existing.uiDelegate = context.coordinator
             context.coordinator.attach(to: existing)
             if existing.url == nil { existing.load(URLRequest(url: url)) }
             return existing
@@ -51,6 +52,7 @@ struct XboxWebView: UIViewRepresentable {
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.customUserAgent = XboxAuth.userAgent
         webView.navigationDelegate = context.coordinator
+        webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = role != .stream
         webView.isOpaque = role != .stream
         webView.backgroundColor = role == .stream ? .black : nil
@@ -122,7 +124,7 @@ struct XboxWebView: UIViewRepresentable {
     // MARK: - Coordinator
 
     @MainActor
-    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
         let role: Role
         var loadedURL: URL?
         var reloadToken = 0
@@ -197,6 +199,39 @@ struct XboxWebView: UIViewRepresentable {
                                  didFailProvisionalNavigation navigation: WKNavigation!,
                                  withError error: Error) {
             report(error)
+        }
+
+        // MARK: Popups
+        //
+        // Microsoft's sign-in can open a new window. A webview with no
+        // WKUIDelegate silently discards that request, so the button appears
+        // to do nothing. Returning nil and loading the request in the current
+        // webview keeps the flow in one place, where the shared data store and
+        // the session both already live.
+        @MainActor
+        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+                     for navigationAction: WKNavigationAction,
+                     windowFeatures: WKWindowFeatures) -> WKWebView? {
+            if let url = navigationAction.request.url, navigationAction.targetFrame == nil {
+                AppLog.shared.debug("web", "following popup to \(url.host ?? "a new window")")
+                webView.load(navigationAction.request)
+            }
+            return nil
+        }
+
+        // The site uses these for consent and error prompts; without a
+        // delegate they never appear and the page waits forever.
+        @MainActor
+        func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
+                     initiatedByFrame frame: WKFrameInfo) async {
+            AppLog.shared.info("web", "page alert: \(message)")
+        }
+
+        @MainActor
+        func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+                     initiatedByFrame frame: WKFrameInfo) async -> Bool {
+            AppLog.shared.info("web", "page confirm: \(message)")
+            return true
         }
 
         private nonisolated func report(_ error: Error) {

@@ -135,7 +135,7 @@ struct WelcomeView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
 
-                if case .checking = auth.state {
+                if auth.isChecking {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
                         Text("Checking your Xbox session…")
