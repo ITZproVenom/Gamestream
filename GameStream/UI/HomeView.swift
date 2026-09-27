@@ -114,7 +114,6 @@ struct HomeView: View {
         }
         .scrollIndicators(.hidden)
         .scrollTargetBehavior(.viewAligned)
-        .scrollClipDisabled()
     }
 
     // MARK: - Quick actions

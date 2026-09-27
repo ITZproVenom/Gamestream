@@ -166,7 +166,6 @@ struct GameShelf: View {
         }
         .scrollIndicators(.hidden)
         .scrollTargetBehavior(.viewAligned)
-        .scrollClipDisabled()
     }
 }
 

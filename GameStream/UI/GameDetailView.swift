@@ -37,7 +37,11 @@ struct GameDetailView: View {
                 }
             }
             .padding(.bottom, 40)
+            // The page is exactly as wide as the screen. A nested horizontal
+            // shelf must never be able to stretch it.
+            .frame(maxWidth: .infinity)
         }
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
         .background { AuroraBackground() }
         .navigationTitle(game.title)
         .navigationBarTitleDisplayMode(.inline)
