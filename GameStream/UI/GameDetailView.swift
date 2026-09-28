@@ -8,6 +8,7 @@ struct GameDetailView: View {
     @EnvironmentObject private var stream: StreamCoordinator
 
     @State private var showingLists = false
+    @State private var playingNatively = false
     @Namespace private var glass
 
     var body: some View {
@@ -67,6 +68,11 @@ struct GameDetailView: View {
                 .accessibilityLabel("More actions")
             }
         }
+        #if canImport(WebRTC)
+        .fullScreenCover(isPresented: $playingNatively) {
+            NativeStreamView(game: game)
+        }
+        #endif
         .sheet(isPresented: $showingLists) {
             ListPickerView(game: game)
         }
@@ -130,6 +136,16 @@ struct GameDetailView: View {
                 .buttonStyle(.glassProminent)
                 .buttonBorderShape(.capsule)
                 .glassEffectID("play", in: glass)
+
+                #if canImport(WebRTC)
+                // The native player, while it is still proving itself. It
+                // shares nothing with the webview path, so a failure here
+                // cannot take the working one down with it.
+                GlassIconButton(systemImage: "bolt.fill", label: "Play natively") {
+                    playingNatively = true
+                }
+                .glassEffectID("native", in: glass)
+                #endif
 
                 GlassIconButton(systemImage: library.isFavorite(game) ? "heart.fill" : "heart",
                                 label: library.isFavorite(game) ? "Remove favorite" : "Add favorite") {
