@@ -259,8 +259,9 @@ struct XboxWebView: UIViewRepresentable {
             case "stats":
                 StreamCoordinator.shared.statsUpdated(StreamStats(payload: body))
             case "command":
-                log.info("stream", "\(body["command"] as? String ?? "command"): "
-                         + "\(body["detail"] as? String ?? "")")
+                let detail = body["detail"] as? String ?? ""
+                log.info("stream", "\(body["command"] as? String ?? "command"): \(detail)")
+                StreamCoordinator.shared.show(notice: detail)
             case "rumble":
                 RumbleBridge.handle(payload: body)
             case "rumbleCaps":

@@ -65,6 +65,11 @@ final class StreamCoordinator: ObservableObject {
 
     @Published private(set) var game: Game?
     @Published private(set) var phase: Phase = .idle
+    /// The result of the last HUD command, shown briefly over the stream.
+    /// Digging a log out of Settings after the fact is not a reasonable way
+    /// to find out whether a button you just pressed did anything.
+    @Published private(set) var notice: String?
+    private var noticeTask: Task<Void, Never>?
     @Published private(set) var resolution: String = ""
     /// Bumping this asks the player's webview to reload the launch page.
     @Published private(set) var reloadToken = 0
@@ -171,6 +176,25 @@ final class StreamCoordinator: ObservableObject {
         if kind == "login", case .connecting = phase {
             phase = .failed("Xbox asked for a sign-in. Your session may have expired.")
             Task { await XboxAuth.shared.refresh(reason: "stream bounced to login") }
+        }
+
+        // Quitting from the Xbox guide, or Better xCloud's "back to home",
+        // navigates the page away from the launch URL. The player was still
+        // on screen showing xbox.com, so leaving a game dumped you on the
+        // cloud gaming website instead of back in the app.
+        if phase == .playing, kind != "launch" {
+            log.info("stream", "the page left the game (now \(kind)); returning to the app")
+            exit()
+        }
+    }
+
+    func show(notice text: String) {
+        notice = text
+        noticeTask?.cancel()
+        noticeTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled else { return }
+            await MainActor.run { self?.notice = nil }
         }
     }
 

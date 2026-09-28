@@ -35,7 +35,25 @@ struct StreamView: View {
             if stream.phase == .playing, showingControls {
                 hud.transition(.opacity.combined(with: .move(edge: .top)))
             }
+
+            if let notice = stream.notice {
+                VStack {
+                    Spacer()
+                    Text(notice)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.leading)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+                        .padding(.bottom, 26)
+                        .padding(.horizontal, 20)
+                }
+                .allowsHitTesting(false)
+                .transition(.opacity)
+            }
         }
+        .animation(.smooth(duration: 0.2), value: stream.notice)
         .statusBarHidden(stream.phase == .playing)
         .persistentSystemOverlays(stream.phase == .playing ? .hidden : .automatic)
         .contentShape(Rectangle())

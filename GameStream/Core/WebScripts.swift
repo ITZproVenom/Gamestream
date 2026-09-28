@@ -612,12 +612,29 @@ enum WebScripts {
                 if (typeof SettingsDialog !== "undefined"
                     && SettingsDialog.getInstance) {
                     SettingsDialog.getInstance().show();
-                    return "SettingsDialog.show()";
+                    return "SettingsDialog.show(), " + dialogState();
                 }
             } catch (e) {
                 return "SettingsDialog threw: " + e;
             }
             return null;
+        }
+
+        /// "Nothing happened" covers two very different faults: the dialog was
+        /// never created, or it was created and cannot be seen. Only the page
+        /// can tell them apart, so it reports which.
+        function dialogState() {
+            var node = document.querySelector(".bx-navigation-dialog");
+            if (!node) return "no .bx-navigation-dialog in the document";
+            var style = window.getComputedStyle(node);
+            var box = node.getBoundingClientRect();
+            return "dialog class=\"" + node.className + "\""
+                + " display=" + style.display
+                + " visibility=" + style.visibility
+                + " opacity=" + style.opacity
+                + " z=" + style.zIndex
+                + " rect=" + Math.round(box.left) + "," + Math.round(box.top)
+                + " " + Math.round(box.width) + "x" + Math.round(box.height);
         }
 
         /// The site's own HUD button, which is what opens the Xbox guide.
