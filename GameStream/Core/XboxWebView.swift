@@ -68,6 +68,14 @@ struct XboxWebView: UIViewRepresentable {
             }
         }
 
+        /// Runs a snippet and hands back what it evaluated to.
+        func evaluate(_ javaScript: String, completion: @escaping (String) -> Void) {
+            guard let view = streamView else { return completion("") }
+            view.evaluateJavaScript(javaScript) { result, _ in
+                completion((result as? String) ?? "")
+            }
+        }
+
         /// Ends the session for real.
         ///
         /// Because the player webview is deliberately kept alive between

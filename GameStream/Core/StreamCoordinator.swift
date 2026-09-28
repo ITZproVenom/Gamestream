@@ -70,6 +70,7 @@ final class StreamCoordinator: ObservableObject {
     /// to find out whether a button you just pressed did anything.
     @Published private(set) var notice: String?
     private var noticeTask: Task<Void, Never>?
+    private var leaveCheck: Task<Void, Never>?
     @Published private(set) var resolution: String = ""
     /// Bumping this asks the player's webview to reload the launch page.
     @Published private(set) var reloadToken = 0
@@ -121,6 +122,8 @@ final class StreamCoordinator: ObservableObject {
     func exit() {
         watchdog?.cancel()
         watchdog = nil
+        leaveCheck?.cancel()
+        leaveCheck = nil
         ControllerRumble.shared.stop()
         // The player webview is kept alive across presentations, so this is
         // the point where the page has to actually be shut down.
@@ -183,8 +186,32 @@ final class StreamCoordinator: ObservableObject {
         // on screen showing xbox.com, so leaving a game dumped you on the
         // cloud gaming website instead of back in the app.
         if phase == .playing, kind != "launch" {
-            log.info("stream", "the page left the game (now \(kind)); returning to the app")
-            exit()
+            confirmLeftTheGame(reportedKind: kind)
+        }
+    }
+
+    /// Ending a live session on one navigation report is too eager: a
+    /// single-page route change can fire and then settle straight back on
+    /// the launch URL, and killing a running game for that would be far
+    /// worse than showing the website for a moment. Ask the page again.
+    private func confirmLeftTheGame(reportedKind: String) {
+        guard leaveCheck == nil else { return }
+        leaveCheck = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(1200))
+            guard let self, !Task.isCancelled else { return }
+            XboxWebView.Registry.shared.evaluate("String(location.href)") { href in
+                Task { @MainActor in
+                    self.leaveCheck = nil
+                    guard self.phase == .playing else { return }
+                    guard !href.contains("/play/launch") else {
+                        self.log.debug("stream", "the page came back to the game")
+                        return
+                    }
+                    self.log.info("stream", "the page left the game "
+                                  + "(\(reportedKind)); returning to the app")
+                    self.exit()
+                }
+            }
         }
     }
 

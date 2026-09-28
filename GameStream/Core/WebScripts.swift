@@ -612,12 +612,44 @@ enum WebScripts {
                 if (typeof SettingsDialog !== "undefined"
                     && SettingsDialog.getInstance) {
                     SettingsDialog.getInstance().show();
-                    return "SettingsDialog.show(), " + dialogState();
+                    return "SettingsDialog.show(), " + reveal();
                 }
             } catch (e) {
                 return "SettingsDialog threw: " + e;
             }
             return null;
+        }
+
+        /// If the dialog exists but cannot be seen, make it seen.
+        ///
+        /// Better xCloud hides it with a `bx-gone` class and shows it by
+        /// removing that class. Anything that leaves it hidden — its own
+        /// stylesheet failing to load, or a restyle of ours interfering —
+        /// produces a button that appears to do nothing at all.
+        function reveal() {
+            var node = document.querySelector(".bx-navigation-dialog");
+            if (!node) return dialogState();
+
+            var before = dialogState();
+            var style = window.getComputedStyle(node);
+            var box = node.getBoundingClientRect();
+            var hidden = style.display === "none"
+                || style.visibility === "hidden"
+                || parseFloat(style.opacity) < 0.05
+                || box.width < 8 || box.height < 8;
+            if (!hidden) return before;
+
+            node.classList.remove("bx-gone");
+            node.style.setProperty("display", "flex", "important");
+            node.style.setProperty("visibility", "visible", "important");
+            node.style.setProperty("opacity", "1", "important");
+            node.style.setProperty("pointer-events", "auto", "important");
+            if (box.width < 8 || box.height < 8) {
+                node.style.setProperty("position", "fixed", "important");
+                node.style.setProperty("inset", "0", "important");
+                node.style.setProperty("z-index", "9999", "important");
+            }
+            return "was hidden (" + before + "), forced visible: " + dialogState();
         }
 
         /// "Nothing happened" covers two very different faults: the dialog was
