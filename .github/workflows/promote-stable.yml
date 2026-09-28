@@ -1,0 +1,106 @@
+name: Promote a beta to stable
+
+# Stable is only ever created by this workflow, by hand, from a beta build
+# that already exists. Nothing on a push can reach the stable channel.
+#
+# The binary is not rebuilt. The exact IPA that was tested as a beta is the
+# one published as stable, because "rebuilt from the same commit" is not the
+# same claim as "the build you tried".
+
+on:
+  workflow_dispatch:
+    inputs:
+      beta_tag:
+        description: "Beta release tag to promote (blank = latest-ios-beta)"
+        required: false
+        default: ""
+      version:
+        description: "Stable version, e.g. 2.1.0"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-stable
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve the beta build
+        id: source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.inputs.beta_tag }}"
+          if [ -z "$TAG" ]; then TAG="latest-ios-beta"; fi
+          echo "Promoting $TAG"
+          mkdir -p out
+          gh release download "$TAG" --pattern 'GameStream-unsigned.ipa' --dir out
+          test -s out/GameStream-unsigned.ipa
+
+          python3 - <<'PY'
+          import plistlib, sys, zipfile
+          archive = zipfile.ZipFile("out/GameStream-unsigned.ipa")
+          names = archive.namelist()
+          plist = [n for n in names if n.endswith("GameStream.app/Info.plist")]
+          if not plist:
+              sys.exit("the beta IPA has no Info.plist")
+          info = plistlib.loads(archive.read(plist[0]))
+          if not any(n.endswith("Assets.car") for n in names):
+              sys.exit("the beta IPA has no asset catalog")
+          print("promoting", info.get("CFBundleShortVersionString"),
+                "build", info.get("CFBundleVersion"),
+                "commit", info.get("GSCommit"))
+          PY
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Notes
+        run: |
+          set -euo pipefail
+          VERSION="${{ github.event.inputs.version }}"
+          {
+            echo "## GameStream ${VERSION}"
+            echo
+            echo "Promoted from the beta channel after testing. This is the same"
+            echo "binary that was published as \`${{ steps.source.outputs.tag }}\`,"
+            echo "not a rebuild."
+            echo
+            echo "### Install"
+            echo "Download **GameStream-unsigned.ipa** and sideload it with AltStore,"
+            echo "Sideloadly, or TrollStore."
+            echo
+            echo "_Unsigned. Not affiliated with Microsoft._"
+          } > notes.md
+
+      - name: Publish the stable release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ios-${{ github.event.inputs.version }}
+          name: GameStream ${{ github.event.inputs.version }}
+          body_path: notes.md
+          files: out/GameStream-unsigned.ipa
+          prerelease: false
+          make_latest: true
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Move the latest-ios pointer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release delete latest-ios --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest-ios \
+            out/GameStream-unsigned.ipa \
+            --title "iOS - latest stable" \
+            --notes-file notes.md \
+            --latest
