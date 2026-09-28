@@ -37,6 +37,29 @@ struct StreamView: View {
                 hud.transition(.opacity.combined(with: .move(edge: .top)))
             }
 
+            // A guaranteed way back to the overlay. The page owns the touches
+            // over the video, so there has to be something that is always
+            // present and unambiguously ours.
+            if stream.phase == .playing, !showingControls {
+                VStack {
+                    Button {
+                        withAnimation(.smooth(duration: 0.25)) { showingControls = true }
+                        scheduleHide()
+                    } label: {
+                        Capsule()
+                            .fill(.white.opacity(0.28))
+                            .frame(width: 46, height: 5)
+                            .padding(.horizontal, 26)
+                            .padding(.vertical, 12)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Show the GameStream controls")
+                    Spacer()
+                }
+                .transition(.opacity)
+            }
+
             if let notice = stream.notice {
                 VStack {
                     Spacer()
@@ -62,6 +85,10 @@ struct StreamView: View {
             guard stream.phase == .playing else { return }
             withAnimation(.smooth(duration: 0.25)) { showingControls.toggle() }
             if showingControls { scheduleHide() }
+        }
+        .onChange(of: stream.overlayRequest) { _, _ in
+            withAnimation(.smooth(duration: 0.25)) { showingControls = true }
+            scheduleHide()
         }
         .onChange(of: stream.phase) { _, phase in
             if phase == .playing {

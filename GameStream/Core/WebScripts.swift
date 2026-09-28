@@ -897,20 +897,34 @@ enum WebScripts {
     // MARK: - Better xCloud preferences
 
     /// Writes Better xCloud preferences before the script boots.
-    static func betterXCloudPrefsJS(_ preferences: [String: String]) -> String {
-        let assignments = preferences.map { key, value in
-            "data[\(jsString(key))] = \(jsString(value));"
-        }.joined(separator: "\n            ")
+    static func betterXCloudPrefsJS(global: [String: String],
+                                    stream: [String: String]) -> String {
+        func assignments(_ values: [String: String]) -> String {
+            values.map { key, value in
+                "data[\(jsString(key))] = \(jsString(value));"
+            }.joined(separator: "\n                    ")
+        }
 
         return """
         (function() {
             try {
                 if ((location.host || "").indexOf("xbox.com") === -1) return;
-                var storageKey = "BetterXcloud";
-                var data = {};
-                try { data = JSON.parse(localStorage.getItem(storageKey) || "{}") || {}; } catch (e) { data = {}; }
-                \(assignments)
-                localStorage.setItem(storageKey, JSON.stringify(data));
+
+                function write(storageKey, apply) {
+                    var data = {};
+                    try {
+                        data = JSON.parse(localStorage.getItem(storageKey) || "{}") || {};
+                    } catch (e) { data = {}; }
+                    apply(data);
+                    localStorage.setItem(storageKey, JSON.stringify(data));
+                }
+
+                write("BetterXcloud", function(data) {
+                    \(assignments(global))
+                });
+                write("BetterXcloud.Stream", function(data) {
+                    \(assignments(stream))
+                });
             } catch (e) {}
         })();
         """

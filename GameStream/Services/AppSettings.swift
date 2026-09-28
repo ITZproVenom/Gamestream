@@ -192,25 +192,18 @@ final class AppSettings: ObservableObject {
     }
 
     /// The preferences handed to Better xCloud before it boots.
-    func betterXCloudPreferences() -> [String: String] {
+    ///
+    /// The script keeps two stores, not one: global settings in
+    /// `BetterXcloud` and per-stream settings in `BetterXcloud.Stream`. Every
+    /// value below went into the global blob, so the stream-scoped ones were
+    /// silently ignored and the script ran on its defaults — which is why its
+    /// own statistics bar kept appearing over ours.
+    func betterXCloudGlobalPreferences() -> [String: String] {
         var values: [String: String] = [
-            "stream.video.resolution": quality.betterXCloudValue,
-            // GameStream owns rumble now. Its bridge reads the packets off the
-            // data channel, applies the intensity setting and plays them, so
-            // the enhancement's own handling is switched off: two owners
-            // playing the same packets produces doubled effects.
-            "controller.vibration": "false",
-            "native-mfi-controller.vibration": "false",
-            // Its phone-vibration path uses navigator.vibrate, which WebKit
-            // does not implement; the native fallback covers that instead.
-            "deviceVibration.mode": "off",
-            // Always off: GameStream draws its own statistics panel from the
-            // peer connection, and two overlays reporting the same numbers in
-            // different styles is worse than one.
-            "stream.stats.showWhenPlaying": "false"
+            "stream.video.resolution": quality.betterXCloudValue
         ]
-        // Bits per second. Zero is the enhancement's "unlimited", which is
-        // its maximum of 15 Mbps rather than genuinely uncapped: the server
+        // Bits per second. Zero is the script's "unlimited", which is its
+        // maximum of 15 Mbps rather than genuinely uncapped: the server
         // decides the bitrate and Xbox does not send more than that.
         //
         // This is negotiated into the session description when the connection
@@ -228,6 +221,19 @@ final class AppSettings: ObservableObject {
             values["server.region"] = region.betterXCloudValue
         }
         return values
+    }
+
+    /// Settings the script scopes to a stream.
+    func betterXCloudStreamPreferences() -> [String: String] {
+        [
+            // Always off: GameStream draws its own statistics panel from the
+            // peer connection, and two overlays reporting the same numbers in
+            // different styles is worse than one.
+            "stats.showWhenPlaying": "false",
+            // Its phone-vibration path uses navigator.vibrate, which WebKit
+            // does not implement; the native fallback covers that instead.
+            "deviceVibration.mode": "off"
+        ]
     }
 
     private func store(_ value: Any, _ key: String) {

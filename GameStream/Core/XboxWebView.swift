@@ -139,6 +139,20 @@ struct XboxWebView: UIViewRepresentable {
             webView.scrollView.bounces = false
             webView.scrollView.contentInsetAdjustmentBehavior = .never
             Registry.shared.streamView = webView
+
+            // A SwiftUI tap gesture on the view behind this one never fires:
+            // the web view consumes the touch, and with touch controls drawn
+            // over the video it consumes all of them. That is why the overlay
+            // vanished after a few seconds and could not be brought back —
+            // every button on it was unreachable for the rest of the session.
+            let tap = UITapGestureRecognizer(target: context.coordinator,
+                                             action: #selector(Coordinator.handleOverlayTap))
+            tap.numberOfTapsRequired = 2
+            tap.cancelsTouchesInView = false
+            tap.delaysTouchesBegan = false
+            tap.delaysTouchesEnded = false
+            tap.delegate = context.coordinator
+            webView.addGestureRecognizer(tap)
         }
 
         context.coordinator.attach(to: webView)
@@ -189,7 +203,9 @@ struct XboxWebView: UIViewRepresentable {
         controller.addUserScript(WKUserScript(source: RumbleBridge.javaScript,
                                               injectionTime: .atDocumentStart,
                                               forMainFrameOnly: false))
-        controller.addUserScript(WKUserScript(source: WebScripts.betterXCloudPrefsJS(AppSettings.shared.betterXCloudPreferences()),
+        controller.addUserScript(WKUserScript(source: WebScripts.betterXCloudPrefsJS(
+            global: AppSettings.shared.betterXCloudGlobalPreferences(),
+            stream: AppSettings.shared.betterXCloudStreamPreferences()),
                                               injectionTime: .atDocumentStart,
                                               forMainFrameOnly: true))
         // A pending reinstall cleans the page before the script sees it, so
@@ -229,7 +245,21 @@ struct XboxWebView: UIViewRepresentable {
     // MARK: - Coordinator
 
     @MainActor
-    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler,
+                             UIGestureRecognizerDelegate {
+
+        /// Two fingers-free taps toggle the app's overlay. It runs alongside
+        /// the page's own handling rather than instead of it, so touch
+        /// controls keep working.
+        @objc func handleOverlayTap() {
+            StreamCoordinator.shared.requestOverlay()
+        }
+
+        nonisolated func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
+        ) -> Bool { true }
+
         let role: Role
         var loadedURL: URL?
         var reloadToken = 0

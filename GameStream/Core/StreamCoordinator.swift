@@ -80,6 +80,8 @@ final class StreamCoordinator: ObservableObject {
     private var bitrateTotal = 0
     private var poorSince: Date?
     private var reducedQuality = false
+    /// Bumped when the player asks for the overlay.
+    @Published var overlayRequest = 0
 
     @Published private(set) var resolution: String = ""
     /// Bumping this asks the player's webview to reload the launch page.
@@ -183,6 +185,9 @@ final class StreamCoordinator: ObservableObject {
         stats = nil
         phase = .idle
     }
+
+    /// Asked for by a double tap on the video, or the grip.
+    func requestOverlay() { overlayRequest &+= 1 }
 
     /// Ends the Xbox session itself rather than only leaving the app.
     ///
