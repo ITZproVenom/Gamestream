@@ -13,6 +13,7 @@ struct StreamView: View {
     @State private var startedAt = Date()
     @State private var showingStats = false
     @State private var showingMenu = false
+    @StateObject private var recorder = StreamRecorder.shared
 
     @Namespace private var glass
 
@@ -217,6 +218,15 @@ struct StreamView: View {
                     hudIcon("slider.horizontal.3", label: "Stream settings",
                             id: "enhance") {
                         showingMenu = true
+                    }
+
+                    hudIcon(recorder.isRecording ? "stop.circle.fill" : "record.circle",
+                            label: recorder.isRecording ? "Stop recording" : "Record a clip",
+                            id: "record", active: recorder.isRecording) {
+                        Task {
+                            let outcome = await recorder.toggle()
+                            stream.show(notice: outcome)
+                        }
                     }
 
                     hudIcon("camera.fill", label: "Screenshot", id: "shot") {

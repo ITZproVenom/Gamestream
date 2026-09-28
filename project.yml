@@ -48,9 +48,9 @@ targets:
           - ProfileName: ExtendedGamepad
         UIRequiredDeviceCapabilities:
           - arm64
-        NSMicrophoneUsageDescription: "Used for in-game voice chat."
+        NSMicrophoneUsageDescription: "Used for in-game voice chat and for recording your voice over clips."
         NSLocalNetworkUsageDescription: "Used to reach Xbox Cloud Gaming servers on your network."
-        NSPhotoLibraryAddUsageDescription: "Used to save screenshots of your stream."
+        NSPhotoLibraryAddUsageDescription: "Used to save screenshots and clips of your stream."
         CFBundleURLTypes:
           - CFBundleURLName: com.gamestream.app
             CFBundleURLSchemes:

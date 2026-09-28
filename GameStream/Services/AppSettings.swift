@@ -160,6 +160,9 @@ final class AppSettings: ObservableObject {
         static let statsPosition = "settings.statsPosition"
         static let statsOpacity = "settings.statsOpacity"
         static let statsTextSize = "settings.statsTextSize"
+        static let recordingBitrate = "settings.recordingBitrate"
+        static let recordMicrophone = "settings.recordMicrophone"
+        static let recordingLimit = "settings.recordingLimit"
     }
 
     @Published var theme: Theme { didSet { store(theme.rawValue, Key.theme) } }
@@ -246,6 +249,16 @@ final class AppSettings: ObservableObject {
     @Published var statsPosition: String { didSet { store(statsPosition, Key.statsPosition) } }
     @Published var statsOpacity: Int { didSet { store(statsOpacity, Key.statsOpacity) } }
     @Published var statsTextSize: Int { didSet { store(statsTextSize, Key.statsTextSize) } }
+    /// Clip recording.
+    @Published var recordingBitrateMbps: Int {
+        didSet { store(recordingBitrateMbps, Key.recordingBitrate) }
+    }
+    @Published var recordMicrophone: Bool {
+        didSet { store(recordMicrophone, Key.recordMicrophone) }
+    }
+    @Published var recordingLimitMinutes: Int {
+        didSet { store(recordingLimitMinutes, Key.recordingLimit) }
+    }
 
     private let defaults = UserDefaults.standard
 
@@ -304,6 +317,9 @@ final class AppSettings: ObservableObject {
         statsPosition = defaults.string(forKey: Key.statsPosition) ?? "top"
         statsOpacity = defaults.object(forKey: Key.statsOpacity) as? Int ?? 90
         statsTextSize = defaults.object(forKey: Key.statsTextSize) as? Int ?? 100
+        recordingBitrateMbps = defaults.object(forKey: Key.recordingBitrate) as? Int ?? 12
+        recordMicrophone = defaults.object(forKey: Key.recordMicrophone) as? Bool ?? false
+        recordingLimitMinutes = defaults.object(forKey: Key.recordingLimit) as? Int ?? 10
     }
 
     /// The preferences handed to Better xCloud before it boots.

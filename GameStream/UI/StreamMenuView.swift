@@ -16,10 +16,10 @@ struct StreamMenuView: View {
     @Environment(\.dismiss) private var dismiss
 
     enum Tab: String, CaseIterable, Identifiable {
-        case presets = "Presets"
         case picture = "Picture"
         case quality = "Quality"
         case audio = "Audio"
+        case capture = "Capture"
         case controller = "Controller"
         case network = "Network"
         case session = "Session"
@@ -28,10 +28,10 @@ struct StreamMenuView: View {
 
         var icon: String {
             switch self {
-            case .presets: return "square.stack.3d.up.fill"
             case .picture: return "slider.horizontal.below.rectangle"
             case .quality: return "antenna.radiowaves.left.and.right"
             case .audio: return "speaker.wave.2.fill"
+            case .capture: return "record.circle"
             case .controller: return "gamecontroller.fill"
             case .network: return "network"
             case .session: return "clock.fill"
@@ -39,9 +39,7 @@ struct StreamMenuView: View {
         }
     }
 
-    @State private var tab: Tab = .presets
-    @StateObject private var profiles = StreamProfiles.shared
-    @State private var savedNotice = false
+    @State private var tab: Tab = .picture
 
     var body: some View {
         VStack(spacing: 0) {
@@ -50,10 +48,10 @@ struct StreamMenuView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     switch tab {
-                    case .presets: presetsTab
                     case .picture: picture
                     case .quality: quality
                     case .audio: audio
+                    case .capture: capture
                     case .controller: controllerTab
                     case .network: networkTab
                     case .session: sessionTab
@@ -111,83 +109,6 @@ struct StreamMenuView: View {
             }
         }
         .padding(18)
-    }
-
-    // MARK: - Presets and profiles
-
-    private var presetsTab: some View {
-        Group {
-            Text("Presets").font(.subheadline.weight(.semibold))
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            ForEach(StreamPreset.allCases) { preset in
-                Button {
-                    profiles.apply(preset.profile)
-                    apply()
-                } label: {
-                    HStack(alignment: .top, spacing: 12) {
-                        Image(systemName: preset.icon)
-                            .font(.title3)
-                            .frame(width: 28)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(preset.title).font(.subheadline.weight(.semibold))
-                            Text(preset.detail)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.leading)
-                        }
-                        Spacer()
-                    }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
-                }
-                .buttonStyle(.plain)
-            }
-
-            Divider().opacity(0.3)
-
-            Text("This game").font(.subheadline.weight(.semibold))
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            if let game = stream.game {
-                caption(profiles.has(game.id)
-                        ? "\(game.title) has its own saved settings, applied every time "
-                          + "it starts."
-                        : "\(game.title) uses the settings above. Save them here and they "
-                          + "come back with this game and nothing else.")
-
-                HStack(spacing: 10) {
-                    Button {
-                        profiles.save(profiles.capture(), for: game.id)
-                        savedNotice = true
-                    } label: {
-                        Label(savedNotice ? "Saved" : "Save for this game",
-                              systemImage: savedNotice ? "checkmark" : "square.and.arrow.down")
-                    }
-                    .buttonStyle(.borderedProminent)
-
-                    if profiles.has(game.id) {
-                        Button(role: .destructive) {
-                            profiles.clear(game.id)
-                            savedNotice = false
-                        } label: {
-                            Label("Forget", systemImage: "trash")
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                }
-            } else {
-                caption("Start a game to save settings against it.")
-            }
-
-            if !profiles.profiles.isEmpty {
-                Divider().opacity(0.3)
-                caption("\(profiles.profiles.count) game"
-                        + (profiles.profiles.count == 1 ? "" : "s")
-                        + " with saved settings.")
-            }
-        }
     }
 
     // MARK: - Picture
@@ -358,6 +279,36 @@ struct StreamMenuView: View {
                        + "become usable and loud ones start to clip.")
         }
         .onChange(of: settings.volumeBoost) { _, _ in apply() }
+    }
+
+    // MARK: - Capture
+
+    private var capture: some View {
+        Group {
+            slider("Clip quality", value: $settings.recordingBitrateMbps,
+                   range: 4...40, step: 2,
+                   caption: "\(settings.recordingBitrateMbps) Mbps",
+                   help: "How much data the clip file gets. Recording above the "
+                       + "bitrate the stream itself arrives at only grows the file, "
+                       + "it cannot recover detail the stream never sent.")
+
+            slider("Stop after", value: $settings.recordingLimitMinutes,
+                   range: 1...60, step: 1,
+                   caption: settings.recordingLimitMinutes == 1
+                       ? "1 minute" : "\(settings.recordingLimitMinutes) minutes",
+                   help: "A safety net so a forgotten recording cannot fill the "
+                       + "device. The clip is saved, not discarded, when it trips.")
+
+            Divider().opacity(0.3)
+
+            Toggle("Record the microphone", isOn: $settings.recordMicrophone)
+            caption("Adds your voice over the game audio. iOS will ask for "
+                    + "microphone permission the first time.")
+
+            caption("Clips record what is on screen, so the HUD and any overlay "
+                    + "you leave open are captured too. They save straight to "
+                    + "Photos when you stop.")
+        }
     }
 
     // MARK: - Controller
