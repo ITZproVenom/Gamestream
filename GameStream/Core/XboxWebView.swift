@@ -52,6 +52,27 @@ struct XboxWebView: UIViewRepresentable {
             }
         }
 
+        /// Evaluates a snippet and hands back whatever it returned.
+        func evaluate(_ javaScript: String, then handler: @escaping (String) -> Void) {
+            guard let view = streamView else { return }
+            view.evaluateJavaScript(javaScript) { result, _ in
+                handler((result as? String) ?? "")
+            }
+        }
+
+        /// Runs an async snippet and waits for the promise it returns.
+        ///
+        /// `callAsyncJavaScript` is the only way to await a promise from
+        /// native code; `evaluateJavaScript` hands back the promise object
+        /// itself, which is useless here.
+        func evaluateAsync(_ body: String) async -> Any? {
+            guard let view = streamView else { return nil }
+            return try? await view.callAsyncJavaScript(body,
+                                                       arguments: [:],
+                                                       in: nil,
+                                                       contentWorld: .page)
+        }
+
         func release() {
             guard let view = streamView else { return }
             streamView = nil
