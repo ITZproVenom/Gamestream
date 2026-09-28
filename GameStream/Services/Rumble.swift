@@ -453,14 +453,9 @@ final class ControllerRumble: ObservableObject {
     var diagnosis: String {
         if supportsHaptics {
             if Date() < controllerRetryAfter {
-                var text = "this controller's haptic engine would not play"
+                return "this controller's haptic engine would not play"
                     + (lastEngineError.map { " (\($0))" } ?? "")
                     + "; the remaining localities are being tried"
-                if !AppSettings.shared.phoneRumbleFallback {
-                    text += ". Turn on \u{201C}Vibrate the phone\u{201D} for feedback meanwhile"
-                    text += " \u{2014} that is what other iOS cloud clients fall back to"
-                }
-                return text
             }
             return "controller haptics are available"
         }

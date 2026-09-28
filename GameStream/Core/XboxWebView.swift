@@ -45,6 +45,22 @@ struct XboxWebView: UIViewRepresentable {
             }
         }
 
+        /// Wipes what Better xCloud stored inside the page.
+        ///
+        /// A live page is cleaned immediately; the flag makes the next page
+        /// clean itself before the script runs, which is the case that
+        /// matters when nothing is streaming at the time.
+        func purgeBetterXCloudStorage() {
+            UserDefaults.standard.set(true, forKey: "betterXCloud.purgePending")
+            guard let view = streamView else { return }
+            view.evaluateJavaScript(BetterXCloud.purgeJS) { result, _ in
+                let removed = (result as? String) ?? ""
+                AppLog.shared.info("betterxcloud", removed.isEmpty
+                                   ? "nothing stored in the page to clear"
+                                   : "cleared from the page: \(removed)")
+            }
+        }
+
         /// Ends the session for real.
         ///
         /// Because the player webview is deliberately kept alive between
@@ -154,6 +170,15 @@ struct XboxWebView: UIViewRepresentable {
         controller.addUserScript(WKUserScript(source: WebScripts.betterXCloudPrefsJS(AppSettings.shared.betterXCloudPreferences()),
                                               injectionTime: .atDocumentStart,
                                               forMainFrameOnly: true))
+        // A pending reinstall cleans the page before the script sees it, so
+        // the new copy cannot pick the old patch cache back up.
+        if UserDefaults.standard.bool(forKey: "betterXCloud.purgePending") {
+            UserDefaults.standard.set(false, forKey: "betterXCloud.purgePending")
+            controller.addUserScript(WKUserScript(source: BetterXCloud.purgeJS,
+                                                  injectionTime: .atDocumentStart,
+                                                  forMainFrameOnly: true))
+            AppLog.shared.info("betterxcloud", "the next page load starts from clean storage")
+        }
         if let script = BetterXCloud.shared.cachedScript {
             controller.addUserScript(WKUserScript(source: script,
                                                   injectionTime: .atDocumentStart,

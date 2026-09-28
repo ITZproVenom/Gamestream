@@ -592,37 +592,87 @@ enum WebScripts {
             return null;
         }
 
+        /// Better xCloud is not wrapped in a closure: its top-level classes
+        /// live in the page's global lexical scope, so the settings dialog can
+        /// be opened by the same call its own button makes —
+        /// `SettingsDialog.getInstance().show()`. Pressing the cloned HUD
+        /// button was never reliable: the script sets pointer-events: none on
+        /// it during the HUD fade and only restores it when the HUD finishes
+        /// at exactly left: 0px, so the element is frequently inert.
+        function openBxSettings() {
+            try {
+                var grip = document.querySelector("#StreamHud button[class^=GripHandle]");
+                if (grip && grip.ariaExpanded === "true") {
+                    grip.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+                    grip.click();
+                }
+            } catch (e) {}
+
+            try {
+                if (typeof SettingsDialog !== "undefined"
+                    && SettingsDialog.getInstance) {
+                    SettingsDialog.getInstance().show();
+                    return "SettingsDialog.show()";
+                }
+            } catch (e) {
+                return "SettingsDialog threw: " + e;
+            }
+            return null;
+        }
+
+        /// The site's own HUD button, which is what opens the Xbox guide.
+        /// Better xCloud finds it the same way, and clones it for itself.
+        function guideButton() {
+            var hud = document.querySelector("#StreamHud");
+            if (!hud) return null;
+            var wrapper = hud.querySelector("div[class^=HUDButton]");
+            if (!wrapper) return null;
+            return wrapper.querySelector("button") || wrapper;
+        }
+
+        function expandHud() {
+            var grip = document.querySelector("#StreamHud button[class^=GripHandle]");
+            if (!grip || grip.ariaExpanded === "true") return;
+            grip.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+            grip.click();
+        }
+
+        /// Better xCloud can leave pointer-events off on the HUD subtree.
+        function enable(node) {
+            while (node && node !== document.body) {
+                if (node.style && node.style.pointerEvents === "none") {
+                    node.style.pointerEvents = "auto";
+                }
+                node = node.parentElement;
+            }
+        }
+
         window.__gsCommand = function(command) {
             var target = null;
 
             if (command === "bxMenu") {
-                // The in-stream button is a clone of the site's own HUD
-                // button with title="Better xCloud" on the inner <button>.
-                // Its click handler opens the settings dialog, so pressing
-                // that element is the supported route.
+                var how = openBxSettings();
+                if (how) {
+                    note(command, "opened via " + how);
+                    return true;
+                }
+                // Only if the script is not loaded at all.
                 target = match([
                     "[title=\"Better xCloud\"]",
                     "button[title*=\"Better xCloud\" i]",
-                    ".bx-header-settings-button",
-                    ".bx-guide-home-buttons button",
-                    "#bx-game-bar .bx-game-bar-container button"
+                    ".bx-header-settings-button"
                 ], /better\s*xcloud/);
-
-                // Pointer events may have been left off by its own fade
-                // handling; clear that on the way up before clicking.
-                var node = target;
-                while (node && node !== document.body) {
-                    if (node.style && node.style.pointerEvents === "none") {
-                        node.style.pointerEvents = "auto";
-                    }
-                    node = node.parentElement;
-                }
+                enable(target);
             } else if (command === "guide") {
-                target = match([
-                    "button[aria-label*=\"guide\" i]",
-                    "button[class*=\"GuideButton\"]",
-                    "button[data-id=\"guide\"]"
-                ], /xbox guide|open guide|guide menu|nexus/);
+                expandHud();
+                target = guideButton();
+                enable(target);
+                if (!target) {
+                    target = match([
+                        "button[aria-label*=\"guide\" i]",
+                        "button[class*=\"GuideButton\"]"
+                    ], /xbox guide|open guide|guide menu|nexus/);
+                }
             }
 
             if (target && click(target)) {
@@ -639,7 +689,9 @@ enum WebScripts {
                 var cls = (all[i].className || "").toString().slice(0, 30);
                 candidates.push(describe(all[i]) + " ." + cls);
             }
-            note(command, "no match; visible controls: " + candidates.join(" | "));
+            note(command, "no match; bx="
+                 + (typeof SettingsDialog !== "undefined" ? "loaded" : "absent")
+                 + "; visible controls: " + candidates.join(" | "));
             return false;
         };
     })();

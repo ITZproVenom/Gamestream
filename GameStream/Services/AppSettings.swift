@@ -158,7 +158,9 @@ final class AppSettings: ObservableObject {
         autoStart = defaults.object(forKey: Key.autoStart) as? Bool ?? true
         showStreamStats = defaults.object(forKey: Key.showStats) as? Bool ?? false
         matchStreamStyle = defaults.object(forKey: Key.matchStreamStyle) as? Bool ?? true
-        phoneRumbleFallback = defaults.object(forKey: Key.phoneRumbleFallback) as? Bool ?? true
+        // Off by default. It is a consolation prize for hardware iOS cannot
+        // drive, not something to hand to someone who plays on a pad.
+        phoneRumbleFallback = defaults.object(forKey: Key.phoneRumbleFallback) as? Bool ?? false
     }
 
     /// The preferences handed to Better xCloud before it boots.
