@@ -41,6 +41,8 @@ final class XboxAuth: NSObject, ObservableObject {
     @Published private(set) var isChecking = false
     /// Where the token was found, shown in Diagnostics so a failed sign-in can
     /// be explained instead of guessed at.
+    /// Never persisted and never printed.
+    private(set) var xstsToken: String?
     @Published private(set) var tokenSource: String = ""
     @Published private(set) var tokenExpires: String = ""
     @Published private(set) var lastCheck: Date?
@@ -180,6 +182,9 @@ final class XboxAuth: NSObject, ObservableObject {
 
         let signedIn = payload["signedIn"] as? Bool ?? false
         let gamertag = (payload["gamertag"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+        // Memory only. This is a bearer token for the account; it is not
+        // written to UserDefaults, not logged, and not included in exports.
+        xstsToken = payload["token"] as? String
         tokenSource = payload["source"] as? String ?? ""
         tokenExpires = payload["expires"] as? String ?? ""
         if let scriptError = payload["error"] as? String, !scriptError.isEmpty {
@@ -235,6 +240,7 @@ final class XboxAuth: NSObject, ObservableObject {
         log.info("auth", "signing out")
         endWatching()
         apply(.signedOut)
+        xstsToken = nil
         tokenSource = ""
         tokenExpires = ""
 

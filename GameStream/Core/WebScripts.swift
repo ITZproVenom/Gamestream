@@ -70,6 +70,9 @@ enum WebScripts {
                         out.signedIn = true;
                         out.source = "xboxcom_xbl_user_info";
                         out.expires = direct.expiration || "";
+                        // The value itself, for the native client. It is kept
+                        // in memory only and never written to disk or logged.
+                        out.token = direct.token;
                         if (!out.gamertag) out.gamertag = fromClaims(direct);
                     }
                 }
@@ -102,6 +105,7 @@ enum WebScripts {
                         out.signedIn = true;
                         out.source = key;
                         out.expires = data.expiration || "";
+                        out.token = data.token;
                         if (!out.gamertag) out.gamertag = fromClaims(data) || fromClaims(entry);
                         break;
                     }
