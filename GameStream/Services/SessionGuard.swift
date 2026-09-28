@@ -50,7 +50,14 @@ final class SessionGuard: ObservableObject {
         // state that never announces itself is the one that matters.
         thermalState = ProcessInfo.processInfo.thermalState
         let minutes = AppSettings.shared.sessionLimitMinutes
-        limit = minutes > 0 ? TimeInterval(minutes * 60) : nil
+        let updated: TimeInterval? = minutes > 0 ? TimeInterval(minutes * 60) : nil
+        if updated != limit {
+            // Extending the limit gives the warnings back, or they would
+            // have been spent on a deadline that no longer exists.
+            warnedAt.remove("limit-1")
+            warnedAt.remove("limit-5")
+            limit = updated
+        }
         remaining = limit
         ticker?.cancel()
         ticker = Task { [weak self] in
@@ -77,7 +84,15 @@ final class SessionGuard: ObservableObject {
         checkBattery()
         checkThermal()
 
-        guard let startedAt, let limit else { return }
+        // The limit is re-read rather than remembered: it can be changed from
+        // the in-stream menu, and a slider that only takes effect on the next
+        // session is a slider that appears to do nothing.
+        let minutes = AppSettings.shared.sessionLimitMinutes
+        limit = minutes > 0 ? TimeInterval(minutes * 60) : nil
+        guard let startedAt, let limit else {
+            remaining = nil
+            return
+        }
         let left = limit - Date().timeIntervalSince(startedAt)
         remaining = max(0, left)
 

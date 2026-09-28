@@ -20,7 +20,20 @@ struct GameStreamApp: App {
         switch action {
         case .play(let identifier):
             guard let game = DeepLink.game(for: identifier, in: catalog) else {
-                AppLog.shared.warn("deeplink", "no game matches \(identifier)")
+                // A shortcut can arrive before the catalogue exists, which is
+                // most of the time on a first launch. Asking again after it
+                // loads is the difference between working and warning.
+                AppLog.shared.warn("deeplink", "no game matches \(identifier) yet; "
+                                   + "waiting for the catalogue")
+                Task {
+                    if catalog.games.isEmpty { await catalog.refresh() }
+                    guard let found = DeepLink.game(for: identifier, in: catalog) else {
+                        AppLog.shared.warn("deeplink", "no game matches \(identifier)")
+                        return
+                    }
+                    AppLog.shared.info("deeplink", "playing \(found.title)")
+                    stream.play(found)
+                }
                 return
             }
             AppLog.shared.info("deeplink", "playing \(game.title)")

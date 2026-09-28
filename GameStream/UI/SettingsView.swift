@@ -662,6 +662,10 @@ struct SettingsRowLabel: View {
 struct DiagnosticsView: View {
     @EnvironmentObject private var auth: XboxAuth
     @StateObject private var log = AppLog.shared
+    @StateObject private var stream = StreamCoordinator.shared
+    @StateObject private var rumble = ControllerRumble.shared
+    @StateObject private var network = NetworkCheck.shared
+    @StateObject private var guardian = SessionGuard.shared
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -711,7 +715,7 @@ struct DiagnosticsView: View {
                     Button("Done") { dismiss() }
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    ShareLink(item: log.exportText()) {
+                    ShareLink(item: log.exportText(context: context)) {
                         Image(systemName: "square.and.arrow.up")
                     }
                     .accessibilityLabel("Share the log")
@@ -727,5 +731,22 @@ struct DiagnosticsView: View {
         case .warn: return .orange
         case .error: return .red
         }
+    }
+
+    /// What the app was when the log was taken. A shared log that does not
+    /// say which renderer was running, or whether a controller was even
+    /// connected, leaves the first two questions unanswered.
+    private var context: [String] {
+        var lines: [String] = []
+        lines.append("Session: " + (auth.state.isSignedIn ? "signed in" : "signed out"))
+        if !auth.tokenSource.isEmpty { lines.append("Token source: \(auth.tokenSource)") }
+        if !auth.tokenExpires.isEmpty { lines.append("Token expires: \(auth.tokenExpires)") }
+        lines.append("Renderer: \(stream.rendererDescription)")
+        if !stream.offeredCodecs.isEmpty { lines.append("Codecs offered: \(stream.offeredCodecs)") }
+        lines.append("Controller: " + (rumble.controllerName ?? "none")
+                     + (rumble.supportsHaptics ? " with haptics" : " without haptics"))
+        if let reading = network.latest { lines.append("Connection: \(reading.detail)") }
+        lines.append("Thermal state: \(guardian.thermalDescription)")
+        return lines
     }
 }
