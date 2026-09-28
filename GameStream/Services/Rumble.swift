@@ -842,7 +842,11 @@ final class ControllerRumble: ObservableObject {
         audioSessionReady = true
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            // Not mixable. A mixing session is a secondary audio client, and
+            // the haptic server treats it as lower priority than one that owns
+            // playback outright; .moviePlayback is what a full-screen video
+            // client asks for and is the closest match to what a stream is.
+            try session.setCategory(.playback, mode: .moviePlayback, options: [])
             try session.setActive(true, options: [])
             log.debug("rumble", "audio session active for haptics")
         } catch {
@@ -1135,6 +1139,8 @@ final class ControllerRumble: ObservableObject {
         lines.append("Stream page actuator: \(pageActuator ? "yes" : "no")")
         if !pageDetail.isEmpty { lines.append("Page gamepads: \(pageDetail)") }
         lines.append("Phone fallback: \(AppSettings.shared.phoneRumbleFallback ? "on" : "off")")
+        lines.append("Player page alive: "
+                     + (XboxWebView.Registry.shared.streamView == nil ? "no" : "yes"))
         return lines.joined(separator: "\n")
     }
 }

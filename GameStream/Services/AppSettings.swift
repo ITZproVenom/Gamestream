@@ -181,7 +181,7 @@ final class AppSettings: ObservableObject {
         matchStreamStyle = defaults.object(forKey: Key.matchStreamStyle) as? Bool ?? true
         // Off by default. It is a consolation prize for hardware iOS cannot
         // drive, not something to hand to someone who plays on a pad.
-        phoneRumbleFallback = defaults.object(forKey: Key.phoneRumbleFallback) as? Bool ?? false
+        phoneRumbleFallback = defaults.object(forKey: Key.phoneRumbleFallback) as? Bool ?? true
         autoReconnect = defaults.object(forKey: Key.autoReconnect) as? Bool ?? true
         sessionLimitMinutes = defaults.object(forKey: Key.sessionLimit) as? Int ?? 0
         thermalGuard = defaults.object(forKey: Key.thermalGuard) as? Bool ?? true
