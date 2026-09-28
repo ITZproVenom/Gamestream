@@ -162,6 +162,8 @@ struct StreamMenuView: View {
                 settings.saturation = 100
                 settings.zoom = 100
                 settings.fillScreen = false
+                settings.aspectRatio = ""
+                settings.videoPosition = "center"
             }
             .buttonStyle(.bordered)
         }
@@ -377,15 +379,6 @@ struct StreamMenuView: View {
             Toggle("Reduce animations", isOn: $settings.reduceAnimations)
             Toggle("Hide scrollbars", isOn: $settings.hideScrollbars)
 
-            Divider().opacity(0.3)
-            Text("Region").font(.subheadline.weight(.semibold))
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Picker("Region", selection: $settings.region) {
-                ForEach(AppSettings.Region.allCases, id: \.self) { option in
-                    Text(option.title).tag(option)
-                }
-            }
-            .pickerStyle(.menu)
         }
         .onChange(of: settings.blockTracking) { _, _ in apply() }
         .onChange(of: settings.skipSplash) { _, _ in apply() }

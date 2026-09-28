@@ -180,8 +180,7 @@ struct XboxWebView: UIViewRepresentable {
         // its WebRTC session, so it has to run at document start.
         let settings = AppSettings.shared
         controller.addUserScript(WKUserScript(
-            source: "window.__gsRumbleMode = \"\(settings.rumbleEnabled ? "page" : "off")\";"
-                + "window.__gsRumbleScale = \(settings.rumbleIntensity);",
+            source: ControllerRumble.shared.pageConfigurationJS,
             injectionTime: .atDocumentStart,
             forMainFrameOnly: false))
         controller.addUserScript(WKUserScript(source: RumbleBridge.javaScript,
@@ -193,9 +192,14 @@ struct XboxWebView: UIViewRepresentable {
             source: StreamEnhancer.script(settings.enhancerConfiguration()),
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true))
-        for source in [WebScripts.streamStateJS, WebScripts.streamChromeJS,
+        // Auto-start is a preference, so the script that presses the site's
+        // Play button is only installed when it is on. Injecting it and
+        // ignoring the setting is how a switch ends up doing nothing.
+        var sources = [WebScripts.streamStateJS, WebScripts.streamChromeJS,
                        WebScripts.streamStatsJS, WebScripts.streamCommandsJS,
-                       WebScripts.captureJS, WebScripts.autoStartJS] {
+                       WebScripts.captureJS]
+        if settings.autoStart { sources.append(WebScripts.autoStartJS) }
+        for source in sources {
             controller.addUserScript(WKUserScript(source: source,
                                                   injectionTime: .atDocumentEnd,
                                                   forMainFrameOnly: true))

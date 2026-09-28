@@ -8,7 +8,7 @@ import Foundation
 struct PlayGameIntent: AppIntent {
     static var title: LocalizedStringResource = "Play a game"
     static var description = IntentDescription(
-        "Starts a Xbox Cloud Gaming session for a game in your library."
+        "Starts an Xbox Cloud Gaming session for a game in your library."
     )
     static var openAppWhenRun = true
 
@@ -41,8 +41,11 @@ struct ResumeLastGameIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        if let last = LibraryStore.shared.activity.first {
-            PendingIntent.shared.request = .play(last.gameID)
+        // Recents, not the activity log: the log only keeps sessions longer
+        // than fifteen seconds, so "resume" could skip the game you just
+        // started and quit.
+        if let last = LibraryStore.shared.recents.first {
+            PendingIntent.shared.request = .play(last.id)
         }
         return .result()
     }

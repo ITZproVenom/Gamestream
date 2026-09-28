@@ -267,41 +267,16 @@ enum WebScripts {
         window.__gsChrome = true;
 
         var STYLE_ID = "gamestream-stream-chrome";
-        // Deliberately narrow. The previous version hid every
-        // nav[aria-label] and clipped the body, which also hid the stream
-        // menu that Better xCloud adds its button to and clipped its
-        // dialogs — that is why its menu "would not open".
+        // Deliberately narrow, and deliberately silent about the video's own
+        // shape. This used to force width, height and object-fit with
+        // !important, which quietly beat every picture setting in the
+        // player's menu: "fill the screen" and the aspect-ratio picker had
+        // nothing to win against. The enhancement layer owns the video box;
+        // this only owns the document around it.
         var css = [
             "html, body { background: #000 !important; margin: 0 !important; padding: 0 !important; }",
             "header[role=\"banner\"], footer[role=\"contentinfo\"] { display: none !important; }",
-            "video { width: 100% !important; height: 100% !important; object-fit: contain !important; background: #000 !important; }",
-            // Nothing belonging to the enhancement may be clipped or buried.
-            "[class^=\"bx-\"], [class*=\" bx-\"], [id^=\"bx-\"] { overflow: visible !important; }",
-            ".bx-settings-dialog, .bx-centered-dialog, .bx-navigation-dialog, .bx-key-binding-dialog { z-index: 2147483000 !important; }",
-            "#bx-game-bar { z-index: 2147482000 !important; }",
-            // The script disables pointer events on its in-stream button
-            // while the HUD fades, and only restores them when the HUD
-            // reports left: 0px. In this webview that condition often never
-            // holds, so the button stays present and untappable. Forcing it
-            // back is scoped to that one button's subtree, which sits inside
-            // a HUD that is itself unclickable while hidden.
-            "[title=\"Better xCloud\"], [title=\"Better xCloud\"] * { pointer-events: auto !important; }",
-            // The site's own HUD is redundant now that the app has its own,
-            // and it overlaps it. Hidden with opacity rather than display so
-            // the elements keep their layout and still answer a programmatic
-            // click: quit and the guide are driven by pressing the real
-            // controls, and display:none would be a behaviour change on a
-            // path that already works.
-            "#StreamHud { opacity: 0 !important; pointer-events: none !important; }",
-            "#bx-game-bar { display: none !important; }",
-            // Better xCloud's own stats bar duplicates the app's, in a
-            // different place and a different font, over the game.
-            ".bx-stats-bar { display: none !important; }",
-            // Its dialog dims the stream behind a blurred overlay. When the
-            // overlay outlives the dialog the game is left permanently
-            // frosted, which only a reconnect used to clear. The blur is
-            // removed outright so a stale overlay is at worst invisible.
-            ".bx-dialog-overlay { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgba(0,0,0,0.4) !important; }"
+            "video { background: #000 !important; }"
         ].join("\n");
 
         function onLaunchPage() {
@@ -327,24 +302,6 @@ enum WebScripts {
         setInterval(apply, 1200);
     })();
     """#
-
-    /// Restyles Better xCloud's own web interface to match the app.
-    ///
-    /// Better xCloud is a userscript: its menus are HTML rendered inside the
-    /// player, so none of the native Liquid Glass work reaches them. It does
-    /// however read every button colour, font and control height from CSS
-    /// custom properties, so its whole interface can be re-skinned from the
-    /// outside without touching or forking the script. Panels get the same
-    /// translucent blur, radii and hairline border as the native cards, and
-    /// buttons pick up the accent colour chosen in Settings.
-
-    /// A CSS payload safe to embed in a JavaScript string literal.
-    private static func escapedForJS(_ value: String) -> String {
-        value
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-            .replacingOccurrences(of: "\n", with: "\\n")
-    }
 
     /// Reports the real WebRTC numbers to the app once a second.
     ///
@@ -492,85 +449,8 @@ enum WebScripts {
             return null;
         }
 
-        /// Better xCloud is not wrapped in a closure: its top-level classes
-        /// live in the page's global lexical scope, so the settings dialog can
-        /// be opened by the same call its own button makes —
-        /// `SettingsDialog.getInstance().show()`. Pressing the cloned HUD
-        /// button was never reliable: the script sets pointer-events: none on
-        /// it during the HUD fade and only restores it when the HUD finishes
-        /// at exactly left: 0px, so the element is frequently inert.
-        function openBxSettings() {
-            try {
-                var grip = document.querySelector("#StreamHud button[class^=GripHandle]");
-                if (grip && grip.ariaExpanded === "true") {
-                    grip.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
-                    grip.click();
-                }
-            } catch (e) {}
-
-            try {
-                if (typeof SettingsDialog !== "undefined"
-                    && SettingsDialog.getInstance) {
-                    SettingsDialog.getInstance().show();
-                    return "SettingsDialog.show(), " + reveal();
-                }
-            } catch (e) {
-                return "SettingsDialog threw: " + e;
-            }
-            return null;
-        }
-
-        /// If the dialog exists but cannot be seen, make it seen.
-        ///
-        /// Better xCloud hides it with a `bx-gone` class and shows it by
-        /// removing that class. Anything that leaves it hidden — its own
-        /// stylesheet failing to load, or a restyle of ours interfering —
-        /// produces a button that appears to do nothing at all.
-        function reveal() {
-            var node = document.querySelector(".bx-navigation-dialog");
-            if (!node) return dialogState();
-
-            var before = dialogState();
-            var style = window.getComputedStyle(node);
-            var box = node.getBoundingClientRect();
-            var hidden = style.display === "none"
-                || style.visibility === "hidden"
-                || parseFloat(style.opacity) < 0.05
-                || box.width < 8 || box.height < 8;
-            if (!hidden) return before;
-
-            node.classList.remove("bx-gone");
-            node.style.setProperty("display", "flex", "important");
-            node.style.setProperty("visibility", "visible", "important");
-            node.style.setProperty("opacity", "1", "important");
-            node.style.setProperty("pointer-events", "auto", "important");
-            if (box.width < 8 || box.height < 8) {
-                node.style.setProperty("position", "fixed", "important");
-                node.style.setProperty("inset", "0", "important");
-                node.style.setProperty("z-index", "9999", "important");
-            }
-            return "was hidden (" + before + "), forced visible: " + dialogState();
-        }
-
-        /// "Nothing happened" covers two very different faults: the dialog was
-        /// never created, or it was created and cannot be seen. Only the page
-        /// can tell them apart, so it reports which.
-        function dialogState() {
-            var node = document.querySelector(".bx-navigation-dialog");
-            if (!node) return "no .bx-navigation-dialog in the document";
-            var style = window.getComputedStyle(node);
-            var box = node.getBoundingClientRect();
-            return "dialog class=\"" + node.className + "\""
-                + " display=" + style.display
-                + " visibility=" + style.visibility
-                + " opacity=" + style.opacity
-                + " z=" + style.zIndex
-                + " rect=" + Math.round(box.left) + "," + Math.round(box.top)
-                + " " + Math.round(box.width) + "x" + Math.round(box.height);
-        }
-
         /// The site's own HUD button, which is what opens the Xbox guide.
-        /// Better xCloud finds it the same way, and clones it for itself.
+        /// Pressing the real control is the only honest way to open it.
         function guideButton() {
             var hud = document.querySelector("#StreamHud");
             if (!hud) return null;
@@ -586,7 +466,8 @@ enum WebScripts {
             grip.click();
         }
 
-        /// Better xCloud can leave pointer-events off on the HUD subtree.
+        /// The site can leave pointer-events off on the HUD subtree while it
+        /// animates, which makes a real control inert.
         function enable(node) {
             while (node && node !== document.body) {
                 if (node.style && node.style.pointerEvents === "none") {
@@ -596,83 +477,10 @@ enum WebScripts {
             }
         }
 
-        /// Closes the enhancement's dialog and clears what it leaves behind.
-        ///
-        /// Tapping outside the dialog dismisses it visually but can leave the
-        /// dimming overlay in the document. That overlay swallows every touch
-        /// meant for the game, which reads as a frozen, frosted picture that
-        /// only a reconnect clears.
-        function closeBxSettings() {
-            try {
-                if (typeof SettingsDialog !== "undefined" && SettingsDialog.getInstance) {
-                    var dialog = SettingsDialog.getInstance();
-                    if (dialog && dialog.hide) dialog.hide();
-                }
-            } catch (e) {}
-            return sweepOverlays();
-        }
-
-        /// Removes any dimming overlay that no longer has a dialog to dim.
-        function sweepOverlays() {
-            var removed = 0;
-            var dialogs = document.querySelectorAll(
-                ".bx-settings-dialog, .bx-navigation-dialog, .bx-centered-dialog, .bx-key-binding-dialog"
-            );
-            var open = false;
-            for (var d = 0; d < dialogs.length; d++) {
-                var node = dialogs[d];
-                if (node.classList.contains("bx-gone")) continue;
-                var box = node.getBoundingClientRect();
-                if (box.width > 8 && box.height > 8) { open = true; break; }
-            }
-            if (open) return "a dialog is still open";
-
-            var overlays = document.querySelectorAll(".bx-dialog-overlay");
-            for (var i = 0; i < overlays.length; i++) {
-                if (overlays[i].parentNode) {
-                    overlays[i].parentNode.removeChild(overlays[i]);
-                    removed++;
-                }
-            }
-            // Anything the script blurred directly, unblurred.
-            var blurred = document.querySelectorAll("[style*=\"blur\"]");
-            for (var b = 0; b < blurred.length; b++) {
-                blurred[b].style.removeProperty("filter");
-                blurred[b].style.removeProperty("-webkit-filter");
-                blurred[b].style.removeProperty("backdrop-filter");
-            }
-            return removed ? ("cleared " + removed + " stale overlay(s)") : "nothing to clear";
-        }
-
-        // A dialog dismissed by tapping outside never routes through our
-        // close command, so the sweep also runs on a slow timer. It is a
-        // cheap query and only acts when there is nothing open.
-        setInterval(function() {
-            try {
-                if (document.querySelector(".bx-dialog-overlay")) sweepOverlays();
-            } catch (e) {}
-        }, 1000);
-
         window.__gsCommand = function(command) {
             var target = null;
 
-            if (command === "bxMenu") {
-                var how = openBxSettings();
-                if (how) {
-                    note(command, "opened via " + how);
-                    return true;
-                }
-                // Only if the script is not loaded at all.
-                target = match([
-                    "[title=\"Better xCloud\"]",
-                    "button[title*=\"Better xCloud\" i]",
-                    ".bx-header-settings-button"
-                ], /better\s*xcloud/);
-                enable(target);
-            } else if (command === "bxClose") {
-                note(command, closeBxSettings());
-                return true;
-            } else if (command === "quit") {
+            if (command === "quit") {
                 // Ending the session properly is the site's own quit, inside
                 // the guide. Closing the player only stops the picture; the
                 // session stays open and the next launch resumes into it.
@@ -711,9 +519,7 @@ enum WebScripts {
                 var cls = (all[i].className || "").toString().slice(0, 30);
                 candidates.push(describe(all[i]) + " ." + cls);
             }
-            note(command, "no match; bx="
-                 + (typeof SettingsDialog !== "undefined" ? "loaded" : "absent")
-                 + "; visible controls: " + candidates.join(" | "));
+            note(command, "no match; visible controls: " + candidates.join(" | "));
             return false;
         };
     })();
@@ -987,18 +793,4 @@ enum WebScripts {
         }, 750);
     })();
     """#
-
-    // MARK: - Better xCloud preferences
-
-    /// Writes Better xCloud preferences before the script boots.
-
-    /// JSON is a subset of JavaScript literals, so this is a safe way to embed
-    /// arbitrary user-visible values without hand-rolling escape rules.
-    private static func jsString(_ value: String) -> String {
-        let data = try? JSONSerialization.data(withJSONObject: [value], options: [])
-        guard let data, var text = String(data: data, encoding: .utf8) else { return "\"\"" }
-        text.removeFirst()
-        text.removeLast()
-        return text
-    }
 }

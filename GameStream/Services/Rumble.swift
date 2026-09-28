@@ -126,10 +126,17 @@ enum RumbleBridge {
         }
 
         function deliver(data) {
-            // Playing in the page is preferred when possible: it is the only
-            // path that reaches an Xbox pad, and it skips a round trip.
-            var played = playInPage(data);
-            if (!played) send(data);
+            // Which route wins is decided natively and pushed in as a mode,
+            // not guessed at here.
+            //
+            // This used to try the page first and forward to native only if
+            // playEffect threw. That is not a test of anything: WebKit hands
+            // back an actuator for pads it cannot drive, playEffect resolves
+            // happily, and the packet was then dropped on the floor. A pad
+            // that reports haptics to iOS, or a phone standing in for one,
+            // never saw a single packet.
+            if (playInPage(data)) return;
+            send(data);
         }
 
         function parse(buffer) {
@@ -550,6 +557,31 @@ final class ControllerRumble: ObservableObject {
         refreshController(reason: "start")
     }
 
+    /// How the page should behave, as a script.
+    ///
+    /// "native" means forward every packet and play nothing in the page; it
+    /// is chosen whenever iOS has a route of its own, because a route that
+    /// can be verified beats one that only reports success. "page" is for the
+    /// case iOS genuinely cannot serve: a pad that exposes no haptics with
+    /// the phone fallback switched off.
+    var pageMode: String {
+        guard AppSettings.shared.rumbleEnabled else { return "off" }
+        if supportsHaptics || AppSettings.shared.phoneRumbleFallback { return "native" }
+        return "page"
+    }
+
+    var pageConfigurationJS: String {
+        "window.__gsRumbleMode = \"\(pageMode)\";"
+            + "window.__gsRumbleScale = \(AppSettings.shared.rumbleIntensity);"
+    }
+
+    /// Pushes the mode into a page that is already running, so switching
+    /// rumble off mid-game actually stops it.
+    func syncPage() {
+        guard XboxWebView.Registry.shared.streamView != nil else { return }
+        XboxWebView.Registry.shared.run(pageConfigurationJS)
+    }
+
     func notePageCapability(actuator: Bool, detail: String) {
         let changed = actuator != pageActuator || detail != pageDetail
         pageActuator = actuator
@@ -912,6 +944,7 @@ final class ControllerRumble: ObservableObject {
         } else {
             next = .unavailable
         }
+        syncPage()
         guard next != path else { return }
         path = next
         warnedUnavailable = false

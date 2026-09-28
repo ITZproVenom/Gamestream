@@ -3,11 +3,10 @@ import Foundation
 /// The first step towards a native player: talking to Xbox Cloud Gaming
 /// directly instead of driving the website.
 ///
-/// This is deliberately scoped to session provisioning — the part that has to
-/// work before anything else is worth building. It exchanges the account's
-/// XSTS token for a cloud-gaming token, asks for a session, and waits for the
-/// service to provision one. It does not stream anything yet: that needs a
-/// WebRTC stack, which is a separate and much larger piece of work.
+/// This is the first step: it exchanges the account's XSTS token for a
+/// cloud-gaming token and reads back the regional endpoints the account may
+/// use. `XCloudSession` spends that token, and `NativeStreamPeer` negotiates
+/// media against the session it provisions.
 ///
 /// Everything here uses the signed-in account's own token, the same one the
 /// website uses in the browser.
@@ -35,8 +34,6 @@ actor XCloudAPI {
     private static let loginURL = URL(
         string: "https://xgpuweb.gssv-play-prod.xboxlive.com/v2/login/user"
     )!
-
-    private var cached: Login?
 
     /// Exchanges the XSTS token for a cloud-gaming token and the list of
     /// regional endpoints the account may use.
@@ -80,7 +77,6 @@ actor XCloudAPI {
             regions: parsed,
             durationSeconds: (object["durationInSeconds"] as? Double) ?? 0
         )
-        cached = login
         return login
     }
 
@@ -102,7 +98,8 @@ actor XCloudAPI {
                 }
                 lines.append("Regions: \(names.joined(separator: ", ")).")
             }
-            lines.append("Session provisioning and WebRTC are not implemented yet.")
+            lines.append("Session provisioning and the native WebRTC player are "
+                         + "built; the bolt button on a game's page uses them.")
             return lines.joined(separator: " ")
         } catch let failure as Failure {
             return "Native access failed at \(failure.step) — \(failure.detail)."

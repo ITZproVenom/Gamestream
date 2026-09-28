@@ -159,6 +159,12 @@ final class StreamCoordinator: ObservableObject {
         reconnectTask = nil
         SessionGuard.shared.end()
         ControllerRumble.shared.stop()
+        // A clip in progress belongs to the session that was running. Left
+        // alone it keeps recording the app with no button on screen to stop
+        // it, and the footage is never written.
+        if StreamRecorder.shared.isRecording {
+            Task { _ = await StreamRecorder.shared.stop() }
+        }
         // The player webview is kept alive across presentations, so this is
         // the point where the page has to actually be shut down.
         XboxWebView.Registry.shared.release()
@@ -351,22 +357,6 @@ final class StreamCoordinator: ObservableObject {
         }
     }
 
-    /// Whether the enhancement's menu is believed to be open, so the same
-    /// button can put it away again. Its dialog is hard to dismiss by touch
-    /// in this webview, so leaving the only exit inside it is a trap.
-    @Published private(set) var enhancementMenuOpen = false
-
-    /// Opens or closes the enhancement's menu.
-    func toggleEnhancementMenu() {
-        if enhancementMenuOpen {
-            closeEnhancementMenu()
-            enhancementMenuOpen = false
-        } else {
-            openEnhancementMenu()
-            enhancementMenuOpen = true
-        }
-    }
-
     /// Which engine is actually drawing frames right now.
     ///
     /// Recorded rather than assumed. "Is this still a browser?" is a
@@ -411,23 +401,6 @@ final class StreamCoordinator: ObservableObject {
     func enhancementReported(codecs: String, notes: String) {
         if !codecs.isEmpty { offeredCodecs = codecs }
         log.info("stream", "codecs: \(codecs)" + (notes.isEmpty ? "" : " — \(notes)"))
-    }
-
-    /// Opens the streaming enhancement's own menu.
-    func openEnhancementMenu() {
-        log.info("stream", "opening the enhancement menu")
-        XboxWebView.Registry.shared.run(
-            "window.__gsCommand ? '' : 'the command bridge is not installed on this page';"
-        )
-        XboxWebView.Registry.shared.run("window.__gsCommand && window.__gsCommand('bxMenu');")
-    }
-
-    /// Closes the enhancement's menu and clears anything it left over the
-    /// game. Dismissing it by tapping outside leaves its dimming overlay in
-    /// the page, which swallows every touch meant for the stream.
-    func closeEnhancementMenu() {
-        log.info("stream", "closing the enhancement menu")
-        XboxWebView.Registry.shared.run("window.__gsCommand && window.__gsCommand('bxClose');")
     }
 
     /// Presses the site's Xbox guide button.

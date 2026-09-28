@@ -147,23 +147,15 @@ struct SettingsView: View {
 
     private var streaming: some View {
         SettingsGroup("Streaming", icon: "cloud.fill") {
-            Picker("Quality", selection: $settings.quality) {
-                ForEach(AppSettings.Quality.allCases) { quality in
-                    Text(quality.title).tag(quality)
-                }
+            VStack(alignment: .leading, spacing: 5) {
+                Toggle("Start the game automatically", isOn: $settings.autoStart)
+                Text("Presses the site's own Play button on a launch page so a game "
+                     + "starts without a second tap. Resolution, bitrate and codec "
+                     + "live in the player's own menu, where they can be changed "
+                     + "against a running stream.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-
-            SettingsDivider()
-
-            Picker("Region", selection: $settings.region) {
-                ForEach(AppSettings.Region.allCases) { region in
-                    Text(region.title).tag(region)
-                }
-            }
-
-            SettingsDivider()
-
-            Toggle("Start the game automatically", isOn: $settings.autoStart)
             SettingsDivider()
             VStack(alignment: .leading, spacing: 5) {
                 Toggle("Open the statistics panel with the stream",
@@ -277,6 +269,10 @@ struct SettingsView: View {
                 Button {
                     UIPasteboard.general.string = rumble.report
                     copiedReport = true
+                    Task {
+                        try? await Task.sleep(for: .seconds(2))
+                        copiedReport = false
+                    }
                 } label: {
                     SettingsRowLabel(title: copiedReport ? "Report copied"
                                      : "Copy controller report",
@@ -320,6 +316,9 @@ struct SettingsView: View {
             SettingsDivider()
 
             Toggle("GameStream enhancements", isOn: $settings.enhancerEnabled)
+                .onChange(of: settings.enhancerEnabled) { _, _ in
+                    stream.applyEnhancements()
+                }
             Text("Our own in-page layer. It edits the session description before the "
                  + "stream is negotiated, which is the only place codec and bitrate "
                  + "are actually decided.")
@@ -328,8 +327,6 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             if settings.enhancerEnabled {
-                Toggle("Hide the site's touch controls", isOn: $settings.hideTouchControls)
-
                 Toggle("Prefer H.265 when offered", isOn: $settings.preferHEVC)
                 Text(stream.offeredCodecs.isEmpty
                      ? "Start a game to see which codecs the server offers."
@@ -350,6 +347,7 @@ struct SettingsView: View {
                         get: { Double(settings.sharpness) },
                         set: { settings.sharpness = Int($0) }
                     ), in: 0...5, step: 1)
+                    .onChange(of: settings.sharpness) { _, _ in stream.applyEnhancements() }
                     Text("A real sharpening kernel over the video. It cannot add detail "
                          + "the stream never sent, and high settings make compression "
                          + "blocks more obvious, not less.")
@@ -369,6 +367,7 @@ struct SettingsView: View {
                         get: { Double(settings.saturation) },
                         set: { settings.saturation = Int($0) }
                     ), in: 50...150, step: 5)
+                    .onChange(of: settings.saturation) { _, _ in stream.applyEnhancements() }
                 }
 
                 VStack(alignment: .leading, spacing: 7) {
@@ -383,6 +382,7 @@ struct SettingsView: View {
                         get: { Double(settings.contrast) },
                         set: { settings.contrast = Int($0) }
                     ), in: 50...150, step: 5)
+                    .onChange(of: settings.contrast) { _, _ in stream.applyEnhancements() }
                 }
             }
 
@@ -564,8 +564,8 @@ struct SettingsView: View {
                         return
                     }
                     do {
-                        let login = try await XCloudAPI.shared.login(xstsToken: token)
                         sessionProbe = "Signing in to the cloud service…"
+                        let login = try await XCloudAPI.shared.login(xstsToken: token)
                         sessionProbe = await XCloudSession.shared.probe(
                             login: login,
                             titleId: game.id
@@ -602,8 +602,6 @@ struct SettingsView: View {
             .buttonStyle(.plain)
         }
     }
-
-    /// Says what the reinstall did, rather than only when it last ran.
 
     private func measureCache() async {
         cacheSize = await PosterCache.shared.diskUsage()

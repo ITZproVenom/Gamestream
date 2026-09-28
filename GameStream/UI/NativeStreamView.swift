@@ -1,5 +1,6 @@
 #if canImport(WebRTC)
 import SwiftUI
+import UIKit
 import WebRTC
 
 /// Renders a native stream's video track.
@@ -48,6 +49,7 @@ struct NativeStreamView: View {
     @State private var status = "Starting"
     @State private var session: XCloudSession.Handle?
     @State private var token: String?
+    @State private var heartbeat: Task<Void, Never>?
 
     var body: some View {
         ZStack {
@@ -87,6 +89,11 @@ struct NativeStreamView: View {
             }
         }
         .task { await start() }
+        .onDisappear {
+            heartbeat?.cancel()
+            heartbeat = nil
+            UIApplication.shared.isIdleTimerDisabled = AppSettings.shared.keepAwake
+        }
         .onChange(of: peer.state) { _, value in
             switch value {
             case .negotiating(let step): status = step
@@ -103,6 +110,9 @@ struct NativeStreamView: View {
             status = "Sign in first"
             return
         }
+        // Nothing else keeps the screen on in this path, and a stream that
+        // dims out after thirty seconds is not a stream.
+        UIApplication.shared.isIdleTimerDisabled = true
         do {
             status = "Signing in to the cloud service"
             let login = try await XCloudAPI.shared.login(xstsToken: xsts)
@@ -120,6 +130,7 @@ struct NativeStreamView: View {
                 }
             }
 
+            startHeartbeat(handle: handle, token: login.gsToken)
             await peer.connect(handle: handle, token: login.gsToken)
         } catch {
             status = "Failed: \(error.localizedDescription)"
@@ -127,7 +138,24 @@ struct NativeStreamView: View {
         }
     }
 
+    /// The service reclaims a session that stops talking to it. Provisioning
+    /// one and then going quiet is how a slot is lost for minutes with
+    /// nothing playing in it.
+    private func startHeartbeat(handle: XCloudSession.Handle, token: String) {
+        heartbeat?.cancel()
+        heartbeat = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(20))
+                guard !Task.isCancelled else { return }
+                await XCloudSession.shared.keepAlive(handle, token: token)
+            }
+        }
+    }
+
     private func stop() async {
+        heartbeat?.cancel()
+        heartbeat = nil
+        UIApplication.shared.isIdleTimerDisabled = AppSettings.shared.keepAwake
         peer.close()
         if let session, let token {
             _ = await XCloudSession.shared.release(session, token: token)

@@ -49,6 +49,12 @@ final class NativeStreamPeer: NSObject, ObservableObject {
     private var pendingCandidates: [RTCIceCandidate] = []
     private var handle: XCloudSession.Handle?
     private var token: String?
+    /// Candidates found after the first exchange still have to be handed
+    /// over. Gathering is continual, and the candidate that actually works
+    /// is often not one of the first: dropping everything after the opening
+    /// round is a connection that fails for no visible reason.
+    private var trickle: Task<Void, Never>?
+    private var exchangedCandidates = 0
 
     /// Called with each rumble payload that arrives on the input channel, so
     /// the existing native rumble code can stay exactly as it is.
@@ -146,20 +152,60 @@ final class NativeStreamPeer: NSObject, ObservableObject {
                 "sdpMid": candidate.sdpMid ?? "0"
             ]
         }
+        exchangedCandidates = mine.count
         let response = try await XCloudSession.shared.exchangeCandidates(
             mine, on: handle, token: token
         )
         for candidate in Self.candidates(fromExchange: response) {
             try? await peer.add(candidate)
         }
+        startTrickling(on: peer)
+    }
+
+    /// Keeps handing over candidates as they are found, for as long as the
+    /// connection has not settled.
+    private func startTrickling(on peer: RTCPeerConnection) {
+        trickle?.cancel()
+        trickle = Task { [weak self] in
+            for _ in 0..<20 {
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                guard let self, !Task.isCancelled else { return }
+                if self.state == .connected { return }
+                guard let handle = self.handle, let token = self.token else { return }
+                let fresh = self.pendingCandidates.dropFirst(self.exchangedCandidates)
+                guard !fresh.isEmpty else { continue }
+                self.exchangedCandidates = self.pendingCandidates.count
+                let payload = fresh.map { candidate -> [String: Any] in
+                    [
+                        "candidate": candidate.sdp,
+                        "sdpMLineIndex": candidate.sdpMLineIndex,
+                        "sdpMid": candidate.sdpMid ?? "0"
+                    ]
+                }
+                guard let response = try? await XCloudSession.shared.exchangeCandidates(
+                    payload, on: handle, token: token
+                ) else { continue }
+                for candidate in Self.candidates(fromExchange: response) {
+                    try? await peer.add(candidate)
+                }
+            }
+        }
     }
 
     func close() {
+        trickle?.cancel()
+        trickle = nil
         inputChannel?.close()
         controlChannel?.close()
+        inputChannel = nil
+        controlChannel = nil
         connection?.close()
         connection = nil
         videoTrack = nil
+        handle = nil
+        token = nil
+        pendingCandidates.removeAll()
+        exchangedCandidates = 0
         state = .closed
     }
 
@@ -265,7 +311,10 @@ extension NativeStreamPeer: RTCPeerConnectionDelegate {
             case .failed:
                 state = .failed("the connection failed")
             case .disconnected:
-                state = .failed("the connection dropped")
+                // Not fatal. ICE reports this while it re-checks a path, and
+                // treating it as an ending tears down a stream that is about
+                // to come back.
+                state = .negotiating("Reconnecting")
             case .closed:
                 state = .closed
             default:

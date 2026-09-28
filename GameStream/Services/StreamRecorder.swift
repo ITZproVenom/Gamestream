@@ -45,6 +45,15 @@ final class StreamRecorder: NSObject, ObservableObject {
     private var writer: AVAssetWriter?
     private var videoInput: AVAssetWriterInput?
     private var audioInput: AVAssetWriterInput?
+    /// The microphone gets its own track.
+    ///
+    /// ReplayKit delivers app audio and microphone audio as two independent
+    /// streams with their own clocks and formats. Appending both to one
+    /// input is not a mix, it is two sources fighting over one timeline: the
+    /// writer refuses the first sample that goes backwards and the whole
+    /// recording is lost. Two tracks is the only correct shape, and players
+    /// play them together.
+    private var micInput: AVAssetWriterInput?
     private var outputURL: URL?
     private var sessionStarted = false
     private var ticker: Task<Void, Never>?
@@ -102,16 +111,48 @@ final class StreamRecorder: NSObject, ObservableObject {
             audio.expectsMediaDataInRealTime = true
             if writer.canAdd(audio) { writer.add(audio) }
 
+            let wantsMicrophone = AppSettings.shared.recordMicrophone
+            if wantsMicrophone {
+                let mic = AVAssetWriterInput(mediaType: .audio, outputSettings: [
+                    AVFormatIDKey: kAudioFormatMPEG4AAC,
+                    AVNumberOfChannelsKey: 1,
+                    AVSampleRateKey: 44_100,
+                    AVEncoderBitRateKey: 64_000
+                ])
+                mic.expectsMediaDataInRealTime = true
+                if writer.canAdd(mic) {
+                    writer.add(mic)
+                    micInput = mic
+                }
+            }
+
             self.writer = writer
             videoInput = video
             audioInput = audio
             sessionStarted = false
 
-            recorder.isMicrophoneEnabled = AppSettings.shared.recordMicrophone
+            recorder.isMicrophoneEnabled = wantsMicrophone
+
+            // Writing starts before capture does. The other way round, every
+            // sample that arrives in the gap is dropped because the writer is
+            // not writing yet, and the clip begins late.
+            writer.startWriting()
 
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 recorder.startCapture { [weak self] sample, type, error in
-                    guard error == nil else { return }
+                    if let error {
+                        // Capture can be ended by the system — backgrounding,
+                        // a call, a screen recording started elsewhere. The
+                        // clip so far is worth keeping, and the state has to
+                        // stop claiming to be recording.
+                        Task { @MainActor in
+                            guard let self, self.isRecording else { return }
+                            let detail = error.localizedDescription
+                            AppLog.shared.warn("recorder", "capture ended: \(detail)")
+                            _ = await self.stop()
+                        }
+                        return
+                    }
                     self?.append(sample, of: type)
                 } completionHandler: { error in
                     if let error {
@@ -122,7 +163,6 @@ final class StreamRecorder: NSObject, ObservableObject {
                 }
             }
 
-            writer.startWriting()
             let started = Date()
             state = .recording(since: started)
             startTicking(from: started)
@@ -146,6 +186,7 @@ final class StreamRecorder: NSObject, ObservableObject {
 
         videoInput?.markAsFinished()
         audioInput?.markAsFinished()
+        micInput?.markAsFinished()
 
         guard let writer, let url = outputURL else {
             state = .idle
@@ -212,9 +253,8 @@ final class StreamRecorder: NSObject, ObservableObject {
                     audioInput?.append(sample)
                 }
             case .audioMic:
-                if AppSettings.shared.recordMicrophone,
-                   audioInput?.isReadyForMoreMediaData == true {
-                    audioInput?.append(sample)
+                if let micInput, micInput.isReadyForMoreMediaData {
+                    micInput.append(sample)
                 }
             @unknown default:
                 break
@@ -243,6 +283,7 @@ final class StreamRecorder: NSObject, ObservableObject {
         writer = nil
         videoInput = nil
         audioInput = nil
+        micInput = nil
         sessionStarted = false
         if let outputURL { try? FileManager.default.removeItem(at: outputURL) }
         outputURL = nil

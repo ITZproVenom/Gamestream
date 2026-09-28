@@ -62,6 +62,30 @@ struct StreamView: View {
                 .transition(.opacity)
             }
 
+            if stream.phase == .playing, recorder.isRecording, !showingControls {
+                VStack {
+                    HStack {
+                        Spacer()
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(.red)
+                                .frame(width: 7, height: 7)
+                                .symbolEffect(.pulse)
+                            Text(Format.clock(recorder.elapsed))
+                                .font(.caption2.weight(.semibold).monospacedDigit())
+                        }
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 6)
+                        .glassEffect(.regular, in: Capsule())
+                        .padding(.trailing, 18)
+                        .padding(.top, 10)
+                    }
+                    Spacer()
+                }
+                .allowsHitTesting(false)
+                .transition(.opacity)
+            }
+
             if let notice = stream.notice {
                 VStack {
                     Spacer()
@@ -259,13 +283,20 @@ struct StreamView: View {
             .padding(.horizontal, 16)
             .padding(.top, 12)
 
-            if showingStats {
+            if showingStats, AppSettings.shared.statsPosition == "top" {
                 statsPanel
                     .padding(.horizontal, 16)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
 
             Spacer()
+
+            if showingStats, AppSettings.shared.statsPosition != "top" {
+                statsPanel
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
     }
 
@@ -348,6 +379,10 @@ struct StreamView: View {
         .padding(16)
         .frame(maxWidth: 460, alignment: .leading)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        // The panel sits over the game, so how loud it is and how big it
+        // reads are the player's call, not ours.
+        .scaleEffect(CGFloat(AppSettings.shared.statsTextSize) / 100, anchor: .topLeading)
+        .opacity(Double(AppSettings.shared.statsOpacity) / 100)
     }
 
     private func statCell(_ value: String, _ caption: String) -> some View {

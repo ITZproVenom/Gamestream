@@ -68,7 +68,12 @@ enum StreamEnhancer {
         window.__gsEnhance = true;
 
         var config = window.__gsEnhanceConfig || {};
-        if (!config.enabled) return;
+        // Note what is *not* here: an early return when the layer is
+        // switched off. Returning meant __gsEnhanceApply was never defined,
+        // so turning the layer back on mid-session did nothing at all and
+        // said nothing about it. The hooks are always installed; every
+        // effect below asks whether it is enabled.
+        function on() { return !!config.enabled; }
 
         var report = { codecs: [], chosen: null, bitrate: null, notes: [] };
         window.__gsEnhanceReport = report;
@@ -220,7 +225,11 @@ enum StreamEnhancer {
         }
 
         function edit(sdp) {
+            if (!on()) return sdp;
             if (typeof sdp !== "string" || !sdp.length) return sdp;
+            // Fresh notes per negotiation. Accumulating them across
+            // reconnects turned the report into a transcript.
+            report.notes = [];
             var lines = sdp.split(/\r\n|\n/);
             var section = videoSection(lines);
             if (!section) return sdp;
@@ -340,15 +349,15 @@ enum StreamEnhancer {
                 // on a slow pad that is wasted work, and on a fast one the
                 // extra reads are what make input feel current, so this is a
                 // choice rather than a default.
-                var interval = config.pollingRate || 0;
+                var interval = on() ? (config.pollingRate || 0) : 0;
                 if (interval > 0 && cached) {
                     var now = Date.now();
                     if (now - lastRead < interval) return cached;
                     lastRead = now;
                 }
                 var pads = original.apply(navigator, arguments);
-                var stickCut = (config.deadzone || 0) / 100;
-                var triggerCut = (config.triggerDeadzone || 0) / 100;
+                var stickCut = on() ? (config.deadzone || 0) / 100 : 0;
+                var triggerCut = on() ? (config.triggerDeadzone || 0) / 100 : 0;
                 if (!stickCut && !triggerCut) { cached = pads; return pads; }
 
                 var shaped = [];
@@ -405,6 +414,7 @@ enum StreamEnhancer {
         ];
 
         function blocked(url) {
+            if (!on() || !config.blockTracking) return false;
             try {
                 var host = new URL(url, location.href).hostname;
                 for (var i = 0; i < BLOCKED.length; i++) {
@@ -417,7 +427,6 @@ enum StreamEnhancer {
         }
 
         function installBlocking() {
-            if (!config.blockTracking) return;
             var fetchOriginal = window.fetch;
             if (typeof fetchOriginal === "function") {
                 window.fetch = function(input) {
@@ -487,8 +496,9 @@ enum StreamEnhancer {
         /// element is an error that silences it for good.
         var amplified = null;
         var gain = null;
+        var audioContext = null;
         function applyVolume(video) {
-            var boost = (config.volumeBoost || 100) / 100;
+            var boost = on() ? (config.volumeBoost || 100) / 100 : 1;
             try {
                 if (boost <= 1.001) {
                     if (gain) gain.gain.value = 1;
@@ -497,12 +507,26 @@ enum StreamEnhancer {
                 if (amplified !== video) {
                     var Context = window.AudioContext || window.webkitAudioContext;
                     if (!Context) return;
-                    var context = new Context();
-                    var source = context.createMediaElementSource(video);
-                    gain = context.createGain();
+                    // One context for the life of the page. Building a new
+                    // one per element leaks them, and iOS allows very few.
+                    if (!audioContext) audioContext = new Context();
+                    var source = audioContext.createMediaElementSource(video);
+                    gain = audioContext.createGain();
                     source.connect(gain);
-                    gain.connect(context.destination);
+                    gain.connect(audioContext.destination);
                     amplified = video;
+                }
+                // Routing a media element through WebAudio moves its audio
+                // into the graph. A suspended graph therefore does not mean
+                // "no boost", it means silence — so the state is resumed,
+                // and resumed again on the next touch if the page had no
+                // gesture to spend yet.
+                if (audioContext && audioContext.state === "suspended") {
+                    audioContext.resume();
+                    document.addEventListener("touchend", function once() {
+                        document.removeEventListener("touchend", once);
+                        if (audioContext) audioContext.resume();
+                    });
                 }
                 if (gain) gain.gain.value = Math.min(boost, 4);
             } catch (e) {}
@@ -510,6 +534,14 @@ enum StreamEnhancer {
 
         function applyPicture() {
             var parts = [];
+            if (!on()) {
+                installSharpen(0);
+                var off = document.getElementById(STYLE_ID);
+                if (off && off.parentNode) off.parentNode.removeChild(off);
+                var element = document.querySelector("video");
+                if (element) applyVolume(element);
+                return;
+            }
             if (config.saturation && config.saturation !== 100) {
                 parts.push("saturate(" + (config.saturation / 100) + ")");
             }

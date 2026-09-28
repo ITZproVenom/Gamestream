@@ -9,9 +9,9 @@ import Foundation
 /// go of it, read where the server lives, then either negotiate media or give
 /// the session back.
 ///
-/// Nothing here decodes video. The negotiation calls exist because they are
-/// pure HTTP and can be written and reasoned about now; the WebRTC peer that
-/// would supply their payloads is separate, much larger work. Every call is
+/// Nothing here decodes video: this is the HTTP half of a session, kept apart
+/// from the peer connection that supplies the payloads its negotiation calls
+/// carry. Every call is
 /// made with the signed-in account's own token.
 ///
 /// A provisioned session occupies one of the account's cloud slots, so
@@ -207,9 +207,6 @@ actor XCloudSession {
     }
 
     // MARK: - Media negotiation
-    //
-    // Written now because it is only HTTP and is easier to get right in
-    // isolation than alongside a peer connection. Unused until there is one.
 
     /// Hands the service our SDP offer and reads back its answer.
     func exchangeOffer(_ sdp: String, on handle: Handle, token: String) async throws -> String {
@@ -305,7 +302,8 @@ actor XCloudSession {
             onProgress("Reading the server address…")
             let server = try await serverDetails(for: created, token: login.gsToken)
             lines.append("Server: \(server.summary).")
-            lines.append("Released the session. Media negotiation needs a WebRTC peer, which is not built yet.")
+            lines.append("Released the session. The native player negotiates media "
+                         + "against a session like this one.")
             return lines.joined(separator: " ")
         } catch let failure as Failure {
             return "Native session failed at \(failure.step) — \(failure.detail)."

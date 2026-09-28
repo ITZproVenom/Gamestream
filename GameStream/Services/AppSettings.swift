@@ -33,19 +33,6 @@ final class AppSettings: ObservableObject {
         case purple, blue, green, orange, pink
         var id: String { rawValue }
         var title: String { rawValue.capitalized }
-        /// The same colour as CSS needs it, for styling the in-stream menus.
-        /// Better xCloud reads its button colours from comma-separated RGB
-        /// custom properties, not from hex.
-        var rgbTriple: String {
-            switch self {
-            case .purple: return "175,82,222"
-            case .blue: return "0,122,255"
-            case .green: return "52,199,89"
-            case .orange: return "255,149,0"
-            case .pink: return "255,45,85"
-            }
-        }
-
         var color: Color {
             switch self {
             case .purple: return .purple
@@ -57,69 +44,14 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    enum Quality: String, CaseIterable, Identifiable, Sendable {
-        case auto, p720, p1080, p1080hq
-
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .auto: return "Auto"
-            case .p720: return "720p"
-            case .p1080: return "1080p"
-            case .p1080hq: return "1080p High quality"
-            }
-        }
-
-        /// The value Better xCloud expects for `stream.video.resolution`.
-        var wireValue: String {
-            switch self {
-            case .auto: return "auto"
-            case .p720: return "720p"
-            case .p1080: return "1080p"
-            case .p1080hq: return "1080p-hq"
-            }
-        }
-    }
-
-    enum Region: String, CaseIterable, Identifiable, Sendable {
-        case auto, northAmerica, europe, asia, australia
-
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .auto: return "Auto"
-            case .northAmerica: return "North America"
-            case .europe: return "Europe"
-            case .asia: return "Asia"
-            case .australia: return "Australia"
-            }
-        }
-
-        var wireValue: String {
-            switch self {
-            case .auto: return ""
-            case .northAmerica: return "us"
-            case .europe: return "eu"
-            case .asia: return "jp"
-            case .australia: return "au"
-            }
-        }
-    }
-
     private enum Key {
         static let theme = "settings.theme"
         static let accent = "settings.accent"
         static let keepAwake = "settings.keepAwake"
-        static let showActivity = "settings.showActivity"
-        static let quality = "settings.quality"
-        static let region = "settings.region"
         static let rumbleEnabled = "settings.rumbleEnabled"
         static let rumbleIntensity = "settings.rumbleIntensity"
         static let autoStart = "settings.autoStart"
         static let showStats = "settings.showStats"
-        static let matchStreamStyle = "settings.matchStreamStyle"
         static let phoneRumbleFallback = "settings.phoneRumbleFallback"
         static let autoReconnect = "settings.autoReconnect"
         static let sessionLimit = "settings.sessionLimitMinutes"
@@ -133,7 +65,6 @@ final class AppSettings: ObservableObject {
         static let sharpness = "settings.sharpness"
         static let saturation = "settings.saturation"
         static let contrast = "settings.contrast"
-        static let hideTouchControls = "settings.hideTouchControls"
         static let brightness = "settings.brightness"
         static let zoom = "settings.zoom"
         static let fillScreen = "settings.fillScreen"
@@ -168,11 +99,18 @@ final class AppSettings: ObservableObject {
     @Published var theme: Theme { didSet { store(theme.rawValue, Key.theme) } }
     @Published var accent: Accent { didSet { store(accent.rawValue, Key.accent) } }
     @Published var keepAwake: Bool { didSet { store(keepAwake, Key.keepAwake) } }
-    @Published var showActivity: Bool { didSet { store(showActivity, Key.showActivity) } }
-    @Published var quality: Quality { didSet { store(quality.rawValue, Key.quality) } }
-    @Published var region: Region { didSet { store(region.rawValue, Key.region) } }
-    @Published var rumbleEnabled: Bool { didSet { store(rumbleEnabled, Key.rumbleEnabled) } }
-    @Published var rumbleIntensity: Float { didSet { store(Double(rumbleIntensity), Key.rumbleIntensity) } }
+    @Published var rumbleEnabled: Bool {
+        didSet {
+            store(rumbleEnabled, Key.rumbleEnabled)
+            ControllerRumble.shared.settingsChanged()
+        }
+    }
+    @Published var rumbleIntensity: Float {
+        didSet {
+            store(Double(rumbleIntensity), Key.rumbleIntensity)
+            ControllerRumble.shared.syncPage()
+        }
+    }
     @Published var autoStart: Bool { didSet { store(autoStart, Key.autoStart) } }
     @Published var showStreamStats: Bool { didSet { store(showStreamStats, Key.showStats) } }
     /// Vibrate the phone when no controller route can rumble.
@@ -182,8 +120,6 @@ final class AppSettings: ObservableObject {
             ControllerRumble.shared.settingsChanged()
         }
     }
-    /// Restyle the streaming enhancement's own web menus to match the app.
-    @Published var matchStreamStyle: Bool { didSet { store(matchStreamStyle, Key.matchStreamStyle) } }
     /// Rejoin automatically when the stream drops rather than stranding the
     /// player on an error screen.
     @Published var autoReconnect: Bool { didSet { store(autoReconnect, Key.autoReconnect) } }
@@ -207,9 +143,6 @@ final class AppSettings: ObservableObject {
     @Published var sharpness: Int { didSet { store(sharpness, Key.sharpness) } }
     @Published var saturation: Int { didSet { store(saturation, Key.saturation) } }
     @Published var contrast: Int { didSet { store(contrast, Key.contrast) } }
-    @Published var hideTouchControls: Bool {
-        didSet { store(hideTouchControls, Key.hideTouchControls) }
-    }
     @Published var brightness: Int { didSet { store(brightness, Key.brightness) } }
     @Published var zoom: Int { didSet { store(zoom, Key.zoom) } }
     @Published var fillScreen: Bool { didSet { store(fillScreen, Key.fillScreen) } }
@@ -267,16 +200,13 @@ final class AppSettings: ObservableObject {
         theme = Theme(rawValue: defaults.string(forKey: Key.theme) ?? "") ?? .system
         accent = Accent(rawValue: defaults.string(forKey: Key.accent) ?? "") ?? .purple
         keepAwake = defaults.object(forKey: Key.keepAwake) as? Bool ?? true
-        showActivity = defaults.object(forKey: Key.showActivity) as? Bool ?? true
-        quality = Quality(rawValue: defaults.string(forKey: Key.quality) ?? "") ?? .auto
-        region = Region(rawValue: defaults.string(forKey: Key.region) ?? "") ?? .auto
         rumbleEnabled = defaults.object(forKey: Key.rumbleEnabled) as? Bool ?? true
         rumbleIntensity = Float(defaults.object(forKey: Key.rumbleIntensity) as? Double ?? 1.6)
         autoStart = defaults.object(forKey: Key.autoStart) as? Bool ?? true
         showStreamStats = defaults.object(forKey: Key.showStats) as? Bool ?? false
-        matchStreamStyle = defaults.object(forKey: Key.matchStreamStyle) as? Bool ?? true
-        // Off by default. It is a consolation prize for hardware iOS cannot
-        // drive, not something to hand to someone who plays on a pad.
+        // On by default. A pad that reports haptics iOS cannot actually
+        // drive is common enough that silence is the wrong default; the
+        // phone buzzing at least tells the truth about what happened.
         phoneRumbleFallback = defaults.object(forKey: Key.phoneRumbleFallback) as? Bool ?? true
         autoReconnect = defaults.object(forKey: Key.autoReconnect) as? Bool ?? true
         sessionLimitMinutes = defaults.object(forKey: Key.sessionLimit) as? Int ?? 0
@@ -290,7 +220,6 @@ final class AppSettings: ObservableObject {
         sharpness = defaults.object(forKey: Key.sharpness) as? Int ?? 0
         saturation = defaults.object(forKey: Key.saturation) as? Int ?? 100
         contrast = defaults.object(forKey: Key.contrast) as? Int ?? 100
-        hideTouchControls = defaults.object(forKey: Key.hideTouchControls) as? Bool ?? true
         brightness = defaults.object(forKey: Key.brightness) as? Int ?? 100
         zoom = defaults.object(forKey: Key.zoom) as? Int ?? 100
         fillScreen = defaults.object(forKey: Key.fillScreen) as? Bool ?? false
@@ -321,16 +250,6 @@ final class AppSettings: ObservableObject {
         recordMicrophone = defaults.object(forKey: Key.recordMicrophone) as? Bool ?? false
         recordingLimitMinutes = defaults.object(forKey: Key.recordingLimit) as? Int ?? 10
     }
-
-    /// The preferences handed to Better xCloud before it boots.
-    ///
-    /// The script keeps two stores, not one: global settings in
-    /// `BetterXcloud` and per-stream settings in `BetterXcloud.Stream`. Every
-    /// value below went into the global blob, so the stream-scoped ones were
-    /// silently ignored and the script ran on its defaults — which is why its
-    /// own statistics bar kept appearing over ours.
-
-    /// Settings the script scopes to a stream.
 
     private func store(_ value: Any, _ key: String) {
         defaults.set(value, forKey: key)
