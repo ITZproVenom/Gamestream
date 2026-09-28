@@ -11,15 +11,19 @@ import WebRTC
 /// frames on every reconnect.
 struct NativeVideoView: UIViewRepresentable {
     let track: RTCVideoTrack?
+    /// "Fill the screen" is a picture setting, and the native path has to
+    /// honour it too or the same switch means different things in the two
+    /// players.
+    let fills: Bool
 
     func makeUIView(context: Context) -> RTCMTLVideoView {
         let view = RTCMTLVideoView()
-        view.videoContentMode = .scaleAspectFit
         view.backgroundColor = .black
         return view
     }
 
     func updateUIView(_ view: RTCMTLVideoView, context: Context) {
+        view.videoContentMode = fills ? .scaleAspectFill : .scaleAspectFit
         if context.coordinator.attached !== track {
             context.coordinator.attached?.remove(view)
             track?.add(view)
@@ -56,11 +60,13 @@ struct NativeStreamView: View {
     /// closing itself.
     @State private var failure: String?
     @State private var steps: [String] = []
+    @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            NativeVideoView(track: peer.videoTrack).ignoresSafeArea()
+            NativeVideoView(track: peer.videoTrack, fills: settings.fillScreen)
+                .ignoresSafeArea()
 
             if let failure {
                 VStack(alignment: .leading, spacing: 14) {
@@ -128,6 +134,18 @@ struct NativeStreamView: View {
                 }
                 .padding()
                 Spacer()
+                // Said plainly, because a stream you cannot play looks like
+                // a broken stream rather than an unfinished one.
+                if peer.videoTrack != nil {
+                    Text("Video only for now: this path does not send controller "
+                         + "input yet. Use Play for a playable stream.")
+                        .font(.caption)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .padding(.bottom, 18)
+                }
             }
         }
         .task { await start() }
@@ -194,9 +212,17 @@ struct NativeStreamView: View {
             token = login.gsToken
             note("Token obtained; \(login.regions.count) region(s)")
 
-            note("Asking for a session for \(game.id)")
+            // A game page carries a store ProductId. The cloud service asks
+            // for sessions by its own title id, so the two have to be
+            // related before anything can be provisioned.
+            note("Looking up the cloud title for \(game.id)")
+            let title = try await XCloudSession.shared.titleInfo(productId: game.id,
+                                                                 login: login)
+            note("Asking for a session for \(title.name ?? title.titleId)")
+            let osName = XCloudSession.osName(forResolution: AppSettings.shared.resolutionPref)
             let handle = try await XCloudSession.shared.provision(login: login,
-                                                                  titleId: game.id)
+                                                                  titleId: title.titleId,
+                                                                  osName: osName)
             session = handle
             note("Session granted at \(handle.path)")
 

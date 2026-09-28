@@ -63,6 +63,10 @@ final class NativeStreamPeer: NSObject, ObservableObject {
     // MARK: - Connecting
 
     func connect(handle: XCloudSession.Handle, token: String) async {
+        // A retry asks the same object to connect again. Without this, the
+        // previous peer connection stays alive and keeps gathering into the
+        // same candidate list.
+        if connection != nil { close() }
         self.handle = handle
         self.token = token
         state = .negotiating("Building the connection")
@@ -119,8 +123,10 @@ final class NativeStreamPeer: NSObject, ObservableObject {
             state = .negotiating("Trading candidates")
             try await exchangeCandidates(on: peer)
         } catch let failure as XCloudSession.Failure {
+            AppLog.shared.error("native", "negotiation failed: \(failure.errorDescription ?? "?")")
             state = .failed(failure.errorDescription ?? "negotiation failed")
         } catch {
+            AppLog.shared.error("native", "negotiation failed: \(error.localizedDescription)")
             state = .failed(error.localizedDescription)
         }
     }
@@ -145,21 +151,32 @@ final class NativeStreamPeer: NSObject, ObservableObject {
         // first only costs another round trip.
         try? await Task.sleep(nanoseconds: 700_000_000)
 
-        let mine = pendingCandidates.map { candidate -> [String: Any] in
+        let mine = Self.payload(for: pendingCandidates)
+        exchangedCandidates = pendingCandidates.count
+        AppLog.shared.debug("native", "handing over \(mine.count) candidate(s)")
+        let response = try await XCloudSession.shared.exchangeCandidates(
+            mine, on: handle, token: token
+        )
+        await add(Self.candidates(fromExchange: response), to: peer)
+        startTrickling(on: peer)
+    }
+
+    private func add(_ candidates: [RTCIceCandidate], to peer: RTCPeerConnection) async {
+        guard !candidates.isEmpty else { return }
+        AppLog.shared.debug("native", "adding \(candidates.count) server candidate(s)")
+        for candidate in candidates {
+            try? await peer.add(candidate)
+        }
+    }
+
+    private static func payload(for candidates: some Sequence<RTCIceCandidate>) -> [[String: Any]] {
+        candidates.map { candidate in
             [
                 "candidate": candidate.sdp,
                 "sdpMLineIndex": candidate.sdpMLineIndex,
                 "sdpMid": candidate.sdpMid ?? "0"
             ]
         }
-        exchangedCandidates = mine.count
-        let response = try await XCloudSession.shared.exchangeCandidates(
-            mine, on: handle, token: token
-        )
-        for candidate in Self.candidates(fromExchange: response) {
-            try? await peer.add(candidate)
-        }
-        startTrickling(on: peer)
     }
 
     /// Keeps handing over candidates as they are found, for as long as the
@@ -173,21 +190,17 @@ final class NativeStreamPeer: NSObject, ObservableObject {
                 if self.state == .connected { return }
                 guard let handle = self.handle, let token = self.token else { return }
                 let fresh = self.pendingCandidates.dropFirst(self.exchangedCandidates)
-                guard !fresh.isEmpty else { continue }
                 self.exchangedCandidates = self.pendingCandidates.count
-                let payload = fresh.map { candidate -> [String: Any] in
-                    [
-                        "candidate": candidate.sdp,
-                        "sdpMLineIndex": candidate.sdpMLineIndex,
-                        "sdpMid": candidate.sdpMid ?? "0"
-                    ]
-                }
+                // An empty hand-over is still worth making: the exchange is
+                // how the server's own later candidates are collected, and
+                // it has no other way to reach us. Only sending when we have
+                // something new means never learning about the relay address
+                // the server found second.
+                let payload = Self.payload(for: fresh)
                 guard let response = try? await XCloudSession.shared.exchangeCandidates(
                     payload, on: handle, token: token
                 ) else { continue }
-                for candidate in Self.candidates(fromExchange: response) {
-                    try? await peer.add(candidate)
-                }
+                await self.add(Self.candidates(fromExchange: response), to: peer)
             }
         }
     }
@@ -233,10 +246,19 @@ final class NativeStreamPeer: NSObject, ObservableObject {
             return sdp
         }
         let kbps = limit * 1000
-        if let existing = lines[(videoIndex + 1)...].firstIndex(where: { $0.hasPrefix("b=AS:") }) {
+        // SDP fixes the order inside a media section: a bandwidth line has
+        // to follow the connection line, not precede it. Put in the wrong
+        // place the whole description can be rejected, which reads as a
+        // negotiation that failed for no reason.
+        let end = lines[(videoIndex + 1)...].firstIndex(where: { $0.hasPrefix("m=") })
+            ?? lines.endIndex
+        let section = (videoIndex + 1)..<end
+        if let existing = lines[section].firstIndex(where: { $0.hasPrefix("b=AS:") }) {
             lines[existing] = "b=AS:\(kbps)"
         } else {
-            lines.insert("b=AS:\(kbps)", at: videoIndex + 1)
+            let afterConnection = lines[section].lastIndex(where: { $0.hasPrefix("c=") })
+                .map { $0 + 1 }
+            lines.insert("b=AS:\(kbps)", at: afterConnection ?? (videoIndex + 1))
         }
         return lines.joined(separator: "\r\n")
     }
@@ -292,19 +314,29 @@ final class NativeStreamPeer: NSObject, ObservableObject {
 extension NativeStreamPeer: RTCPeerConnectionDelegate {
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection,
                                     didGenerate candidate: RTCIceCandidate) {
-        Task { @MainActor in pendingCandidates.append(candidate) }
+        Task { @MainActor in
+            guard connection != nil else { return }
+            pendingCandidates.append(candidate)
+        }
     }
 
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection,
                                     didAdd receiver: RTCRtpReceiver,
                                     streams: [RTCMediaStream]) {
         guard let track = receiver.track as? RTCVideoTrack else { return }
-        Task { @MainActor in videoTrack = track }
+        Task { @MainActor in
+            AppLog.shared.info("native", "video track arrived")
+            videoTrack = track
+        }
     }
 
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection,
                                     didChange newState: RTCIceConnectionState) {
         Task { @MainActor in
+            // A closed connection still delivers a last state or two. Acting
+            // on them puts a torn-down peer back into "Reconnecting".
+            guard connection != nil else { return }
+            AppLog.shared.debug("native", "ice state \(newState.rawValue)")
             switch newState {
             case .connected, .completed:
                 state = .connected
@@ -326,8 +358,10 @@ extension NativeStreamPeer: RTCPeerConnectionDelegate {
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection,
                                     didOpen dataChannel: RTCDataChannel) {
         Task { @MainActor in
+            AppLog.shared.debug("native", "channel '\(dataChannel.label)' opened by the server")
             dataChannel.delegate = self
             if dataChannel.label == "input" { inputChannel = dataChannel }
+            if dataChannel.label == "control" { controlChannel = dataChannel }
         }
     }
 
@@ -339,7 +373,11 @@ extension NativeStreamPeer: RTCPeerConnectionDelegate {
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection,
                                     didRemove stream: RTCMediaStream) {}
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection,
-                                    didChange newState: RTCIceGatheringState) {}
+                                    didChange newState: RTCIceGatheringState) {
+        Task { @MainActor in
+            AppLog.shared.debug("native", "ice gathering \(newState.rawValue)")
+        }
+    }
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection,
                                     didRemove candidates: [RTCIceCandidate]) {}
 }

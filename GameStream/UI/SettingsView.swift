@@ -568,7 +568,7 @@ struct SettingsView: View {
                         let login = try await XCloudAPI.shared.login(xstsToken: token)
                         sessionProbe = await XCloudSession.shared.probe(
                             login: login,
-                            titleId: game.id
+                            productId: game.id
                         ) { progress in
                             Task { @MainActor in sessionProbe = progress }
                         }
