@@ -882,14 +882,148 @@ enum WebScripts {
             };
         }
 
+        /// Collects several consecutive frames and makes one image out of
+        /// them.
+        ///
+        /// The bitrate cannot be raised on demand -- the encoder is on the
+        /// server and decides for itself -- but the picture is not equally
+        /// bad in every frame. Two things are true of a heavily compressed
+        /// stream, and both can be used:
+        ///
+        ///  * On a scene that is holding still, the encoder keeps refining
+        ///    the same picture, and the quantisation noise it leaves is
+        ///    different in each frame. Averaging several frames of the same
+        ///    still scene cancels much of that noise and recovers real
+        ///    detail. This is the only genuine quality gain available here.
+        ///  * On a scene that is moving, averaging would smear it, so the
+        ///    sharpest single frame is used instead. Frames right after a
+        ///    keyframe carry far more detail than the ones between, and
+        ///    sharpness is a good proxy for catching one.
+        ///
+        /// Which of the two applies is decided by measuring how much the
+        /// frames actually differ, not by asking the user.
+        function stack(video, frames) {
+            var width = video.videoWidth;
+            var height = video.videoHeight;
+            if (!frames.length) return null;
+
+            // Cheap motion measure on a coarse grid: full-resolution
+            // comparison of several 1080p frames is far too slow here.
+            var step = Math.max(1, Math.floor(width / 160)) * 4;
+            var moved = 0;
+            var first = frames[0];
+            for (var f = 1; f < frames.length; f++) {
+                var other = frames[f];
+                var total = 0;
+                var samples = 0;
+                for (var i = 0; i < first.length; i += step) {
+                    total += Math.abs(first[i] - other[i]);
+                    samples++;
+                }
+                if (samples) moved = Math.max(moved, total / samples);
+            }
+
+            var canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            var context = canvas.getContext("2d", { alpha: false });
+            var output = context.createImageData(width, height);
+            var out = output.data;
+
+            // Roughly a tenth of a level of average movement. Above this the
+            // scene is not still and averaging would ghost.
+            if (moved > 2.5) {
+                var sharpest = 0;
+                var best = -1;
+                for (var g = 0; g < frames.length; g++) {
+                    var data = frames[g];
+                    var energy = 0;
+                    for (var p = 4; p < data.length - 4; p += step) {
+                        var d = data[p] - data[p - 4];
+                        energy += d * d;
+                    }
+                    if (energy > best) { best = energy; sharpest = g; }
+                }
+                out.set(frames[sharpest]);
+                context.putImageData(output, 0, 0);
+                return {
+                    data: canvas.toDataURL("image/png"),
+                    width: width,
+                    height: height,
+                    method: "sharpest of " + frames.length
+                };
+            }
+
+            var count = frames.length;
+            for (var q = 0; q < out.length; q += 4) {
+                var r = 0, g2 = 0, b = 0;
+                for (var k = 0; k < count; k++) {
+                    var frame = frames[k];
+                    r += frame[q];
+                    g2 += frame[q + 1];
+                    b += frame[q + 2];
+                }
+                out[q] = r / count;
+                out[q + 1] = g2 / count;
+                out[q + 2] = b / count;
+                out[q + 3] = 255;
+            }
+            context.putImageData(output, 0, 0);
+            return {
+                data: canvas.toDataURL("image/png"),
+                width: width,
+                height: height,
+                method: "averaged " + count + " still frames"
+            };
+        }
+
+        /// Grabs `count` presented frames in a row, then stacks them.
+        function captureStacked(video, count, resolve) {
+            var reader = document.createElement("canvas");
+            reader.width = video.videoWidth;
+            reader.height = video.videoHeight;
+            var context = reader.getContext("2d", { alpha: false, willReadFrequently: true });
+            var frames = [];
+
+            function next() {
+                if (frames.length >= count) {
+                    try {
+                        resolve(stack(video, frames) || { error: "nothing was captured" });
+                    } catch (e) {
+                        resolve({ error: String(e) });
+                    }
+                    return;
+                }
+                try {
+                    context.drawImage(video, 0, 0, reader.width, reader.height);
+                    frames.push(context.getImageData(0, 0, reader.width, reader.height).data);
+                } catch (e) {
+                    resolve({ error: String(e) });
+                    return;
+                }
+                if (typeof video.requestVideoFrameCallback === "function") {
+                    video.requestVideoFrameCallback(next);
+                } else {
+                    setTimeout(next, 20);
+                }
+            }
+            next();
+        }
+
         /// Resolves with the next presented frame where possible, so the
         /// capture is a real frame rather than whatever the element happens
         /// to be holding between them.
-        window.__gsCapture = function() {
+        window.__gsCapture = function(options) {
             return new Promise(function(resolve) {
                 var video = biggestVideo();
                 if (!video) {
                     resolve({ error: "no video is playing" });
+                    return;
+                }
+
+                var stackFrames = options && options.stack ? options.stack : 0;
+                if (stackFrames > 1) {
+                    captureStacked(video, Math.min(stackFrames, 8), resolve);
                     return;
                 }
 

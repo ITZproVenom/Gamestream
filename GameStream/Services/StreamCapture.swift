@@ -18,14 +18,16 @@ import WebKit
 @MainActor
 enum StreamCapture {
     enum Outcome {
-        case saved(width: Int, height: Int)
+        case saved(width: Int, height: Int, method: String)
         case denied
         case failed(String)
 
         var message: String {
             switch self {
-            case .saved(let width, let height):
-                return "Saved to Photos at \(width)×\(height)."
+            case .saved(let width, let height, let method):
+                return method.isEmpty
+                    ? "Saved to Photos at \(width)×\(height)."
+                    : "Saved to Photos at \(width)×\(height) — \(method)."
             case .denied:
                 return "GameStream cannot add to Photos. Allow it in iOS Settings."
             case .failed(let reason):
@@ -40,7 +42,7 @@ enum StreamCapture {
         }
 
         guard let payload = await XboxWebView.Registry.shared
-            .evaluateAsync("return await window.__gsCapture();") as? [String: Any] else {
+            .evaluateAsync("return await window.__gsCapture({ stack: 6 });") as? [String: Any] else {
             return .failed("the page did not return a frame")
         }
         if let error = payload["error"] as? String { return .failed(error) }
@@ -68,7 +70,8 @@ enum StreamCapture {
                 request.addResource(with: .photo, data: data, options: nil)
             }
             AppLog.shared.info("capture", "saved a \(width)×\(height) frame")
-            return .saved(width: width, height: height)
+            return .saved(width: width, height: height,
+                          method: payload["method"] as? String ?? "")
         } catch {
             return .failed(error.localizedDescription)
         }
