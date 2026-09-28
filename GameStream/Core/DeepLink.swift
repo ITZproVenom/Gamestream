@@ -41,7 +41,7 @@ enum DeepLink {
     /// Resolves an identifier the way a person would mean it: exact product
     /// ID first, then slug, then a title match.
     static func game(for identifier: String, in catalog: Catalog) -> Game? {
-        let all = catalog.allGames
+        let all = catalog.games
         if let exact = all.first(where: { $0.matches(id: identifier) }) { return exact }
         if let slug = all.first(where: { $0.slug.caseInsensitiveCompare(identifier) == .orderedSame }) {
             return slug
