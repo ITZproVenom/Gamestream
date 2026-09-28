@@ -50,13 +50,55 @@ struct NativeStreamView: View {
     @State private var session: XCloudSession.Handle?
     @State private var token: String?
     @State private var heartbeat: Task<Void, Never>?
+    /// Set when a step fails. The view stays up so the reason can be read:
+    /// dismissing on failure meant the message was written and thrown away
+    /// in the same breath, and every failure looked like the screen simply
+    /// closing itself.
+    @State private var failure: String?
+    @State private var steps: [String] = []
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             NativeVideoView(track: peer.videoTrack).ignoresSafeArea()
 
-            if peer.videoTrack == nil {
+            if let failure {
+                VStack(alignment: .leading, spacing: 14) {
+                    Label("The native stream could not start", systemImage: "bolt.slash.fill")
+                        .font(.headline)
+                    Text(failure)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+
+                    if !steps.isEmpty {
+                        Text("How far it got")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Text(steps.joined(separator: "\n"))
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+
+                    HStack(spacing: 12) {
+                        Button("Try again") {
+                            Task { await retry() }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        Button("Exit") {
+                            Task { await stop() }
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .padding(.top, 2)
+                }
+                .padding(22)
+                .frame(maxWidth: 460, alignment: .leading)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+                .padding(24)
+            } else if peer.videoTrack == nil {
                 VStack(spacing: 12) {
                     ProgressView()
                     Text(status)
@@ -98,43 +140,78 @@ struct NativeStreamView: View {
             switch value {
             case .negotiating(let step): status = step
             case .connected: status = "Connected"
-            case .failed(let reason): status = "Failed: \(reason)"
+            case .failed(let reason):
+                status = "Failed: \(reason)"
+                Task { await fail(reason) }
             case .closed: status = "Closed"
             case .idle: status = "Starting"
             }
         }
     }
 
+    /// Records each step, so a failure says how far it got rather than only
+    /// what broke.
+    @MainActor
+    private func note(_ step: String) {
+        status = step
+        steps.append(step)
+        AppLog.shared.info("native", step)
+    }
+
+    private func retry() async {
+        failure = nil
+        steps = []
+        await start()
+    }
+
+    private func fail(_ reason: String) async {
+        AppLog.shared.error("native", reason)
+        failure = reason
+        heartbeat?.cancel()
+        heartbeat = nil
+        peer.close()
+        // The session is given back even though the screen stays up: a
+        // failed attempt must not sit on one of the account's slots while
+        // the reason is being read.
+        if let session, let token {
+            _ = await XCloudSession.shared.release(session, token: token)
+        }
+        session = nil
+    }
+
     private func start() async {
         guard let xsts = auth.xstsToken else {
-            status = "Sign in first"
+            await fail("No cloud-gaming token is available. Sign in on the Xbox "
+                       + "page first, then try again.")
             return
         }
         // Nothing else keeps the screen on in this path, and a stream that
         // dims out after thirty seconds is not a stream.
         UIApplication.shared.isIdleTimerDisabled = true
         do {
-            status = "Signing in to the cloud service"
+            note("Signing in to the cloud service")
             let login = try await XCloudAPI.shared.login(xstsToken: xsts)
             token = login.gsToken
+            note("Token obtained; \(login.regions.count) region(s)")
 
-            status = "Asking for a session"
+            note("Asking for a session for \(game.id)")
             let handle = try await XCloudSession.shared.provision(login: login,
                                                                   titleId: game.id)
             session = handle
+            note("Session granted at \(handle.path)")
 
-            status = "Waiting for a server"
+            note("Waiting for a server")
             _ = try await XCloudSession.shared.waitUntilReady(handle, token: login.gsToken) { state in
                 Task { @MainActor in
-                    status = state.queuePosition.map { "Queued at position \($0)" } ?? state.raw
+                    note(state.queuePosition.map { "Queued at position \($0)" } ?? state.raw)
                 }
             }
 
             startHeartbeat(handle: handle, token: login.gsToken)
+            note("Negotiating media")
             await peer.connect(handle: handle, token: login.gsToken)
         } catch {
-            status = "Failed: \(error.localizedDescription)"
-            await stop()
+            await fail(error.localizedDescription)
         }
     }
 
