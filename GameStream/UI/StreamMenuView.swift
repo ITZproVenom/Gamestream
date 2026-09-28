@@ -16,6 +16,7 @@ struct StreamMenuView: View {
     @Environment(\.dismiss) private var dismiss
 
     enum Tab: String, CaseIterable, Identifiable {
+        case presets = "Presets"
         case picture = "Picture"
         case quality = "Quality"
         case audio = "Audio"
@@ -27,6 +28,7 @@ struct StreamMenuView: View {
 
         var icon: String {
             switch self {
+            case .presets: return "square.stack.3d.up.fill"
             case .picture: return "slider.horizontal.below.rectangle"
             case .quality: return "antenna.radiowaves.left.and.right"
             case .audio: return "speaker.wave.2.fill"
@@ -37,7 +39,9 @@ struct StreamMenuView: View {
         }
     }
 
-    @State private var tab: Tab = .picture
+    @State private var tab: Tab = .presets
+    @StateObject private var profiles = StreamProfiles.shared
+    @State private var savedNotice = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -46,6 +50,7 @@ struct StreamMenuView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     switch tab {
+                    case .presets: presetsTab
                     case .picture: picture
                     case .quality: quality
                     case .audio: audio
@@ -106,6 +111,83 @@ struct StreamMenuView: View {
             }
         }
         .padding(18)
+    }
+
+    // MARK: - Presets and profiles
+
+    private var presetsTab: some View {
+        Group {
+            Text("Presets").font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            ForEach(StreamPreset.allCases) { preset in
+                Button {
+                    profiles.apply(preset.profile)
+                    apply()
+                } label: {
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: preset.icon)
+                            .font(.title3)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(preset.title).font(.subheadline.weight(.semibold))
+                            Text(preset.detail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.leading)
+                        }
+                        Spacer()
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                }
+                .buttonStyle(.plain)
+            }
+
+            Divider().opacity(0.3)
+
+            Text("This game").font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let game = stream.game {
+                caption(profiles.has(game.id)
+                        ? "\(game.title) has its own saved settings, applied every time "
+                          + "it starts."
+                        : "\(game.title) uses the settings above. Save them here and they "
+                          + "come back with this game and nothing else.")
+
+                HStack(spacing: 10) {
+                    Button {
+                        profiles.save(profiles.capture(), for: game.id)
+                        savedNotice = true
+                    } label: {
+                        Label(savedNotice ? "Saved" : "Save for this game",
+                              systemImage: savedNotice ? "checkmark" : "square.and.arrow.down")
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    if profiles.has(game.id) {
+                        Button(role: .destructive) {
+                            profiles.clear(game.id)
+                            savedNotice = false
+                        } label: {
+                            Label("Forget", systemImage: "trash")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+            } else {
+                caption("Start a game to save settings against it.")
+            }
+
+            if !profiles.profiles.isEmpty {
+                Divider().opacity(0.3)
+                caption("\(profiles.profiles.count) game"
+                        + (profiles.profiles.count == 1 ? "" : "s")
+                        + " with saved settings.")
+            }
+        }
     }
 
     // MARK: - Picture

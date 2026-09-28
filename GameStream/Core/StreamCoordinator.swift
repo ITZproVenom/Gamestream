@@ -102,6 +102,9 @@ final class StreamCoordinator: ObservableObject {
     // MARK: - Session control
 
     func play(_ game: Game) {
+        // Before anything is built, so the page is created with the settings
+        // this game is meant to run with rather than corrected afterwards.
+        StreamProfiles.shared.applyProfile(for: game.id)
         guard XboxAuth.shared.state.isSignedIn else {
             log.warn("stream", "refused to launch \(game.title): not signed in")
             phase = .failed("Sign in to your Microsoft account before starting a game.")
