@@ -63,10 +63,6 @@ struct StreamView: View {
             withAnimation(.smooth(duration: 0.25)) { showingControls.toggle() }
             if showingControls { scheduleHide() }
         }
-        .onChange(of: stream.overlayRequest) { _, _ in
-            withAnimation(.smooth(duration: 0.25)) { showingControls = true }
-            scheduleHide()
-        }
         .onChange(of: stream.phase) { _, phase in
             if phase == .playing {
                 startedAt = Date()

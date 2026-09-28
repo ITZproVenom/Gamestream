@@ -126,7 +126,6 @@ final class AppSettings: ObservableObject {
         static let thermalGuard = "settings.thermalGuard"
         static let batteryGuard = "settings.batteryGuard"
         static let adaptiveQuality = "settings.adaptiveQuality"
-        static let controllerShortcuts = "settings.controllerShortcuts"
         static let preflightCheck = "settings.preflightCheck"
     }
 
@@ -158,7 +157,6 @@ final class AppSettings: ObservableObject {
     @Published var batteryGuard: Bool { didSet { store(batteryGuard, Key.batteryGuard) } }
     /// Drop the resolution by itself when the connection cannot hold it.
     @Published var adaptiveQuality: Bool { didSet { store(adaptiveQuality, Key.adaptiveQuality) } }
-    @Published var controllerShortcuts: Bool { didSet { store(controllerShortcuts, Key.controllerShortcuts) } }
     /// Measure the connection before a game starts.
     @Published var preflightCheck: Bool { didSet { store(preflightCheck, Key.preflightCheck) } }
 
@@ -185,7 +183,6 @@ final class AppSettings: ObservableObject {
         thermalGuard = defaults.object(forKey: Key.thermalGuard) as? Bool ?? true
         batteryGuard = defaults.object(forKey: Key.batteryGuard) as? Bool ?? true
         adaptiveQuality = defaults.object(forKey: Key.adaptiveQuality) as? Bool ?? true
-        controllerShortcuts = defaults.object(forKey: Key.controllerShortcuts) as? Bool ?? true
         preflightCheck = defaults.object(forKey: Key.preflightCheck) as? Bool ?? true
     }
 

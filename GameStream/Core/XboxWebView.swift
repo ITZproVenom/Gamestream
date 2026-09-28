@@ -76,6 +76,13 @@ struct XboxWebView: UIViewRepresentable {
             }
         }
 
+        /// Awaits an async snippet and hands back its resolved value.
+        func evaluateAsync(_ javaScript: String) async -> Any? {
+            guard let view = streamView else { return nil }
+            return try? await view.callAsyncJavaScript(javaScript,
+                                                       contentWorld: .page)
+        }
+
         /// Ends the session for real.
         ///
         /// Because the player webview is deliberately kept alive between
@@ -212,7 +219,7 @@ struct XboxWebView: UIViewRepresentable {
 
         for source in [WebScripts.streamStateJS, WebScripts.streamChromeJS,
                        WebScripts.streamStatsJS, WebScripts.streamCommandsJS,
-                       WebScripts.autoStartJS] {
+                       WebScripts.captureJS, WebScripts.autoStartJS] {
             controller.addUserScript(WKUserScript(source: source,
                                                   injectionTime: .atDocumentEnd,
                                                   forMainFrameOnly: true))

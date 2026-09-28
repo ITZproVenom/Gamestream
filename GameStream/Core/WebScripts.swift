@@ -759,6 +759,89 @@ enum WebScripts {
     })();
     """#
 
+    /// Captures the decoded video frame itself, at its own resolution.
+    ///
+    /// Snapshotting the web view returns what the phone is showing: the frame
+    /// scaled down to a few hundred points, with the touch controls, the
+    /// site's HUD and any overlay drawn on top. Reading the `<video>` element
+    /// into a canvas returns the frame the decoder produced — 1920x1080 when
+    /// that is what is being streamed — with nothing over it.
+    ///
+    /// WebRTC video does not taint a canvas, so the pixels can be read back.
+    static let captureJS = #"""
+    (function() {
+        if (window.__gsCapture) return;
+
+        function biggestVideo() {
+            var videos = document.querySelectorAll("video");
+            var best = null;
+            for (var i = 0; i < videos.length; i++) {
+                var v = videos[i];
+                if (!v.videoWidth || !v.videoHeight) continue;
+                if (!best || v.videoWidth * v.videoHeight > best.videoWidth * best.videoHeight) {
+                    best = v;
+                }
+            }
+            return best;
+        }
+
+        function grab(video) {
+            var canvas = document.createElement("canvas");
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            var context = canvas.getContext("2d", { alpha: false });
+            context.imageSmoothingEnabled = false;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            // PNG: the frame has already been through one lossy encoder on
+            // the way here, and adding a second one for no reason would be
+            // the only avoidable quality loss in the whole path.
+            return {
+                data: canvas.toDataURL("image/png"),
+                width: canvas.width,
+                height: canvas.height
+            };
+        }
+
+        /// Resolves with the next presented frame where possible, so the
+        /// capture is a real frame rather than whatever the element happens
+        /// to be holding between them.
+        window.__gsCapture = function() {
+            return new Promise(function(resolve) {
+                var video = biggestVideo();
+                if (!video) {
+                    resolve({ error: "no video is playing" });
+                    return;
+                }
+
+                function done() {
+                    try {
+                        resolve(grab(video));
+                    } catch (e) {
+                        resolve({ error: String(e) });
+                    }
+                }
+
+                if (typeof video.requestVideoFrameCallback === "function") {
+                    var settled = false;
+                    video.requestVideoFrameCallback(function() {
+                        if (settled) return;
+                        settled = true;
+                        done();
+                    });
+                    // Do not hang if the stream is paused or stalled.
+                    setTimeout(function() {
+                        if (settled) return;
+                        settled = true;
+                        done();
+                    }, 250);
+                } else {
+                    done();
+                }
+            });
+        };
+    })();
+    """#
+
     /// Presses the site's own Play button on a launch page.
     ///
     /// 1.x clicked anything labelled "play", "ok", "continue" or "start"

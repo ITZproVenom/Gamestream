@@ -352,14 +352,6 @@ struct SettingsView: View {
             SettingsDivider()
 
             Toggle("Warn on low battery", isOn: $settings.batteryGuard)
-            SettingsDivider()
-
-            Toggle("Controller shortcuts", isOn: $settings.controllerShortcuts)
-            Text("Hold both shoulder buttons with View for the overlay, Menu for "
-                 + "the Xbox guide, A for the enhancement menu, Y for statistics.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

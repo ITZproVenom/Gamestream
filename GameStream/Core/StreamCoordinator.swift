@@ -80,8 +80,7 @@ final class StreamCoordinator: ObservableObject {
     private var bitrateTotal = 0
     private var poorSince: Date?
     private var reducedQuality = false
-    /// Set when a controller chord asks the interface to show itself.
-    @Published var overlayRequest = 0
+
     @Published private(set) var resolution: String = ""
     /// Bumping this asks the player's webview to reload the launch page.
     @Published private(set) var reloadToken = 0
@@ -201,9 +200,6 @@ final class StreamCoordinator: ObservableObject {
             await MainActor.run { self?.exit() }
         }
     }
-
-    /// Asked for by a controller chord.
-    func requestOverlay() { overlayRequest &+= 1 }
 
     /// Steps the stream down a resolution, once per session.
     func reduceQuality(reason: String) {
