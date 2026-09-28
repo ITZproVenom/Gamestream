@@ -2,6 +2,7 @@ import Foundation
 import GameController
 import CoreHaptics
 import UIKit
+import AVFoundation
 
 /// The JavaScript half of rumble, plus the hand-off to native code.
 ///
@@ -308,6 +309,11 @@ final class ControllerRumble: ObservableObject {
     /// Kept for Settings, so a failing route can say what it failed with.
     private(set) var lastEngineError: String?
     private var localityAttempts: [String] = []
+    /// Which of the pad's claimed localities to try next. A locality
+    /// whose engine is created but cannot play is not the right one.
+    private var localityIndex = 0
+    private var currentLocality: String?
+    private var audioSessionReady = false
 
     private var stopTimer: Task<Void, Never>?
     private var stopDeadline: Date?
@@ -447,9 +453,14 @@ final class ControllerRumble: ObservableObject {
     var diagnosis: String {
         if supportsHaptics {
             if Date() < controllerRetryAfter {
-                return "this controller's haptic engine would not start"
+                var text = "this controller's haptic engine would not play"
                     + (lastEngineError.map { " (\($0))" } ?? "")
-                    + "; it is being retried every few seconds"
+                    + "; the remaining localities are being tried"
+                if !AppSettings.shared.phoneRumbleFallback {
+                    text += ". Turn on \u{201C}Vibrate the phone\u{201D} for feedback meanwhile"
+                    text += " \u{2014} that is what other iOS cloud clients fall back to"
+                }
+                return text
             }
             return "controller haptics are available"
         }
@@ -491,6 +502,7 @@ final class ControllerRumble: ObservableObject {
                 lines.append("Claimed localities: no GCDeviceHaptics")
             }
         }
+        lines.append("Locality in use: \(currentLocality ?? "none")")
         lines.append("Engine attempts: \(localityAttempts.isEmpty ? "none yet" : localityAttempts.joined(separator: " | "))")
         lines.append("Last engine error: \(lastEngineError ?? "none")")
         lines.append("Device haptic engine: \(Self.deviceHapticsSupported ? "supported" : "unsupported")")
@@ -554,6 +566,7 @@ final class ControllerRumble: ObservableObject {
     func retryAllRoutes(reason: String) {
         controllerRetryAfter = .distantPast
         deviceRetryAfter = .distantPast
+        localityIndex = 0
         log.debug("rumble", "routes re-armed (\(reason))")
         updatePath(reason: reason)
     }
@@ -662,9 +675,18 @@ final class ControllerRumble: ObservableObject {
         case .controller:
             let first = controllerRetryAfter == .distantPast
             controllerRetryAfter = backoff
+            // The locality that just failed is not the one. Move to the next
+            // one the pad claims before retrying, rather than hammering the
+            // same dead endpoint for the whole session.
+            localityIndex += 1
+            if localityIndex >= controllerLocalities().count {
+                localityIndex = 0
+                controllerRetryAfter = Date().addingTimeInterval(20)
+            }
             if first {
-                log.warn("rumble", "\(controllerName ?? "this controller") would not start a "
-                         + "haptic engine (\(reason)); retrying, and using another route meanwhile")
+                log.warn("rumble", "\(controllerName ?? "this controller") would not play through "
+                         + "\(currentLocality ?? "its haptics") (\(reason)); trying the next "
+                         + "locality, and another route meanwhile")
             }
         case .device:
             deviceRetryAfter = backoff
@@ -672,37 +694,73 @@ final class ControllerRumble: ObservableObject {
         }
     }
 
+    /// The localities this pad claims, best first.
+    private func controllerLocalities() -> [GCHapticsLocality] {
+        guard let haptics = activeController()?.haptics else { return [] }
+        let claimed = haptics.supportedLocalities
+        let order: [GCHapticsLocality] = [.default, .all, .handles, .leftHandle, .rightHandle,
+                                          .triggers, .leftTrigger, .rightTrigger]
+        let filtered = order.filter { $0 == .default || claimed.contains($0) }
+        return filtered.isEmpty ? [.default] : filtered
+    }
+
+    /// CoreHaptics talks to a system helper over XPC, and that connection is
+    /// tied to the process's audio session. Without an active one the engine
+    /// can be created and then fail to play with NSCocoaErrorDomain 4097,
+    /// "couldn't communicate with a helper application" — which is exactly
+    /// what this pad reports. Activating a session costs nothing and is the
+    /// one remaining thing that can change that outcome.
+    private func prepareAudioSession() {
+        guard !audioSessionReady else { return }
+        audioSessionReady = true
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playback, mode: .default,
+                                    options: [.mixWithOthers])
+            try session.setActive(true, options: [])
+            log.debug("rumble", "audio session active for haptics")
+        } catch {
+            log.debug("rumble", "audio session would not activate: \(Self.describe(error))")
+        }
+    }
+
     /// Creates, but does not start, an engine for the controller.
     ///
-    /// `createEngine(withLocality: .default)` is what every other client uses,
-    /// and on some pads it is the one locality that returns nil. Sweeping the
-    /// advertised set costs nothing. Nothing here is started: starting is the
-    /// step that fails, and the player does it lazily and more reliably.
+    /// Nothing here is started: `start()` is the call that throws 4097 on this
+    /// hardware, and the player brings the engine up lazily and more
+    /// reliably. Each failure advances to the next locality the pad claims,
+    /// because an engine that is created is not an engine that can play.
     private func makeControllerEngine() -> CHHapticEngine? {
         guard let haptics = activeController()?.haptics else {
             lastEngineError = "the controller exposes no haptics"
             return nil
         }
+        prepareAudioSession()
 
-        let claimed = haptics.supportedLocalities
-        log.info("rumble", "controller advertises localities: "
-                 + (claimed.isEmpty ? "none" : claimed.map(\.rawValue).sorted().joined(separator: ", ")))
+        let localities = controllerLocalities()
+        guard localityIndex < localities.count else {
+            localityIndex = 0
+            return nil
+        }
 
-        var order: [GCHapticsLocality] = [.default, .all, .handles, .leftHandle, .rightHandle,
-                                          .triggers, .leftTrigger, .rightTrigger]
-        order = order.filter { $0 == .default || claimed.contains($0) }
-
-        localityAttempts = []
-        for locality in order {
+        for index in localityIndex..<localities.count {
+            let locality = localities[index]
             if let engine = haptics.createEngine(withLocality: locality) {
-                localityAttempts.append("\(locality.rawValue): created")
+                localityIndex = index
+                currentLocality = locality.rawValue
+                record("\(locality.rawValue): created")
                 log.info("rumble", "engine created on locality \(locality.rawValue)")
                 return engine
             }
-            localityAttempts.append("\(locality.rawValue): nil")
+            record("\(locality.rawValue): nil")
         }
-        lastEngineError = "no locality produced an engine"
+        lastEngineError = "no remaining locality produced an engine"
         return nil
+    }
+
+    private func record(_ attempt: String) {
+        localityAttempts.removeAll { $0.hasPrefix(attempt.split(separator: ":")[0] + ":") }
+        localityAttempts.append(attempt)
     }
 
     private static func describe(_ error: Error) -> String {
@@ -755,6 +813,9 @@ final class ControllerRumble: ObservableObject {
                 return true
             } catch {
                 log.warn("rumble", "playback failed: \(Self.describe(error))")
+                if let locality = currentLocality {
+                    record("\(locality): created, then \(Self.describe(error))")
+                }
                 let kind = engineKind
                 engineDidStop()
                 if let kind { noteFailure(kind, reason: Self.describe(error)) }
