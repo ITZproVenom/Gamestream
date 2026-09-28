@@ -91,7 +91,18 @@ struct GameStreamApp: App {
             AppLog.shared.debug("app", "foreground")
             // Coming back from the background is exactly when a token is most
             // likely to have expired.
-            Task { await auth.refresh(reason: "foreground") }
+            Task {
+                await auth.refresh(reason: "foreground")
+                // Game Pass adds and removes titles constantly, and the
+                // catalogue was only ever fetched at launch: an app left
+                // open for days offered games that had gone and hid ones
+                // that had arrived.
+                guard auth.state.isSignedIn, !stream.phase.isActive else { return }
+                let age = catalog.updatedAt.map { Date().timeIntervalSince($0) } ?? .infinity
+                guard age > 6 * 3600 else { return }
+                await catalog.refresh()
+                SpotlightIndex.update(with: catalog.games)
+            }
         case .background:
             AppLog.shared.debug("app", "background")
             ControllerRumble.shared.stop()

@@ -66,7 +66,12 @@ enum WebScripts {
                     var info = JSON.parse(raw);
                     out.gamertag = readGamertag(info);
                     var direct = info && info.tokens && info.tokens["http://gssv.xboxlive.com/"];
-                    if (direct && usable(direct.token)) {
+                    // An expired token is not a session. This path did not
+                    // check, so a stale one was reported as signed in and
+                    // everything built on it failed later with a 401.
+                    var stale = direct && direct.expiration
+                        && Date.parse(direct.expiration) <= Date.now();
+                    if (direct && usable(direct.token) && !stale) {
                         out.signedIn = true;
                         out.source = "xboxcom_xbl_user_info";
                         out.expires = direct.expiration || "";
@@ -153,12 +158,23 @@ enum WebScripts {
             return "other";
         }
 
+        // Only changes are worth sending. The interval below exists to catch
+        // a route change that fires no event, not to repeat the same page
+        // twice a second: posting unconditionally filled the app's log with
+        // one identical line every two seconds for the whole session.
+        var lastReported = null;
+
         function report() {
             try {
+                var href = location.href || "";
+                var kind = classify(href);
+                var signature = kind + " " + href;
+                if (signature === lastReported) return;
+                lastReported = signature;
                 window.webkit.messageHandlers.gamestream.postMessage({
                     type: "nav",
-                    href: location.href || "",
-                    kind: classify(location.href),
+                    href: href,
+                    kind: kind,
                     title: document.title || "",
                     hasVideo: !!document.querySelector("video")
                 });
