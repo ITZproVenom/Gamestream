@@ -73,6 +73,14 @@ struct GameStreamApp: App {
                 .onChange(of: scenePhase) { _, phase in
                     handle(phase)
                 }
+                // Signing in is the first moment there is anything to fetch.
+                // Without this the catalogue was only ever loaded at launch,
+                // so the first run after a sign-in showed an empty Home and
+                // pull-to-refresh was the only way out of it.
+                .onChange(of: auth.state) { _, state in
+                    guard state.isSignedIn else { return }
+                    Task { await loadCatalogueIfNeeded(maximumAge: 0) }
+                }
                 .onChange(of: settings.keepAwake) { _, keepAwake in
                     // Streaming always keeps the screen on; outside a session
                     // the preference decides.
@@ -93,9 +101,23 @@ struct GameStreamApp: App {
         await auth.refresh(reason: "launch")
 
         if auth.state.isSignedIn {
-            await catalog.refresh()
-            SpotlightIndex.update(with: catalog.games)
+            await loadCatalogueIfNeeded(maximumAge: 0)
         }
+    }
+
+    /// Fetches the catalogue when what is on screen is older than
+    /// `maximumAge` seconds. An empty catalogue is always old enough.
+    @MainActor
+    private func loadCatalogueIfNeeded(maximumAge: TimeInterval) async {
+        // Launch and the sign-in change can both ask at once. Refreshing
+        // twice would cancel the first fetch halfway and pay for it again.
+        if catalog.isLoading { return }
+        if !catalog.games.isEmpty, let updated = catalog.updatedAt,
+           Date().timeIntervalSince(updated) < maximumAge {
+            return
+        }
+        await catalog.refresh()
+        SpotlightIndex.update(with: catalog.games)
     }
 
     private func handle(_ phase: ScenePhase) {
@@ -111,10 +133,7 @@ struct GameStreamApp: App {
                 // open for days offered games that had gone and hid ones
                 // that had arrived.
                 guard auth.state.isSignedIn, !stream.phase.isActive else { return }
-                let age = catalog.updatedAt.map { Date().timeIntervalSince($0) } ?? .infinity
-                guard age > 6 * 3600 else { return }
-                await catalog.refresh()
-                SpotlightIndex.update(with: catalog.games)
+                await loadCatalogueIfNeeded(maximumAge: 6 * 3600)
             }
         case .background:
             AppLog.shared.debug("app", "background")
