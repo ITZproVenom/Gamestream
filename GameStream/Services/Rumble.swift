@@ -252,61 +252,171 @@ enum RumbleBridge {
     }
 }
 
-/// One haptic engine and the looping player driven from it.
+/// One haptic engine and whichever way of driving it this hardware accepts.
 ///
-/// The structure of this file follows the rumble implementation in OpenNOW
-/// (https://github.com/OpenCloudGaming/OpenNOW, MIT licence), which is the
-/// reference for how an iOS cloud-gaming client should drive controller
-/// haptics: a continuous pattern held at a fixed intensity and reshaped by
-/// dynamic parameters, one engine per controller, rebuilt whenever it stops.
+/// Two strategies, because one is not enough. A held continuous pattern is the
+/// obvious way to render rumble — it is the only way to change strength
+/// smoothly without restarting anything — but it asks the haptic server to
+/// keep a long-lived player alive on the device, and that is exactly the
+/// request some adapters refuse. When the refusal comes it arrives at play
+/// time as an XPC error, long after the engine was created and reported
+/// healthy, which is why a failure here has to be survivable rather than
+/// fatal.
 ///
-/// MIT License — Copyright (c) OpenNOW contributors. Permission is hereby
-/// granted, free of charge, to any person obtaining a copy of this software
-/// and associated documentation files to deal in the Software without
-/// restriction, subject to the copyright notice and this permission notice
-/// being included in all copies or substantial portions of the Software.
+/// So the fallback is not a different device, it is a different way of asking
+/// the same device: a train of short transient events, each its own
+/// throwaway player, fired on a cadence derived from the magnitude. It is
+/// coarser than a continuous pattern and it cannot glide between strengths,
+/// but nothing has to stay resident between pulses. If the smooth route is
+/// refused, this one is tried on the same engine before the controller is
+/// written off and the phone takes over.
 @MainActor
 private final class HapticPlayback {
+    enum Drive { case continuous, pulsed }
+
+    private enum PlaybackError: Error { case noHeldPlayer }
+
     static let loopDuration: TimeInterval = 1
 
     let engine: CHHapticEngine
-    let player: CHHapticAdvancedPatternPlayer
     let owner: ObjectIdentifier?
+    private(set) var drive: Drive
+    private var held: CHHapticAdvancedPatternPlayer?
+    private var pulse: Timer?
+    private var target = RumbleProfile(weak: 0, strong: 0)
+
     var isPlaying = false
     var lastProfile: RumbleProfile?
     var lastUpdateAt: TimeInterval = 0
 
+    /// The engine is brought up here rather than left for the first player to
+    /// start lazily. Starting it explicitly means a device that will never
+    /// work says so once, at connect time, instead of once per packet.
     init(engine: CHHapticEngine, owner: ObjectIdentifier?) throws {
         self.engine = engine
         self.owner = owner
+        self.drive = .continuous
+        try engine.start()
 
-        // Held at full strength and modulated live. Building a new pattern per
-        // packet would mean a new player several times a second, and the gaps
-        // between them are audible as a stutter in the motors.
+        do {
+            let event = CHHapticEvent(
+                eventType: .hapticContinuous,
+                parameters: [
+                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 1),
+                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5)
+                ],
+                relativeTime: 0,
+                duration: Self.loopDuration
+            )
+            let pattern = try CHHapticPattern(events: [event], parameters: [])
+            let player = try engine.makeAdvancedPlayer(with: pattern)
+            player.loopEnabled = true
+            player.loopEnd = Self.loopDuration
+            held = player
+        } catch {
+            // The engine exists but will not hold a pattern. Pulses might
+            // still land, so this is not the end of the controller route.
+            drive = .pulsed
+        }
+    }
+
+    /// Renders a profile. Throws only when neither strategy is left.
+    func apply(_ profile: RumbleProfile) throws {
+        target = profile
+        if drive == .continuous {
+            do {
+                try applyHeld(profile)
+                return
+            } catch {
+                // Demote once, then let the pulse train answer for this packet
+                // instead of losing it.
+                held = nil
+                drive = .pulsed
+                isPlaying = false
+            }
+        }
+        applyPulsed(profile)
+    }
+
+    private func applyHeld(_ profile: RumbleProfile) throws {
+        guard let held else { throw PlaybackError.noHeldPlayer }
+        let parameters = [
+            CHHapticDynamicParameter(parameterID: .hapticIntensityControl,
+                                     value: profile.intensity, relativeTime: 0),
+            CHHapticDynamicParameter(parameterID: .hapticSharpnessControl,
+                                     value: profile.sharpness, relativeTime: 0)
+        ]
+        if isPlaying {
+            try held.sendParameters(parameters, atTime: CHHapticTimeImmediate)
+            return
+        }
+        // Started muted so the first packet does not land as a click at full
+        // strength, then unmuted once the real intensity is in place.
+        held.isMuted = true
+        try held.start(atTime: CHHapticTimeImmediate)
+        try held.sendParameters(parameters, atTime: CHHapticTimeImmediate)
+        held.isMuted = false
+        isPlaying = true
+    }
+
+    private func applyPulsed(_ profile: RumbleProfile) {
+        guard !profile.isSilent else {
+            stopPulse()
+            return
+        }
+        isPlaying = true
+        let interval = profile.pulseInterval
+        // Only rebuild the timer when the cadence has really moved, otherwise
+        // a stream of similar packets restarts it several times a second and
+        // the train never actually fires.
+        if let pulse, abs(pulse.timeInterval - interval) < 0.008 { return }
+        stopPulse()
+        firePulse()
+        let timer = Timer(timeInterval: interval, repeats: true) { _ in
+            Task { @MainActor [weak self] in self?.firePulse() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        pulse = timer
+    }
+
+    private func firePulse() {
+        guard !target.isSilent else { return }
         let event = CHHapticEvent(
-            eventType: .hapticContinuous,
+            eventType: .hapticTransient,
             parameters: [
-                CHHapticEventParameter(parameterID: .hapticIntensity, value: 1),
-                CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5)
+                CHHapticEventParameter(parameterID: .hapticIntensity, value: target.intensity),
+                CHHapticEventParameter(parameterID: .hapticSharpness,
+                                       value: (target.sharpness + 1) / 2)
             ],
-            relativeTime: 0,
-            duration: Self.loopDuration
+            relativeTime: 0
         )
-        let pattern = try CHHapticPattern(events: [event], parameters: [])
-        player = try engine.makeAdvancedPlayer(with: pattern)
-        player.loopEnabled = true
-        player.loopEnd = Self.loopDuration
+        guard let pattern = try? CHHapticPattern(events: [event], parameters: []),
+              let player = try? engine.makePlayer(with: pattern) else { return }
+        try? player.start(atTime: CHHapticTimeImmediate)
+    }
+
+    private func stopPulse() {
+        pulse?.invalidate()
+        pulse = nil
+    }
+
+    /// What is actually driving the motors, for the diagnostics report.
+    var driveDescription: String {
+        drive == .continuous ? "continuous" : "pulsed"
     }
 
     func stopPlayer() {
-        if isPlaying { try? player.stop(atTime: CHHapticTimeImmediate) }
+        stopPulse()
+        if isPlaying { try? held?.stop(atTime: CHHapticTimeImmediate) }
         isPlaying = false
         lastProfile = nil
         lastUpdateAt = 0
+        target = RumbleProfile(weak: 0, strong: 0)
     }
 
     func shutdown() {
         stopPlayer()
+        held = nil
         engine.stop(completionHandler: nil)
     }
 }
@@ -321,6 +431,14 @@ struct RumbleProfile: Equatable {
     /// Intensity the player hears, weighted towards the heavy motor.
     var intensity: Float { min(max(strong * 0.78 + weak * 0.48, 0), 1) }
     var sharpness: Float { min(max(weak * 0.75 + strong * 0.25, 0), 1) * 2 - 1 }
+
+    /// How often the pulse train fires when a held pattern is refused.
+    /// Stronger rumble reads as faster, because a transient cannot be made
+    /// to last longer — only to repeat sooner.
+    var pulseInterval: TimeInterval {
+        let magnitude = Double(min(max(intensity, 0), 1))
+        return 0.115 - 0.070 * magnitude
+    }
 
     /// Small changes are not worth a round trip to the haptic server.
     func materiallyDiffers(from other: RumbleProfile) -> Bool {
@@ -565,7 +683,11 @@ final class ControllerRumble: ObservableObject {
         }
     }
 
-    /// Pushes a profile into a live player, starting it if it is idle.
+    /// Pushes a profile into a live playback, throttled.
+    ///
+    /// The throttle is here rather than in the playback because it is about
+    /// how often we are willing to talk to the haptic server at all, not
+    /// about which strategy is answering.
     private func update(_ playback: HapticPlayback, with profile: RumbleProfile) throws {
         let now = Date().timeIntervalSinceReferenceDate
         if let last = playback.lastProfile,
@@ -575,25 +697,7 @@ final class ControllerRumble: ObservableObject {
         }
         playback.lastProfile = profile
         playback.lastUpdateAt = now
-
-        let parameters = [
-            CHHapticDynamicParameter(parameterID: .hapticIntensityControl,
-                                     value: profile.intensity, relativeTime: 0),
-            CHHapticDynamicParameter(parameterID: .hapticSharpnessControl,
-                                     value: profile.sharpness, relativeTime: 0)
-        ]
-
-        if playback.isPlaying {
-            try playback.player.sendParameters(parameters, atTime: CHHapticTimeImmediate)
-            return
-        }
-        // Start muted so the first packet does not land as a click at full
-        // strength, then unmute once the real intensity is in place.
-        playback.player.isMuted = true
-        try playback.player.start(atTime: CHHapticTimeImmediate)
-        try playback.player.sendParameters(parameters, atTime: CHHapticTimeImmediate)
-        playback.player.isMuted = false
-        playback.isPlaying = true
+        try playback.apply(profile)
     }
 
     /// An engine that stops or resets is discarded, so the next packet builds
@@ -1016,6 +1120,12 @@ final class ControllerRumble: ObservableObject {
             }
         }
         lines.append("Locality in use: \(currentLocality ?? "none")")
+        if let identity = controller.map(ObjectIdentifier.init),
+           let playback = controllerPlayback[identity] {
+            lines.append("Drive strategy: \(playback.driveDescription)")
+        } else {
+            lines.append("Drive strategy: not started")
+        }
         lines.append("Engine attempts: "
                      + (localityAttempts.isEmpty ? "none yet"
                         : localityAttempts.joined(separator: " | ")))
