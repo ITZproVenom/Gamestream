@@ -30,6 +30,10 @@ GameStream is an independent client project focused on giving Xbox Cloud Gaming 
 GameStream uses and integrates with open-source projects and platform technologies. Their respective names, licenses, and terms remain with their owners.
 
 - **Better xCloud** for the userscript and streaming enhancements.
+- **OpenNOW** (MIT) for the controller haptics design that GameStream's
+  rumble implementation follows: a continuous pattern held at full strength
+  and reshaped by dynamic parameters, one engine per controller, rebuilt
+  whenever it stops. https://github.com/OpenCloudGaming/OpenNOW
 - **Apple** frameworks for the native iOS application, controller input, haptics, WebView, and SwiftUI.
 - **Android / Jetpack Compose** for the Android application layer.
 - **GitHub Actions** for automated builds and release packaging.

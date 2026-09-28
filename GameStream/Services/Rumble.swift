@@ -252,6 +252,82 @@ enum RumbleBridge {
     }
 }
 
+/// One haptic engine and the looping player driven from it.
+///
+/// The structure of this file follows the rumble implementation in OpenNOW
+/// (https://github.com/OpenCloudGaming/OpenNOW, MIT licence), which is the
+/// reference for how an iOS cloud-gaming client should drive controller
+/// haptics: a continuous pattern held at a fixed intensity and reshaped by
+/// dynamic parameters, one engine per controller, rebuilt whenever it stops.
+///
+/// MIT License — Copyright (c) OpenNOW contributors. Permission is hereby
+/// granted, free of charge, to any person obtaining a copy of this software
+/// and associated documentation files to deal in the Software without
+/// restriction, subject to the copyright notice and this permission notice
+/// being included in all copies or substantial portions of the Software.
+@MainActor
+private final class HapticPlayback {
+    static let loopDuration: TimeInterval = 1
+
+    let engine: CHHapticEngine
+    let player: CHHapticAdvancedPatternPlayer
+    let owner: ObjectIdentifier?
+    var isPlaying = false
+    var lastProfile: RumbleProfile?
+    var lastUpdateAt: TimeInterval = 0
+
+    init(engine: CHHapticEngine, owner: ObjectIdentifier?) throws {
+        self.engine = engine
+        self.owner = owner
+
+        // Held at full strength and modulated live. Building a new pattern per
+        // packet would mean a new player several times a second, and the gaps
+        // between them are audible as a stutter in the motors.
+        let event = CHHapticEvent(
+            eventType: .hapticContinuous,
+            parameters: [
+                CHHapticEventParameter(parameterID: .hapticIntensity, value: 1),
+                CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5)
+            ],
+            relativeTime: 0,
+            duration: Self.loopDuration
+        )
+        let pattern = try CHHapticPattern(events: [event], parameters: [])
+        player = try engine.makeAdvancedPlayer(with: pattern)
+        player.loopEnabled = true
+        player.loopEnd = Self.loopDuration
+    }
+
+    func stopPlayer() {
+        if isPlaying { try? player.stop(atTime: CHHapticTimeImmediate) }
+        isPlaying = false
+        lastProfile = nil
+        lastUpdateAt = 0
+    }
+
+    func shutdown() {
+        stopPlayer()
+        engine.stop(completionHandler: nil)
+    }
+}
+
+/// What the motors should be doing, as two magnitudes.
+struct RumbleProfile: Equatable {
+    var weak: Float
+    var strong: Float
+
+    var isSilent: Bool { weak < 0.01 && strong < 0.01 }
+
+    /// Intensity the player hears, weighted towards the heavy motor.
+    var intensity: Float { min(max(strong * 0.78 + weak * 0.48, 0), 1) }
+    var sharpness: Float { min(max(weak * 0.75 + strong * 0.25, 0), 1) * 2 - 1 }
+
+    /// Small changes are not worth a round trip to the haptic server.
+    func materiallyDiffers(from other: RumbleProfile) -> Bool {
+        abs(weak - other.weak) > 0.02 || abs(strong - other.strong) > 0.02
+    }
+}
+
 /// Plays rumble on whichever route this hardware actually supports.
 @MainActor
 final class ControllerRumble: ObservableObject {
@@ -277,45 +353,6 @@ final class ControllerRumble: ObservableObject {
         }
     }
 
-    @Published private(set) var controllerName: String?
-    /// True only when Apple's own controller haptics exist for this pad.
-    @Published private(set) var supportsHaptics = false
-    @Published private(set) var pageActuator = false
-    @Published private(set) var pageDetail = ""
-    @Published private(set) var path: Path = .unavailable
-
-    private enum EngineKind: Equatable {
-        case controller(ObjectIdentifier)
-        case device
-    }
-
-    private var engine: CHHapticEngine?
-    private var player: CHHapticAdvancedPatternPlayer?
-    private var engineKind: EngineKind?
-    private var isPlaying = false
-    private var observers: [NSObjectProtocol] = []
-    private var started = false
-    private var warnedUnavailable = false
-    /// A failed route is retried, never written off.
-    ///
-    /// The engine for an Xbox pad can fail with "couldn't communicate with a
-    /// helper application" and then start working later in the same session —
-    /// the haptic server is not always up when the first packet arrives.
-    /// Earlier builds disabled the controller route permanently on the first
-    /// failure, which meant one unlucky packet cost rumble for good. These
-    /// hold a short backoff instead.
-    private var controllerRetryAfter = Date.distantPast
-    private var deviceRetryAfter = Date.distantPast
-    /// Kept for Settings, so a failing route can say what it failed with.
-    private(set) var lastEngineError: String?
-    private var localityAttempts: [String] = []
-    /// Which of the pad's claimed localities to try next. A locality
-    /// whose engine is created but cannot play is not the right one.
-    private var localityIndex = 0
-    private var currentLocality: String?
-    private var audioSessionReady = false
-
-    /// The guided test: press a trigger, feel a burst.
     enum TestPhase: Equatable {
         case idle
         case waitingForTrigger
@@ -323,22 +360,52 @@ final class ControllerRumble: ObservableObject {
         case finished(String)
     }
 
+    @Published private(set) var controllerName: String?
+    @Published private(set) var supportsHaptics = false
+    @Published private(set) var pageActuator = false
+    @Published private(set) var pageDetail = ""
+    @Published private(set) var path: Path = .unavailable
     @Published private(set) var testPhase: TestPhase = .idle
-    private var testTimeout: Task<Void, Never>?
-    private var testRun: Task<Void, Never>?
-    /// The pad that pressed the trigger. Using the controller the player is
-    /// actually holding beats guessing from `GCController.current`, which can
-    /// name a different device entirely.
-    private var preferredController: GCController?
 
+    // MARK: Playback
+
+    /// One engine per controller, keyed by identity. A pad that reconnects is
+    /// a different object and gets a new engine rather than a stale one.
+    private var controllerPlayback: [ObjectIdentifier: HapticPlayback] = [:]
+    private var phonePlayback: HapticPlayback?
+
+    /// Parameters are not resent faster than this. A stream can deliver
+    /// rumble packets far more often than the hardware can act on them, and
+    /// the surplus only adds latency to the ones that matter.
+    private static let updateInterval: TimeInterval = 0.035
+
+    private var controllerRetryAfter: Date = .distantPast
+    private var phoneRetryAfter: Date = .distantPast
     private var stopTimer: Task<Void, Never>?
     private var stopDeadline: Date?
+
+    // MARK: Taptics
+
     private var tapticTask: Task<Void, Never>?
     private var tapticGenerator: UIImpactFeedbackGenerator?
     private var tapticStyle: UIImpactFeedbackGenerator.FeedbackStyle?
 
+    // MARK: Diagnostics
+
+    private(set) var lastEngineError: String?
+    private var localityAttempts: [String] = []
+    private var localityIndex = 0
+    private var currentLocality: String?
+    private var audioSessionReady = false
+    private var preferredController: GCController?
+
+    private var observers: [NSObjectProtocol] = []
+    private var started = false
+    private var warnedUnavailable = false
+    private var testTimeout: Task<Void, Never>?
+    private var testRun: Task<Void, Never>?
+
     private let log = AppLog.shared
-    private static let loopDuration: TimeInterval = 1
 
     private init() {}
 
@@ -359,24 +426,20 @@ final class ControllerRumble: ObservableObject {
         })
         observers.append(center.addObserver(forName: UIApplication.didBecomeActiveNotification,
                                             object: nil, queue: .main) { _ in
-            // The haptic server is not always reachable while the app is
-            // coming back to the foreground, so every route gets a clean try.
             Task { @MainActor in ControllerRumble.shared.retryAllRoutes(reason: "app active") }
         })
         GCController.startWirelessControllerDiscovery(completionHandler: nil)
         refreshController(reason: "start")
     }
 
-    /// The page reporting what it can do with the gamepad it can see.
     func notePageCapability(actuator: Bool, detail: String) {
         let changed = actuator != pageActuator || detail != pageDetail
         pageActuator = actuator
         pageDetail = detail
-        if changed {
-            log.info("rumble", "page reports actuator \(actuator ? "available" : "missing")"
-                     + (detail.isEmpty ? "" : " for \(detail)"))
-            updatePath(reason: "page report")
-        }
+        guard changed else { return }
+        log.info("rumble", "page reports actuator \(actuator ? "available" : "missing")"
+                 + (detail.isEmpty ? "" : " for \(detail)"))
+        updatePath(reason: "page report")
     }
 
     // MARK: - Playing
@@ -386,36 +449,32 @@ final class ControllerRumble: ObservableObject {
               rightTrigger: Float = 0, durationMs: Double, force: Bool = false) -> Bool {
         guard force || AppSettings.shared.rumbleEnabled else { return false }
 
-        let magnitudeLeft = scale(max(normalise(left), normalise(leftTrigger)))
-        let magnitudeRight = scale(max(normalise(right), normalise(rightTrigger)))
-        let intensity = min(max(magnitudeRight * 0.78 + magnitudeLeft * 0.48, 0), 1)
+        let scale = AppSettings.shared.rumbleIntensity
+        func level(_ value: Float) -> Float {
+            let normalised = value > 1 ? value / 100 : value
+            return min(max(normalised * scale, 0), 1)
+        }
 
-        guard intensity > 0.001 else {
+        let profile = RumbleProfile(
+            weak: max(level(right), level(rightTrigger)),
+            strong: max(level(left), level(leftTrigger))
+        )
+
+        guard !profile.isSilent else {
             stop()
             return false
         }
 
-        let sharpness = min(max(magnitudeLeft * 0.75 + magnitudeRight * 0.25, 0), 1) * 2 - 1
-
-        // Every usable route in order, so a route that fails this packet costs
-        // one silent packet rather than the rest of the session.
-        for route in playableRoutes() {
-            if route == .taptics {
-                playTaptics(intensity: intensity, durationMs: durationMs)
-                return true
-            }
-            guard let kind = engineKind(for: route) else { continue }
-            guard prepareEngine(kind) else { continue }
-            guard apply(intensity: intensity, sharpness: sharpness) else { continue }
-
-            // A zero duration means "until further notice"; clamp anything
-            // longer than a couple of seconds so a lost packet cannot strand
-            // the motors.
+        // Every route is tried on every packet. A route that failed a moment
+        // ago is not written off; it is simply not first in line until its
+        // backoff expires.
+        if playOnController(profile) || playOnPhone(profile) {
             let seconds = durationMs > 0 ? min(durationMs / 1000, 2.5) : 2.5
             stopDeadline = Date().addingTimeInterval(seconds)
             startStopTimer()
             return true
         }
+        if playTaptics(profile, durationMs: durationMs) { return true }
 
         if !warnedUnavailable {
             warnedUnavailable = true
@@ -424,31 +483,353 @@ final class ControllerRumble: ObservableObject {
         return false
     }
 
+    private func playOnController(_ profile: RumbleProfile) -> Bool {
+        guard Date() >= controllerRetryAfter else { return false }
+        guard let controller = activeController(), controller.haptics != nil else { return false }
+        let identity = ObjectIdentifier(controller)
+
+        do {
+            let playback: HapticPlayback
+            if let existing = controllerPlayback[identity] {
+                playback = existing
+            } else {
+                shutdownController(identity)
+                guard let engine = makeControllerEngine(for: controller) else {
+                    throw RumbleFailure.noEngine(lastEngineError ?? "no engine could be created")
+                }
+                engine.playsHapticsOnly = true
+                engine.isAutoShutdownEnabled = false
+                let created = try HapticPlayback(engine: engine, owner: identity)
+                install(created, for: identity)
+                controllerPlayback[identity] = created
+                playback = created
+            }
+            try update(playback, with: profile)
+            // A working controller means the phone does not need to step in.
+            phoneRetryAfter = .distantPast
+            return true
+        } catch {
+            shutdownController(identity)
+            note(failure: error, route: .controller)
+            return false
+        }
+    }
+
+    private func playOnPhone(_ profile: RumbleProfile) -> Bool {
+        guard AppSettings.shared.phoneRumbleFallback else { return false }
+        guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else { return false }
+        guard Date() >= phoneRetryAfter else { return false }
+
+        do {
+            let playback: HapticPlayback
+            if let existing = phonePlayback {
+                playback = existing
+            } else {
+                let engine = try CHHapticEngine()
+                engine.playsHapticsOnly = true
+                engine.isAutoShutdownEnabled = false
+                let created = try HapticPlayback(engine: engine, owner: nil)
+                install(created, for: nil)
+                phonePlayback = created
+                playback = created
+            }
+            try update(playback, with: profile)
+            return true
+        } catch {
+            phonePlayback?.shutdown()
+            phonePlayback = nil
+            note(failure: error, route: .device)
+            return false
+        }
+    }
+
+    /// Pushes a profile into a live player, starting it if it is idle.
+    private func update(_ playback: HapticPlayback, with profile: RumbleProfile) throws {
+        let now = Date().timeIntervalSinceReferenceDate
+        if let last = playback.lastProfile,
+           now - playback.lastUpdateAt < Self.updateInterval,
+           !profile.materiallyDiffers(from: last) {
+            return
+        }
+        playback.lastProfile = profile
+        playback.lastUpdateAt = now
+
+        let parameters = [
+            CHHapticDynamicParameter(parameterID: .hapticIntensityControl,
+                                     value: profile.intensity, relativeTime: 0),
+            CHHapticDynamicParameter(parameterID: .hapticSharpnessControl,
+                                     value: profile.sharpness, relativeTime: 0)
+        ]
+
+        if playback.isPlaying {
+            try playback.player.sendParameters(parameters, atTime: CHHapticTimeImmediate)
+            return
+        }
+        // Start muted so the first packet does not land as a click at full
+        // strength, then unmute once the real intensity is in place.
+        playback.player.isMuted = true
+        try playback.player.start(atTime: CHHapticTimeImmediate)
+        try playback.player.sendParameters(parameters, atTime: CHHapticTimeImmediate)
+        playback.player.isMuted = false
+        playback.isPlaying = true
+    }
+
+    /// An engine that stops or resets is discarded, so the next packet builds
+    /// a fresh one rather than talking to something that is no longer there.
+    private func install(_ playback: HapticPlayback, for identity: ObjectIdentifier?) {
+        playback.engine.stoppedHandler = { _ in
+            Task { @MainActor in ControllerRumble.shared.discard(identity) }
+        }
+        playback.engine.resetHandler = {
+            Task { @MainActor in ControllerRumble.shared.discard(identity) }
+        }
+    }
+
+    private func discard(_ identity: ObjectIdentifier?) {
+        if let identity {
+            controllerPlayback.removeValue(forKey: identity)?.stopPlayer()
+        } else {
+            phonePlayback?.stopPlayer()
+            phonePlayback = nil
+        }
+    }
+
+    private func shutdownController(_ identity: ObjectIdentifier) {
+        controllerPlayback.removeValue(forKey: identity)?.shutdown()
+    }
+
+    private enum RumbleFailure: Error, LocalizedError {
+        case noEngine(String)
+        var errorDescription: String? {
+            switch self { case .noEngine(let reason): return reason }
+        }
+    }
+
+    private func note(failure: Error, route: Path) {
+        let reason = Self.describe(failure)
+        lastEngineError = reason
+        if let locality = currentLocality, route == .controller {
+            record("\(locality): created, then \(reason)")
+        }
+        switch route {
+        case .controller:
+            let first = controllerRetryAfter == .distantPast
+            controllerRetryAfter = Date().addingTimeInterval(4)
+            localityIndex += 1
+            if localityIndex >= controllerLocalities().count {
+                localityIndex = 0
+                controllerRetryAfter = Date().addingTimeInterval(20)
+            }
+            if first {
+                log.warn("rumble", "\(controllerName ?? "this controller") would not play "
+                         + "through \(currentLocality ?? "its haptics") (\(reason))")
+            }
+        default:
+            phoneRetryAfter = Date().addingTimeInterval(5)
+            log.warn("rumble", "the phone's haptic engine will not play (\(reason))")
+        }
+    }
+
+    // MARK: - Taptics
+
+    /// No engine, no server, no XPC. This is feedback when CoreHaptics can
+    /// produce none, and it is the phone rather than the pad.
+    @discardableResult
+    private func playTaptics(_ profile: RumbleProfile, durationMs: Double) -> Bool {
+        guard AppSettings.shared.phoneRumbleFallback,
+              UIDevice.current.userInterfaceIdiom == .phone else { return false }
+
+        let intensity = profile.intensity
+        let style: UIImpactFeedbackGenerator.FeedbackStyle =
+            intensity > 0.66 ? .heavy : (intensity > 0.33 ? .medium : .light)
+        let generator = (tapticStyle == style ? tapticGenerator : nil)
+            ?? UIImpactFeedbackGenerator(style: style)
+        tapticGenerator = generator
+        tapticStyle = style
+        generator.prepare()
+        generator.impactOccurred(intensity: CGFloat(min(max(intensity, 0.1), 1)))
+
+        let seconds = durationMs > 0 ? min(durationMs / 1000, 2.5) : 0.25
+        guard seconds > 0.14 else { return true }
+
+        tapticTask?.cancel()
+        tapticTask = Task { [weak self] in
+            let deadline = Date().addingTimeInterval(seconds)
+            while !Task.isCancelled, Date() < deadline {
+                try? await Task.sleep(for: .milliseconds(90))
+                guard !Task.isCancelled, let self else { return }
+                self.tapticGenerator?.impactOccurred(
+                    intensity: CGFloat(min(max(intensity, 0.1), 1)))
+            }
+        }
+        return true
+    }
+
+    // MARK: - Stopping
+
     func stop() {
         stopTimer?.cancel()
         stopTimer = nil
         stopDeadline = nil
         tapticTask?.cancel()
         tapticTask = nil
-        guard isPlaying else { return }
-        try? player?.stop(atTime: CHHapticTimeImmediate)
-        isPlaying = false
+        for playback in controllerPlayback.values { playback.stopPlayer() }
+        phonePlayback?.stopPlayer()
     }
 
     func teardown() {
         stop()
-        engine?.stop(completionHandler: nil)
-        engine = nil
-        player = nil
-        engineKind = nil
+        for playback in controllerPlayback.values { playback.shutdown() }
+        controllerPlayback.removeAll()
+        phonePlayback?.shutdown()
+        phonePlayback = nil
     }
 
-    /// The guided test: ask for a real trigger pull, then fire a burst.
+    private func startStopTimer() {
+        guard stopTimer == nil else { return }
+        stopTimer = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(80))
+                guard !Task.isCancelled, let self, let deadline = self.stopDeadline else { return }
+                if Date() >= deadline {
+                    self.stop()
+                    return
+                }
+            }
+        }
+    }
+
+    // MARK: - Engines
+
+    private func controllerLocalities() -> [GCHapticsLocality] {
+        guard let haptics = activeController()?.haptics else { return [.default] }
+        let claimed = haptics.supportedLocalities
+        let order: [GCHapticsLocality] = [.default, .all, .handles, .leftHandle, .rightHandle,
+                                          .triggers, .leftTrigger, .rightTrigger]
+        let filtered = order.filter { $0 == .default || claimed.contains($0) }
+        return filtered.isEmpty ? [.default] : filtered
+    }
+
+    /// CoreHaptics reaches a system helper over XPC, and that connection is
+    /// tied to the process audio session. Without an active one the engine can
+    /// be created and then fail to play with NSCocoaErrorDomain 4097.
+    private func prepareAudioSession() {
+        guard !audioSessionReady else { return }
+        audioSessionReady = true
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try session.setActive(true, options: [])
+            log.debug("rumble", "audio session active for haptics")
+        } catch {
+            log.debug("rumble", "audio session would not activate: \(Self.describe(error))")
+        }
+    }
+
+    /// Created but never started. `start()` is the call that throws on this
+    /// hardware, and the player brings the engine up lazily instead.
+    private func makeControllerEngine(for controller: GCController) -> CHHapticEngine? {
+        guard let haptics = controller.haptics else {
+            lastEngineError = "the controller exposes no haptics"
+            return nil
+        }
+        prepareAudioSession()
+
+        let localities = controllerLocalities()
+        log.info("rumble", "localities claimed: "
+                 + localities.map(\.rawValue).joined(separator: ", "))
+
+        for index in min(localityIndex, localities.count - 1)..<localities.count {
+            let locality = localities[index]
+            if let engine = haptics.createEngine(withLocality: locality) {
+                localityIndex = index
+                currentLocality = locality.rawValue
+                record("\(locality.rawValue): created")
+                return engine
+            }
+            record("\(locality.rawValue): nil")
+        }
+        lastEngineError = "no remaining locality produced an engine"
+        return nil
+    }
+
+    private func record(_ attempt: String) {
+        let prefix = attempt.split(separator: ":").first.map(String.init) ?? attempt
+        localityAttempts.removeAll { $0.hasPrefix(prefix + ":") }
+        localityAttempts.append(attempt)
+    }
+
+    private static func describe(_ error: Error) -> String {
+        let nsError = error as NSError
+        return "\(error.localizedDescription) [\(nsError.domain) \(nsError.code)]"
+    }
+
+    // MARK: - Routing
+
+    private static var deviceHapticsSupported: Bool {
+        CHHapticEngine.capabilitiesForHardware().supportsHaptics
+    }
+
+    private func updatePath(reason: String) {
+        let next: Path
+        if supportsHaptics {
+            next = .controller
+        } else if pageActuator {
+            next = .page
+        } else if Self.deviceHapticsSupported, AppSettings.shared.phoneRumbleFallback {
+            next = .device
+        } else if UIDevice.current.userInterfaceIdiom == .phone,
+                  AppSettings.shared.phoneRumbleFallback {
+            next = .taptics
+        } else {
+            next = .unavailable
+        }
+        guard next != path else { return }
+        path = next
+        warnedUnavailable = false
+        teardown()
+        log.info("rumble", "path is now \(next.rawValue) (\(reason))")
+    }
+
+    func settingsChanged() { updatePath(reason: "settings") }
+
+    func retryAllRoutes(reason: String) {
+        controllerRetryAfter = .distantPast
+        phoneRetryAfter = .distantPast
+        localityIndex = 0
+        log.debug("rumble", "routes re-armed (\(reason))")
+        updatePath(reason: reason)
+    }
+
+    private func refreshController(reason: String) {
+        let controller = activeController()
+        let changed = controller?.vendorName != controllerName
+        controllerName = controller?.vendorName
+        supportsHaptics = controller?.haptics != nil
+        if changed { retryAllRoutes(reason: "controller changed") }
+        log.info("rumble", "\(reason): \(controllerName ?? "no controller")"
+                 + (supportsHaptics ? " with haptics" : " without haptics"))
+        if controller == nil { teardown() }
+        updatePath(reason: reason)
+    }
+
+    private func activeController() -> GCController? {
+        if let preferred = preferredController,
+           GCController.controllers().contains(where: { $0 === preferred }) {
+            return preferred
+        }
+        if let current = GCController.current, current.haptics != nil { return current }
+        let all = GCController.controllers()
+        return all.first { $0.haptics != nil } ?? all.first
+    }
+
+    // MARK: - Guided test
+
+    /// Ask for a real trigger pull, then fire a burst.
     ///
-    /// Waiting for input does more than make the test obvious. It names the
-    /// pad the player is holding, and it guarantees the controller is awake
-    /// and delivering input to this app before any engine is asked for —
-    /// which is the state a haptic engine is meant to be created in.
+    /// Waiting for input names the pad being held rather than guessing from
+    /// `GCController.current`, and guarantees the controller is awake and
+    /// delivering input to this app before an engine is requested.
     func beginGuidedTest() {
         cancelTest()
         retryAllRoutes(reason: "guided test")
@@ -456,13 +837,10 @@ final class ControllerRumble: ObservableObject {
         log.info("rumble", "guided test: waiting for a trigger pull")
 
         for controller in GCController.controllers() {
-            controller.extendedGamepad?.valueChangedHandler = { [weak self] pad, element in
+            controller.extendedGamepad?.valueChangedHandler = { [weak self] pad, _ in
                 guard let self else { return }
-                let pulled = pad.rightTrigger.value > 0.4 || pad.leftTrigger.value > 0.4
-                guard pulled else { return }
-                Task { @MainActor in
-                    self.triggerPulled(on: pad.controller, element: element)
-                }
+                guard pad.rightTrigger.value > 0.4 || pad.leftTrigger.value > 0.4 else { return }
+                Task { @MainActor in self.triggerPulled(on: pad.controller) }
             }
         }
 
@@ -481,14 +859,18 @@ final class ControllerRumble: ObservableObject {
         testTimeout = nil
         testRun?.cancel()
         testRun = nil
+        clearTestHandlers()
+        stop()
+        if case .finished = testPhase {} else { testPhase = .idle }
+    }
+
+    private func clearTestHandlers() {
         for controller in GCController.controllers() {
             controller.extendedGamepad?.valueChangedHandler = nil
         }
-        stop()
-        if testPhase != .idle, case .finished = testPhase {} else { testPhase = .idle }
     }
 
-    private func triggerPulled(on controller: GCController?, element: GCControllerElement) {
+    private func triggerPulled(on controller: GCController?) {
         guard testPhase == .waitingForTrigger else { return }
         testTimeout?.cancel()
         testTimeout = nil
@@ -503,9 +885,7 @@ final class ControllerRumble: ObservableObject {
             updatePath(reason: "trigger pulled")
         }
 
-        testRun = Task { [weak self] in
-            await self?.fireBurst()
-        }
+        testRun = Task { [weak self] in await self?.fireBurst() }
     }
 
     /// Six shots and a recoil, which is unmistakable if it plays at all.
@@ -519,22 +899,19 @@ final class ControllerRumble: ObservableObject {
             }
             try? await Task.sleep(for: .milliseconds(heavy ? 300 : 120))
             stop()
-            try? await Task.sleep(for: .milliseconds(heavy ? 0 : 45))
             if Task.isCancelled { return }
+            try? await Task.sleep(for: .milliseconds(heavy ? 0 : 45))
         }
-
-        for controller in GCController.controllers() {
-            controller.extendedGamepad?.valueChangedHandler = nil
-        }
+        clearTestHandlers()
 
         if played == 0 {
             finishTest("Nothing played: \(diagnosis).")
         } else {
-            let where_ = path == .controller
-                ? "the controller\(currentLocality.map { " (\($0))" } ?? "")"
+            let route = path == .controller
+                ? "the controller" + (currentLocality.map { " (\($0))" } ?? "")
                 : path.title.lowercased()
-            finishTest("Fired six shots through \(where_). "
-                       + "If you felt nothing, this route reports success but produces no motion.")
+            finishTest("Fired six shots through \(route). If you felt nothing, "
+                       + "this route reports success but produces no motion.")
         }
     }
 
@@ -543,7 +920,8 @@ final class ControllerRumble: ObservableObject {
         log.info("rumble", "guided test: \(message)")
     }
 
-    /// Plain-language reason there is or is not rumble, for Settings.
+    // MARK: - Reporting
+
     var diagnosis: String {
         if supportsHaptics {
             if Date() < controllerRetryAfter {
@@ -573,9 +951,6 @@ final class ControllerRumble: ObservableObject {
         return reasons.joined(separator: "; ")
     }
 
-    /// Everything known about this controller, for the Settings report. Worth
-    /// having verbatim: what a pad claims and what the engine then does are
-    /// different facts, and only the pair of them explains a silent session.
     var report: String {
         let controller = activeController()
         var lines: [String] = []
@@ -586,386 +961,22 @@ final class ControllerRumble: ObservableObject {
             lines.append("Attached to device: \(controller.isAttachedToDevice)")
             if let haptics = controller.haptics {
                 let claimed = haptics.supportedLocalities.map(\.rawValue).sorted()
-                lines.append("Claimed localities: \(claimed.isEmpty ? "none" : claimed.joined(separator: ", "))")
+                lines.append("Claimed localities: "
+                             + (claimed.isEmpty ? "none" : claimed.joined(separator: ", ")))
             } else {
                 lines.append("Claimed localities: no GCDeviceHaptics")
             }
         }
         lines.append("Locality in use: \(currentLocality ?? "none")")
-        lines.append("Engine attempts: \(localityAttempts.isEmpty ? "none yet" : localityAttempts.joined(separator: " | "))")
+        lines.append("Engine attempts: "
+                     + (localityAttempts.isEmpty ? "none yet"
+                        : localityAttempts.joined(separator: " | ")))
         lines.append("Last engine error: \(lastEngineError ?? "none")")
-        lines.append("Device haptic engine: \(Self.deviceHapticsSupported ? "supported" : "unsupported")")
+        lines.append("Device haptic engine: "
+                     + (Self.deviceHapticsSupported ? "supported" : "unsupported"))
         lines.append("Stream page actuator: \(pageActuator ? "yes" : "no")")
         if !pageDetail.isEmpty { lines.append("Page gamepads: \(pageDetail)") }
         lines.append("Phone fallback: \(AppSettings.shared.phoneRumbleFallback ? "on" : "off")")
         return lines.joined(separator: "\n")
-    }
-
-    // MARK: - Routing
-
-    private static var deviceHapticsSupported: Bool {
-        CHHapticEngine.capabilitiesForHardware().supportsHaptics
-    }
-
-    private static var tapticsAvailable: Bool {
-        UIDevice.current.userInterfaceIdiom == .phone
-    }
-
-    /// The routes that could carry this packet, best first.
-    private func playableRoutes() -> [Path] {
-        var routes: [Path] = []
-        let now = Date()
-        if supportsHaptics, now >= controllerRetryAfter { routes.append(.controller) }
-        if Self.deviceHapticsSupported, now >= deviceRetryAfter,
-           AppSettings.shared.phoneRumbleFallback { routes.append(.device) }
-        if Self.tapticsAvailable, AppSettings.shared.phoneRumbleFallback { routes.append(.taptics) }
-        return routes
-    }
-
-    /// What Settings shows. Backoffs are deliberately ignored here: a route
-    /// that is being retried is still the route, and saying "Unavailable" for
-    /// a few seconds would be a lie in the other direction.
-    private func updatePath(reason: String) {
-        let next: Path
-        if supportsHaptics {
-            next = .controller
-        } else if pageActuator {
-            next = .page
-        } else if Self.deviceHapticsSupported, AppSettings.shared.phoneRumbleFallback {
-            next = .device
-        } else if Self.tapticsAvailable, AppSettings.shared.phoneRumbleFallback {
-            next = .taptics
-        } else {
-            next = .unavailable
-        }
-        guard next != path else { return }
-        path = next
-        warnedUnavailable = false
-        // A route change means the old engine belongs to the wrong target.
-        teardown()
-        log.info("rumble", "path is now \(next.rawValue) (\(reason))")
-    }
-
-    /// Recomputed when the phone-vibration preference changes.
-    func settingsChanged() {
-        updatePath(reason: "settings")
-    }
-
-    /// Clears the backoffs, so a route that failed earlier gets a clean try.
-    func retryAllRoutes(reason: String) {
-        controllerRetryAfter = .distantPast
-        deviceRetryAfter = .distantPast
-        localityIndex = 0
-        log.debug("rumble", "routes re-armed (\(reason))")
-        updatePath(reason: reason)
-    }
-
-    private func engineKind(for route: Path) -> EngineKind? {
-        switch route {
-        case .controller:
-            guard let controller = activeController(), controller.haptics != nil else { return nil }
-            return .controller(ObjectIdentifier(controller))
-        case .device:
-            return .device
-        case .page, .taptics, .unavailable:
-            return nil
-        }
-    }
-
-    private func refreshController(reason: String) {
-        let controller = activeController()
-        let changed = controller?.vendorName != controllerName
-        controllerName = controller?.vendorName
-        supportsHaptics = controller?.haptics != nil
-        if changed { retryAllRoutes(reason: "controller changed") }
-        log.info("rumble", "\(reason): \(controllerName ?? "no controller")"
-                 + (supportsHaptics
-                    ? " with Apple haptics"
-                    : " without Apple haptics (normal for Xbox pads)"))
-        if controller == nil { teardown() }
-        updatePath(reason: reason)
-    }
-
-    private func activeController() -> GCController? {
-        if let preferred = preferredController,
-           GCController.controllers().contains(where: { $0 === preferred }) {
-            return preferred
-        }
-        if let current = GCController.current, current.haptics != nil { return current }
-        let all = GCController.controllers()
-        return all.first { $0.haptics != nil } ?? all.first
-    }
-
-    // MARK: - Engine
-
-    private func prepareEngine(_ kind: EngineKind) -> Bool {
-        if engineKind == kind, player != nil { return true }
-        teardown()
-
-        let created: CHHapticEngine?
-        switch kind {
-        case .controller:
-            created = makeControllerEngine()
-        case .device:
-            created = try? CHHapticEngine()
-        }
-        guard let engine = created else {
-            noteFailure(kind, reason: lastEngineError ?? "no engine could be created")
-            return false
-        }
-
-        // Configuration has to happen before the engine runs, and the engine
-        // must not be started here. CHHapticEngine starts itself when a player
-        // first plays; calling start() by hand is what threw "couldn't
-        // communicate with a helper application" on this pad, and treating
-        // that throw as "the controller cannot rumble" is what silenced it.
-        engine.playsHapticsOnly = true
-        engine.isAutoShutdownEnabled = false
-        engine.stoppedHandler = { _ in
-            Task { @MainActor in ControllerRumble.shared.engineDidStop() }
-        }
-        engine.resetHandler = {
-            Task { @MainActor in ControllerRumble.shared.engineDidStop() }
-        }
-
-        do {
-            let event = CHHapticEvent(
-                eventType: .hapticContinuous,
-                parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 1),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5)
-                ],
-                relativeTime: 0,
-                duration: Self.loopDuration
-            )
-            let pattern = try CHHapticPattern(events: [event], parameters: [])
-            let advanced = try engine.makeAdvancedPlayer(with: pattern)
-            advanced.loopEnabled = true
-            advanced.loopEnd = Self.loopDuration
-
-            engineKind = kind
-            self.engine = engine
-            self.player = advanced
-            log.info("rumble", "haptic player ready (\(path.rawValue))")
-            return true
-        } catch {
-            log.error("rumble", "haptic setup failed: \(Self.describe(error))")
-            engine.stop(completionHandler: nil)
-            self.engine = nil
-            self.player = nil
-            engineKind = nil
-            noteFailure(kind, reason: Self.describe(error))
-            return false
-        }
-    }
-
-    /// A route that failed backs off briefly. It is not written off: this pad's
-    /// engine can refuse one packet and take the next.
-    private func noteFailure(_ kind: EngineKind, reason: String) {
-        lastEngineError = reason
-        let backoff = Date().addingTimeInterval(4)
-        switch kind {
-        case .controller:
-            let first = controllerRetryAfter == .distantPast
-            controllerRetryAfter = backoff
-            // The locality that just failed is not the one. Move to the next
-            // one the pad claims before retrying, rather than hammering the
-            // same dead endpoint for the whole session.
-            localityIndex += 1
-            if localityIndex >= controllerLocalities().count {
-                localityIndex = 0
-                controllerRetryAfter = Date().addingTimeInterval(20)
-            }
-            if first {
-                log.warn("rumble", "\(controllerName ?? "this controller") would not play through "
-                         + "\(currentLocality ?? "its haptics") (\(reason)); trying the next "
-                         + "locality, and another route meanwhile")
-            }
-        case .device:
-            deviceRetryAfter = backoff
-            log.warn("rumble", "the phone's haptic engine will not start (\(reason))")
-        }
-    }
-
-    /// The localities this pad claims, best first.
-    private func controllerLocalities() -> [GCHapticsLocality] {
-        guard let haptics = activeController()?.haptics else { return [] }
-        let claimed = haptics.supportedLocalities
-        let order: [GCHapticsLocality] = [.default, .all, .handles, .leftHandle, .rightHandle,
-                                          .triggers, .leftTrigger, .rightTrigger]
-        let filtered = order.filter { $0 == .default || claimed.contains($0) }
-        return filtered.isEmpty ? [.default] : filtered
-    }
-
-    /// CoreHaptics talks to a system helper over XPC, and that connection is
-    /// tied to the process's audio session. Without an active one the engine
-    /// can be created and then fail to play with NSCocoaErrorDomain 4097,
-    /// "couldn't communicate with a helper application" — which is exactly
-    /// what this pad reports. Activating a session costs nothing and is the
-    /// one remaining thing that can change that outcome.
-    private func prepareAudioSession() {
-        guard !audioSessionReady else { return }
-        audioSessionReady = true
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setCategory(.playback, mode: .default,
-                                    options: [.mixWithOthers])
-            try session.setActive(true, options: [])
-            log.debug("rumble", "audio session active for haptics")
-        } catch {
-            log.debug("rumble", "audio session would not activate: \(Self.describe(error))")
-        }
-    }
-
-    /// Creates, but does not start, an engine for the controller.
-    ///
-    /// Nothing here is started: `start()` is the call that throws 4097 on this
-    /// hardware, and the player brings the engine up lazily and more
-    /// reliably. Each failure advances to the next locality the pad claims,
-    /// because an engine that is created is not an engine that can play.
-    private func makeControllerEngine() -> CHHapticEngine? {
-        guard let haptics = activeController()?.haptics else {
-            lastEngineError = "the controller exposes no haptics"
-            return nil
-        }
-        prepareAudioSession()
-
-        let localities = controllerLocalities()
-        guard localityIndex < localities.count else {
-            localityIndex = 0
-            return nil
-        }
-
-        for index in localityIndex..<localities.count {
-            let locality = localities[index]
-            if let engine = haptics.createEngine(withLocality: locality) {
-                localityIndex = index
-                currentLocality = locality.rawValue
-                record("\(locality.rawValue): created")
-                log.info("rumble", "engine created on locality \(locality.rawValue)")
-                return engine
-            }
-            record("\(locality.rawValue): nil")
-        }
-        lastEngineError = "no remaining locality produced an engine"
-        return nil
-    }
-
-    private func record(_ attempt: String) {
-        localityAttempts.removeAll { $0.hasPrefix(attempt.split(separator: ":")[0] + ":") }
-        localityAttempts.append(attempt)
-    }
-
-    private static func describe(_ error: Error) -> String {
-        let nsError = error as NSError
-        return "\(error.localizedDescription) [\(nsError.domain) \(nsError.code)]"
-    }
-
-    private func engineDidStop() {
-        isPlaying = false
-        player = nil
-        engine = nil
-        engineKind = nil
-    }
-
-    @discardableResult
-    private func apply(intensity: Float, sharpness: Float) -> Bool {
-        guard let player else { return false }
-        let parameters = [
-            CHHapticDynamicParameter(parameterID: .hapticIntensityControl,
-                                     value: intensity, relativeTime: 0),
-            CHHapticDynamicParameter(parameterID: .hapticSharpnessControl,
-                                     value: sharpness, relativeTime: 0)
-        ]
-
-        func send(startIfNeeded: Bool) throws {
-            if !isPlaying {
-                // Start silent, apply the real intensity, then unmute, so the
-                // first packet does not arrive as a click at full strength.
-                player.isMuted = true
-                try player.start(atTime: CHHapticTimeImmediate)
-                try player.sendParameters(parameters, atTime: CHHapticTimeImmediate)
-                player.isMuted = false
-                isPlaying = true
-                return
-            }
-            try player.sendParameters(parameters, atTime: CHHapticTimeImmediate)
-        }
-
-        do {
-            try send(startIfNeeded: true)
-            return true
-        } catch {
-            // The engine had not come up on its own. Start it explicitly and
-            // try the packet once more before giving the route up.
-            log.debug("rumble", "playback needs an explicit engine start: \(Self.describe(error))")
-            do {
-                try engine?.start()
-                isPlaying = false
-                try send(startIfNeeded: false)
-                return true
-            } catch {
-                log.warn("rumble", "playback failed: \(Self.describe(error))")
-                if let locality = currentLocality {
-                    record("\(locality): created, then \(Self.describe(error))")
-                }
-                let kind = engineKind
-                engineDidStop()
-                if let kind { noteFailure(kind, reason: Self.describe(error)) }
-                return false
-            }
-        }
-    }
-
-    /// Taptics have no continuous mode, so a rumble becomes a short train of
-    /// impacts. It is not a motor, and it is not pretending to be one, but it
-    /// is feedback where CoreHaptics can produce none.
-    private func playTaptics(intensity: Float, durationMs: Double) {
-        let style: UIImpactFeedbackGenerator.FeedbackStyle =
-            intensity > 0.66 ? .heavy : (intensity > 0.33 ? .medium : .light)
-        let generator = (tapticStyle == style ? tapticGenerator : nil)
-            ?? UIImpactFeedbackGenerator(style: style)
-        tapticGenerator = generator
-        tapticStyle = style
-        generator.prepare()
-        generator.impactOccurred(intensity: CGFloat(min(max(intensity, 0.1), 1)))
-
-        let seconds = durationMs > 0 ? min(durationMs / 1000, 2.5) : 0.25
-        guard seconds > 0.14 else { return }
-
-        tapticTask?.cancel()
-        tapticTask = Task { [weak self] in
-            let deadline = Date().addingTimeInterval(seconds)
-            while !Task.isCancelled, Date() < deadline {
-                try? await Task.sleep(for: .milliseconds(90))
-                guard !Task.isCancelled, let self else { return }
-                self.tapticGenerator?.impactOccurred(intensity: CGFloat(min(max(intensity, 0.1), 1)))
-            }
-        }
-    }
-
-    private func startStopTimer() {
-        guard stopTimer == nil else { return }
-        stopTimer = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(80))
-                guard !Task.isCancelled, let self else { return }
-                guard let deadline = self.stopDeadline else { return }
-                if Date() >= deadline {
-                    self.stop()
-                    return
-                }
-            }
-        }
-    }
-
-    private func normalise(_ value: Float) -> Float {
-        let scaled = value > 1 ? value / 100 : value
-        return min(max(scaled, 0), 1)
-    }
-
-    private func scale(_ value: Float) -> Float {
-        guard value > 0.005 else { return 0 }
-        return min(max(value * AppSettings.shared.rumbleIntensity, 0.05), 1)
     }
 }
