@@ -37,10 +37,17 @@ struct XboxWebView: UIViewRepresentable {
         /// The native HUD needs to press controls that belong to the site, and
         /// this is the only handle on that webview once it is on screen.
         func run(_ javaScript: String) {
-            guard let view = streamView else { return }
-            view.evaluateJavaScript(javaScript) { _, error in
+            guard let view = streamView else {
+                // Silence here is indistinguishable from a button that did
+                // nothing, so say so.
+                AppLog.shared.warn("stream", "no player page is attached; the command was dropped")
+                return
+            }
+            view.evaluateJavaScript(javaScript) { result, error in
                 if let error {
                     AppLog.shared.warn("stream", "command failed: \(error.localizedDescription)")
+                } else if let text = result as? String, !text.isEmpty {
+                    AppLog.shared.debug("stream", text)
                 }
             }
         }

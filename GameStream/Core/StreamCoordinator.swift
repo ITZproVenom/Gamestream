@@ -186,12 +186,18 @@ final class StreamCoordinator: ObservableObject {
     /// Opens the streaming enhancement's own menu.
     func openEnhancementMenu() {
         log.info("stream", "opening the enhancement menu")
+        XboxWebView.Registry.shared.run(
+            "window.__gsCommand ? '' : 'the command bridge is not installed on this page';"
+        )
         XboxWebView.Registry.shared.run("window.__gsCommand && window.__gsCommand('bxMenu');")
     }
 
     /// Presses the site's Xbox guide button.
     func pressGuide() {
         log.info("stream", "pressing the Xbox guide")
+        XboxWebView.Registry.shared.run(
+            "window.__gsCommand ? '' : 'the command bridge is not installed on this page';"
+        )
         XboxWebView.Registry.shared.run("window.__gsCommand && window.__gsCommand('guide');")
     }
 
