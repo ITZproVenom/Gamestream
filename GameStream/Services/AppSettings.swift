@@ -128,6 +128,12 @@ final class AppSettings: ObservableObject {
         static let adaptiveQuality = "settings.adaptiveQuality"
         static let preflightCheck = "settings.preflightCheck"
         static let maxBitrate = "settings.maxBitrateMbps"
+        static let enhancer = "settings.enhancer"
+        static let preferHEVC = "settings.preferHEVC"
+        static let sharpness = "settings.sharpness"
+        static let saturation = "settings.saturation"
+        static let contrast = "settings.contrast"
+        static let hideTouchControls = "settings.hideTouchControls"
     }
 
     @Published var theme: Theme { didSet { store(theme.rawValue, Key.theme) } }
@@ -164,6 +170,18 @@ final class AppSettings: ObservableObject {
     /// maximum of 15 Mbps — there is nothing above that to ask for.
     @Published var maxBitrateMbps: Int { didSet { store(maxBitrateMbps, Key.maxBitrate) } }
 
+    /// GameStream's own in-page enhancement layer.
+    @Published var enhancerEnabled: Bool { didSet { store(enhancerEnabled, Key.enhancer) } }
+    /// Ask for H.265 when the server offers it. Whether it does is reported,
+    /// never assumed.
+    @Published var preferHEVC: Bool { didSet { store(preferHEVC, Key.preferHEVC) } }
+    @Published var sharpness: Int { didSet { store(sharpness, Key.sharpness) } }
+    @Published var saturation: Int { didSet { store(saturation, Key.saturation) } }
+    @Published var contrast: Int { didSet { store(contrast, Key.contrast) } }
+    @Published var hideTouchControls: Bool {
+        didSet { store(hideTouchControls, Key.hideTouchControls) }
+    }
+
     private let defaults = UserDefaults.standard
 
     private init() {
@@ -189,6 +207,12 @@ final class AppSettings: ObservableObject {
         adaptiveQuality = defaults.object(forKey: Key.adaptiveQuality) as? Bool ?? true
         preflightCheck = defaults.object(forKey: Key.preflightCheck) as? Bool ?? true
         maxBitrateMbps = defaults.object(forKey: Key.maxBitrate) as? Int ?? 0
+        enhancerEnabled = defaults.object(forKey: Key.enhancer) as? Bool ?? true
+        preferHEVC = defaults.object(forKey: Key.preferHEVC) as? Bool ?? false
+        sharpness = defaults.object(forKey: Key.sharpness) as? Int ?? 0
+        saturation = defaults.object(forKey: Key.saturation) as? Int ?? 100
+        contrast = defaults.object(forKey: Key.contrast) as? Int ?? 100
+        hideTouchControls = defaults.object(forKey: Key.hideTouchControls) as? Bool ?? true
     }
 
     /// The preferences handed to Better xCloud before it boots.
@@ -238,5 +262,18 @@ final class AppSettings: ObservableObject {
 
     private func store(_ value: Any, _ key: String) {
         defaults.set(value, forKey: key)
+    }
+
+    /// The configuration handed to GameStream's own enhancement layer.
+    func enhancerConfiguration() -> StreamEnhancer.Configuration {
+        StreamEnhancer.Configuration(
+            enabled: enhancerEnabled,
+            preferHEVC: preferHEVC,
+            bitrateKbps: maxBitrateMbps > 0 ? maxBitrateMbps * 1000 : 0,
+            sharpness: sharpness,
+            saturation: saturation,
+            contrast: contrast,
+            hideTouchControls: hideTouchControls
+        )
     }
 }

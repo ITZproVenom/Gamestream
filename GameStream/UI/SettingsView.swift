@@ -8,6 +8,7 @@ struct SettingsView: View {
     @EnvironmentObject private var catalog: Catalog
     @EnvironmentObject private var rumble: ControllerRumble
     @StateObject private var network = NetworkCheck.shared
+    @StateObject private var stream = StreamCoordinator.shared
     @StateObject private var guardian = SessionGuard.shared
 
     @Binding var showingBrowser: Bool
@@ -357,6 +358,75 @@ struct SettingsView: View {
                      + "starts, so it applies to the next game you launch.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            SettingsDivider()
+
+            Toggle("GameStream enhancements", isOn: $settings.enhancerEnabled)
+            Text("Our own in-page layer. It edits the session description before the "
+                 + "stream is negotiated, which is the only place codec and bitrate "
+                 + "are actually decided.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if settings.enhancerEnabled {
+                Toggle("Hide the site's touch controls", isOn: $settings.hideTouchControls)
+
+                Toggle("Prefer H.265 when offered", isOn: $settings.preferHEVC)
+                Text(stream.offeredCodecs.isEmpty
+                     ? "Start a game to see which codecs the server offers."
+                     : "Server offered: \(stream.offeredCodecs).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack {
+                        Text("Sharpness").font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Text(settings.sharpness == 0 ? "Off" : "\(settings.sharpness)")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    Slider(value: Binding(
+                        get: { Double(settings.sharpness) },
+                        set: { settings.sharpness = Int($0) }
+                    ), in: 0...5, step: 1)
+                    Text("A real sharpening kernel over the video. It cannot add detail "
+                         + "the stream never sent, and high settings make compression "
+                         + "blocks more obvious, not less.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack {
+                        Text("Saturation").font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Text("\(settings.saturation)%")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    Slider(value: Binding(
+                        get: { Double(settings.saturation) },
+                        set: { settings.saturation = Int($0) }
+                    ), in: 50...150, step: 5)
+                }
+
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack {
+                        Text("Contrast").font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Text("\(settings.contrast)%")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    Slider(value: Binding(
+                        get: { Double(settings.contrast) },
+                        set: { settings.contrast = Int($0) }
+                    ), in: 50...150, step: 5)
+                }
             }
 
             SettingsDivider()

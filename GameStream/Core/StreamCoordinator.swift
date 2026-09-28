@@ -366,6 +366,18 @@ final class StreamCoordinator: ObservableObject {
         }
     }
 
+    /// What the enhancement layer saw in the session description.
+    ///
+    /// This is the only truthful source for which codecs are actually on
+    /// offer, which is why it is recorded rather than inferred from a
+    /// setting the user turned on.
+    @Published private(set) var offeredCodecs = ""
+
+    func enhancementReported(codecs: String, notes: String) {
+        if !codecs.isEmpty { offeredCodecs = codecs }
+        log.info("stream", "codecs: \(codecs)" + (notes.isEmpty ? "" : " — \(notes)"))
+    }
+
     /// Opens the streaming enhancement's own menu.
     func openEnhancementMenu() {
         log.info("stream", "opening the enhancement menu")

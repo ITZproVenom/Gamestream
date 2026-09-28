@@ -203,6 +203,12 @@ struct XboxWebView: UIViewRepresentable {
         controller.addUserScript(WKUserScript(source: RumbleBridge.javaScript,
                                               injectionTime: .atDocumentStart,
                                               forMainFrameOnly: false))
+        // GameStream's own enhancement layer wraps RTCPeerConnection, so like
+        // the rumble bridge it has to be in place before the page builds one.
+        controller.addUserScript(WKUserScript(
+            source: StreamEnhancer.script(settings.enhancerConfiguration()),
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true))
         controller.addUserScript(WKUserScript(source: WebScripts.betterXCloudPrefsJS(
             global: AppSettings.shared.betterXCloudGlobalPreferences(),
             stream: AppSettings.shared.betterXCloudStreamPreferences()),
@@ -307,6 +313,10 @@ struct XboxWebView: UIViewRepresentable {
                 let detail = body["detail"] as? String ?? ""
                 log.info("stream", "\(body["command"] as? String ?? "command"): \(detail)")
                 StreamCoordinator.shared.show(notice: detail)
+            case "enhance":
+                let codecs = body["codecs"] as? String ?? ""
+                let notes = body["notes"] as? String ?? ""
+                StreamCoordinator.shared.enhancementReported(codecs: codecs, notes: notes)
             case "rumble":
                 RumbleBridge.handle(payload: body)
             case "rumbleCaps":
