@@ -139,6 +139,12 @@ final class AppSettings: ObservableObject {
         static let fillScreen = "settings.fillScreen"
         static let volumeBoost = "settings.volumeBoost"
         static let hideSiteOverlays = "settings.hideSiteOverlays"
+        static let codecProfile = "settings.codecProfile"
+        static let preferIPv6 = "settings.preferIPv6"
+        static let blockTracking = "settings.blockTracking"
+        static let skipSplash = "settings.skipSplash"
+        static let deadzone = "settings.deadzone"
+        static let triggerDeadzone = "settings.triggerDeadzone"
     }
 
     @Published var theme: Theme { didSet { store(theme.rawValue, Key.theme) } }
@@ -193,6 +199,16 @@ final class AppSettings: ObservableObject {
     @Published var hideSiteOverlays: Bool {
         didSet { store(hideSiteOverlays, Key.hideSiteOverlays) }
     }
+    /// "", "baseline", "main" or "high". Higher profiles compress better at
+    /// the same bitrate; the server decides whether it offers one.
+    @Published var codecProfile: String { didSet { store(codecProfile, Key.codecProfile) } }
+    @Published var preferIPv6: Bool { didSet { store(preferIPv6, Key.preferIPv6) } }
+    @Published var blockTracking: Bool { didSet { store(blockTracking, Key.blockTracking) } }
+    @Published var skipSplash: Bool { didSet { store(skipSplash, Key.skipSplash) } }
+    @Published var deadzone: Int { didSet { store(deadzone, Key.deadzone) } }
+    @Published var triggerDeadzone: Int {
+        didSet { store(triggerDeadzone, Key.triggerDeadzone) }
+    }
 
     private let defaults = UserDefaults.standard
 
@@ -230,6 +246,12 @@ final class AppSettings: ObservableObject {
         fillScreen = defaults.object(forKey: Key.fillScreen) as? Bool ?? false
         volumeBoost = defaults.object(forKey: Key.volumeBoost) as? Int ?? 100
         hideSiteOverlays = defaults.object(forKey: Key.hideSiteOverlays) as? Bool ?? true
+        codecProfile = defaults.string(forKey: Key.codecProfile) ?? ""
+        preferIPv6 = defaults.object(forKey: Key.preferIPv6) as? Bool ?? false
+        blockTracking = defaults.object(forKey: Key.blockTracking) as? Bool ?? true
+        skipSplash = defaults.object(forKey: Key.skipSplash) as? Bool ?? true
+        deadzone = defaults.object(forKey: Key.deadzone) as? Int ?? 0
+        triggerDeadzone = defaults.object(forKey: Key.triggerDeadzone) as? Int ?? 0
     }
 
     /// The preferences handed to Better xCloud before it boots.
@@ -260,7 +282,14 @@ final class AppSettings: ObservableObject {
             fillScreen: fillScreen,
             volumeBoost: volumeBoost,
             hideTouchControls: hideTouchControls,
-            hideSiteOverlays: hideSiteOverlays
+            hideSiteOverlays: hideSiteOverlays,
+            codecProfile: codecProfile,
+            preferIPv6: preferIPv6,
+            blockTracking: blockTracking,
+            skipSplash: skipSplash,
+            deadzone: deadzone,
+            triggerDeadzone: triggerDeadzone,
+            vibrationScale: Int(rumbleIntensity * 100)
         )
     }
 }

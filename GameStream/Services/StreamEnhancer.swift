@@ -35,6 +35,13 @@ enum StreamEnhancer {
         var volumeBoost: Int          // percent, 100 = untouched
         var hideTouchControls: Bool
         var hideSiteOverlays: Bool
+        var codecProfile: String      // "", "baseline", "main", "high"
+        var preferIPv6: Bool
+        var blockTracking: Bool
+        var skipSplash: Bool
+        var deadzone: Int             // percent of stick travel ignored
+        var triggerDeadzone: Int      // percent of trigger travel ignored
+        var vibrationScale: Int       // percent applied to rumble magnitudes
     }
 
     static func script(_ configuration: Configuration) -> String {
@@ -132,6 +139,61 @@ enum StreamEnhancer {
             lines.splice(section.start + 1, 0, "b=AS:" + kbps);
         }
 
+        /// H.264 profiles are distinguished by the first byte of
+        /// profile-level-id on the codec's fmtp line, not by the codec name:
+        /// 42 is baseline, 4d main, 64 high. Higher profiles compress better
+        /// at the same bitrate, which is the whole reason to ask.
+        function preferProfile(lines, section, profile) {
+            var prefix = profile === "high" ? "64"
+                       : profile === "main" ? "4d"
+                       : profile === "baseline" ? "42" : null;
+            if (!prefix) return false;
+
+            var wanted = [];
+            for (var i = section.start; i < section.end; i++) {
+                var match = /^a=fmtp:(\d+)\s+(.*)$/.exec(lines[i]);
+                if (!match) continue;
+                var id = /profile-level-id=([0-9a-fA-F]{6})/.exec(match[2]);
+                if (id && id[1].toLowerCase().indexOf(prefix) === 0) wanted.push(match[1]);
+            }
+            if (!wanted.length) return false;
+
+            var parts = lines[section.start].split(" ");
+            var reordered = wanted.slice();
+            var payloads = parts.slice(3);
+            for (var p = 0; p < payloads.length; p++) {
+                if (reordered.indexOf(payloads[p]) === -1) reordered.push(payloads[p]);
+            }
+            lines[section.start] = parts.slice(0, 3).concat(reordered).join(" ");
+            return true;
+        }
+
+        /// Puts IPv6 candidates ahead of IPv4 ones. On a network with real
+        /// IPv6 this often avoids a layer of carrier NAT; where there is no
+        /// IPv6 there is nothing to reorder and nothing changes.
+        function preferIPv6Candidates(lines) {
+            var sixes = [];
+            var rest = [];
+            var moved = false;
+            for (var i = 0; i < lines.length; i++) {
+                if (lines[i].indexOf("a=candidate:") !== 0) { rest.push(lines[i]); continue; }
+                if (lines[i].indexOf(":") !== -1 && /\s[0-9a-fA-F]*:[0-9a-fA-F:]+\s/.test(lines[i])) {
+                    sixes.push(lines[i]);
+                    moved = true;
+                } else {
+                    rest.push(lines[i]);
+                }
+            }
+            if (!moved) return false;
+            // Reinsert the IPv6 candidates at the first candidate position.
+            var at = rest.findIndex(function(line) { return line.indexOf("a=candidate:") === 0; });
+            if (at < 0) at = rest.length;
+            Array.prototype.splice.apply(rest, [at, 0].concat(sixes));
+            lines.length = 0;
+            Array.prototype.push.apply(lines, rest);
+            return true;
+        }
+
         function edit(sdp) {
             if (typeof sdp !== "string" || !sdp.length) return sdp;
             var lines = sdp.split(/\r\n|\n/);
@@ -146,8 +208,18 @@ enum StreamEnhancer {
                     report.chosen = "H265";
                     report.notes.push("asked for H.265");
                 } else {
-                    report.notes.push("H.265 was not offered by the server");
+                    report.notes.push("H.265 was not offered");
                 }
+            }
+            if (config.codecProfile) {
+                if (preferProfile(lines, section, config.codecProfile)) {
+                    report.notes.push("asked for H.264 " + config.codecProfile);
+                } else {
+                    report.notes.push("H.264 " + config.codecProfile + " was not offered");
+                }
+            }
+            if (config.preferIPv6) {
+                if (preferIPv6Candidates(lines)) report.notes.push("IPv6 first");
             }
             if (config.bitrateKbps > 0) {
                 setBitrate(lines, section, config.bitrateKbps);
@@ -204,6 +276,127 @@ enum StreamEnhancer {
             window.RTCPeerConnection = Wrapped;
             if (window.webkitRTCPeerConnection) window.webkitRTCPeerConnection = Wrapped;
         }
+
+        // ---- Controller ---------------------------------------------------
+        //
+        // The page reads pads through the Gamepad API, so a deadzone applied
+        // here is applied before the page ever sees the stick. Rescaling the
+        // remainder matters as much as the cut: a raw cut leaves a dead step
+        // at the edge of the zone where the stick suddenly jumps.
+
+        function shapeAxis(value, cut) {
+            if (!cut) return value;
+            var magnitude = Math.abs(value);
+            if (magnitude <= cut) return 0;
+            var scaled = (magnitude - cut) / (1 - cut);
+            return value < 0 ? -scaled : scaled;
+        }
+
+        function installGamepadShaping() {
+            var original = navigator.getGamepads;
+            if (typeof original !== "function") return;
+            navigator.getGamepads = function() {
+                var pads = original.apply(navigator, arguments);
+                var stickCut = (config.deadzone || 0) / 100;
+                var triggerCut = (config.triggerDeadzone || 0) / 100;
+                if (!stickCut && !triggerCut) return pads;
+
+                var shaped = [];
+                for (var i = 0; i < pads.length; i++) {
+                    var pad = pads[i];
+                    if (!pad) { shaped.push(pad); continue; }
+                    var axes = Array.prototype.slice.call(pad.axes);
+                    for (var a = 0; a < axes.length; a++) {
+                        axes[a] = shapeAxis(axes[a], stickCut);
+                    }
+                    var buttons = Array.prototype.slice.call(pad.buttons);
+                    if (triggerCut) {
+                        // 6 and 7 are the triggers in the standard mapping.
+                        for (var b = 6; b <= 7 && b < buttons.length; b++) {
+                            var button = buttons[b];
+                            var value = shapeAxis(button.value, triggerCut);
+                            buttons[b] = {
+                                pressed: value > 0,
+                                touched: button.touched,
+                                value: value
+                            };
+                        }
+                    }
+                    // A plain object: the real Gamepad is read-only, and the
+                    // page only ever reads these fields off it.
+                    shaped.push({
+                        id: pad.id, index: pad.index, connected: pad.connected,
+                        mapping: pad.mapping, timestamp: pad.timestamp,
+                        axes: axes, buttons: buttons,
+                        vibrationActuator: pad.vibrationActuator,
+                        hapticActuators: pad.hapticActuators
+                    });
+                }
+                return shaped;
+            };
+        }
+
+        installGamepadShaping();
+
+        // ---- Network noise --------------------------------------------------
+
+        /// Drops the page's telemetry without touching anything it needs.
+        ///
+        /// Matched on host, not on a guess about what a URL is for: blocking
+        /// by keyword catches real API calls and breaks the player.
+        var BLOCKED = [
+            "browser.events.data.microsoft.com",
+            "mobile.events.data.microsoft.com",
+            "dc.services.visualstudio.com",
+            "js.monitor.azure.com",
+            "google-analytics.com",
+            "googletagmanager.com"
+        ];
+
+        function blocked(url) {
+            try {
+                var host = new URL(url, location.href).hostname;
+                for (var i = 0; i < BLOCKED.length; i++) {
+                    if (host === BLOCKED[i] || host.indexOf("." + BLOCKED[i]) !== -1) {
+                        return true;
+                    }
+                }
+            } catch (e) {}
+            return false;
+        }
+
+        function installBlocking() {
+            if (!config.blockTracking) return;
+            var fetchOriginal = window.fetch;
+            if (typeof fetchOriginal === "function") {
+                window.fetch = function(input) {
+                    var url = typeof input === "string" ? input : (input && input.url);
+                    if (url && blocked(url)) {
+                        return Promise.resolve(new Response("", { status: 204 }));
+                    }
+                    return fetchOriginal.apply(window, arguments);
+                };
+            }
+            var openOriginal = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function(method, url) {
+                this.__gsBlocked = url && blocked(url);
+                return openOriginal.apply(this, arguments);
+            };
+            var sendOriginal = XMLHttpRequest.prototype.send;
+            XMLHttpRequest.prototype.send = function() {
+                if (this.__gsBlocked) return;
+                return sendOriginal.apply(this, arguments);
+            };
+            if (navigator.sendBeacon) {
+                var beacon = navigator.sendBeacon.bind(navigator);
+                navigator.sendBeacon = function(url) {
+                    if (blocked(url)) return true;
+                    return beacon.apply(navigator, arguments);
+                };
+            }
+        }
+
+        installBlocking();
 
         // ---- Picture ------------------------------------------------------
 
@@ -294,7 +487,13 @@ enum StreamEnhancer {
                            + "[class*=\"touch-control\"] { display: none !important; }");
             }
             if (config.hideSiteOverlays) {
-                rules.push("#StreamHud, .bx-stats-bar, #bx-game-bar { display: none !important; }");
+                rules.push("#StreamHud { display: none !important; }");
+            }
+            if (config.skipSplash) {
+                // The launch animation and the big piece of key art behind
+                // it, both of which only delay the picture.
+                rules.push("[class*=\"SplashScreen\"], [class*=\"splash\"], "
+                           + "[class*=\"GameArtBackground\"] { display: none !important; }");
             }
 
             var video = document.querySelector("video");

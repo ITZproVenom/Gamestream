@@ -20,6 +20,7 @@ struct StreamMenuView: View {
         case quality = "Quality"
         case audio = "Audio"
         case controller = "Controller"
+        case network = "Network"
         case session = "Session"
 
         var id: String { rawValue }
@@ -30,6 +31,7 @@ struct StreamMenuView: View {
             case .quality: return "antenna.radiowaves.left.and.right"
             case .audio: return "speaker.wave.2.fill"
             case .controller: return "gamecontroller.fill"
+            case .network: return "network"
             case .session: return "clock.fill"
             }
         }
@@ -48,6 +50,7 @@ struct StreamMenuView: View {
                     case .quality: quality
                     case .audio: audio
                     case .controller: controllerTab
+                    case .network: networkTab
                     case .session: sessionTab
                     }
                 }
@@ -156,10 +159,23 @@ struct StreamMenuView: View {
                        + "negotiated when a session starts, so it applies to the next "
                        + "game you launch.")
 
-            Toggle("Prefer H.265 when offered", isOn: $settings.preferHEVC)
-            caption(stream.offeredCodecs.isEmpty
-                    ? "The codecs the server offers appear here once a game is running."
-                    : "Server offered: \(stream.offeredCodecs).")
+            Divider().opacity(0.3)
+            Text("Codec").font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Picker("H.264 profile", selection: $settings.codecProfile) {
+                Text("Whatever is offered").tag("")
+                Text("Baseline").tag("baseline")
+                Text("Main").tag("main")
+                Text("High").tag("high")
+            }
+            .pickerStyle(.segmented)
+            caption("Higher profiles fit more detail into the same bitrate. The server "
+                    + "decides whether it offers one, and the choice is made when a "
+                    + "session starts.")
+
+            Toggle("Request HDR (H.265)", isOn: $settings.preferHEVC)
+            caption(hdrExplanation)
 
             Toggle("Hide the site's touch controls", isOn: $settings.hideTouchControls)
             Toggle("Hide the site's own overlays", isOn: $settings.hideSiteOverlays)
@@ -220,11 +236,77 @@ struct StreamMenuView: View {
                 }
                 Slider(value: $settings.rumbleIntensity, in: 0.5...2.5, step: 0.1)
             }
+            Divider().opacity(0.3)
+
+            slider("Stick deadzone", value: $settings.deadzone, range: 0...40, step: 1,
+                   caption: settings.deadzone == 0 ? "Off" : "\(settings.deadzone)%",
+                   help: "Ignores the first part of the stick's travel, then rescales "
+                       + "the rest so there is no jump at the edge of the zone. "
+                       + "Applied before the stream ever sees the stick.")
+
+            slider("Trigger deadzone", value: $settings.triggerDeadzone,
+                   range: 0...40, step: 1,
+                   caption: settings.triggerDeadzone == 0
+                       ? "Off" : "\(settings.triggerDeadzone)%")
+
+            Divider().opacity(0.3)
+
             Toggle("Use the phone when the pad cannot rumble",
                    isOn: $settings.phoneRumbleFallback)
             caption("Some controllers advertise haptics they cannot actually play. This "
                     + "is the consolation prize, and it is the phone buzzing, not the pad.")
         }
+        .onChange(of: settings.deadzone) { _, _ in apply() }
+        .onChange(of: settings.triggerDeadzone) { _, _ in apply() }
+    }
+
+    // MARK: - Network
+
+    private var networkTab: some View {
+        Group {
+            Toggle("Prefer IPv6", isOn: $settings.preferIPv6)
+            caption("Puts IPv6 candidates first when negotiating. On a network with "
+                    + "real IPv6 this often skips a layer of carrier NAT; where there "
+                    + "is none, nothing changes.")
+
+            Toggle("Block telemetry", isOn: $settings.blockTracking)
+            caption("Drops requests to known analytics hosts. Matched on the host "
+                    + "itself, never on a guess about what a URL is for, because "
+                    + "keyword matching catches real API calls and breaks the player.")
+
+            Toggle("Skip the launch animation", isOn: $settings.skipSplash)
+
+            Divider().opacity(0.3)
+            Text("Region").font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Picker("Region", selection: $settings.region) {
+                ForEach(AppSettings.Region.allCases, id: \.self) { option in
+                    Text(option.title).tag(option)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+        .onChange(of: settings.blockTracking) { _, _ in apply() }
+        .onChange(of: settings.skipSplash) { _, _ in apply() }
+    }
+
+    /// Said plainly, because a switch that quietly does nothing is worse
+    /// than no switch at all.
+    private var hdrExplanation: String {
+        let offered = stream.offeredCodecs
+        if offered.isEmpty {
+            return "HDR needs H.265, and the service only sends it to clients it "
+                + "offers it to. This asks. Start a game and the codecs the server "
+                + "actually offered appear here."
+        }
+        if offered.localizedCaseInsensitiveContains("H265")
+            || offered.localizedCaseInsensitiveContains("HEVC") {
+            return "Server offered: \(offered). H.265 is available, so HDR is "
+                + "genuinely possible on this connection."
+        }
+        return "Server offered: \(offered). No H.265, so this stream is SDR and "
+            + "asking again will not change that. The toggle stays on for the next "
+            + "session in case the server's answer changes."
     }
 
     // MARK: - Session
