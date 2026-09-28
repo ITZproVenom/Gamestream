@@ -207,9 +207,12 @@ struct StreamView: View {
                         stream.pressGuide()
                     }
 
-                    hudIcon("slider.horizontal.3", label: "Streaming enhancements",
+                    hudIcon(stream.enhancementMenuOpen
+                            ? "slider.horizontal.3" : "slider.horizontal.3",
+                            label: stream.enhancementMenuOpen
+                            ? "Close enhancements" : "Streaming enhancements",
                             id: "enhance") {
-                        stream.openEnhancementMenu()
+                        stream.toggleEnhancementMenu()
                     }
 
                     hudIcon("camera.fill", label: "Screenshot", id: "shot") {

@@ -350,6 +350,22 @@ final class StreamCoordinator: ObservableObject {
         }
     }
 
+    /// Whether the enhancement's menu is believed to be open, so the same
+    /// button can put it away again. Its dialog is hard to dismiss by touch
+    /// in this webview, so leaving the only exit inside it is a trap.
+    @Published private(set) var enhancementMenuOpen = false
+
+    /// Opens or closes the enhancement's menu.
+    func toggleEnhancementMenu() {
+        if enhancementMenuOpen {
+            closeEnhancementMenu()
+            enhancementMenuOpen = false
+        } else {
+            openEnhancementMenu()
+            enhancementMenuOpen = true
+        }
+    }
+
     /// Opens the streaming enhancement's own menu.
     func openEnhancementMenu() {
         log.info("stream", "opening the enhancement menu")
@@ -357,6 +373,14 @@ final class StreamCoordinator: ObservableObject {
             "window.__gsCommand ? '' : 'the command bridge is not installed on this page';"
         )
         XboxWebView.Registry.shared.run("window.__gsCommand && window.__gsCommand('bxMenu');")
+    }
+
+    /// Closes the enhancement's menu and clears anything it left over the
+    /// game. Dismissing it by tapping outside leaves its dimming overlay in
+    /// the page, which swallows every touch meant for the stream.
+    func closeEnhancementMenu() {
+        log.info("stream", "closing the enhancement menu")
+        XboxWebView.Registry.shared.run("window.__gsCommand && window.__gsCommand('bxClose');")
     }
 
     /// Presses the site's Xbox guide button.

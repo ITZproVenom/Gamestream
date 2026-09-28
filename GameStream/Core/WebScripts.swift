@@ -285,7 +285,23 @@ enum WebScripts {
             // holds, so the button stays present and untappable. Forcing it
             // back is scoped to that one button's subtree, which sits inside
             // a HUD that is itself unclickable while hidden.
-            "[title=\"Better xCloud\"], [title=\"Better xCloud\"] * { pointer-events: auto !important; }"
+            "[title=\"Better xCloud\"], [title=\"Better xCloud\"] * { pointer-events: auto !important; }",
+            // The site's own HUD is redundant now that the app has its own,
+            // and it overlaps it. Hidden with opacity rather than display so
+            // the elements keep their layout and still answer a programmatic
+            // click: quit and the guide are driven by pressing the real
+            // controls, and display:none would be a behaviour change on a
+            // path that already works.
+            "#StreamHud { opacity: 0 !important; pointer-events: none !important; }",
+            "#bx-game-bar { display: none !important; }",
+            // Better xCloud's own stats bar duplicates the app's, in a
+            // different place and a different font, over the game.
+            ".bx-stats-bar { display: none !important; }",
+            // Its dialog dims the stream behind a blurred overlay. When the
+            // overlay outlives the dialog the game is left permanently
+            // frosted, which only a reconnect used to clear. The blur is
+            // removed outright so a stale overlay is at worst invisible.
+            ".bx-dialog-overlay { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgba(0,0,0,0.4) !important; }"
         ].join("\n");
 
         function onLaunchPage() {
@@ -700,6 +716,63 @@ enum WebScripts {
             }
         }
 
+        /// Closes the enhancement's dialog and clears what it leaves behind.
+        ///
+        /// Tapping outside the dialog dismisses it visually but can leave the
+        /// dimming overlay in the document. That overlay swallows every touch
+        /// meant for the game, which reads as a frozen, frosted picture that
+        /// only a reconnect clears.
+        function closeBxSettings() {
+            try {
+                if (typeof SettingsDialog !== "undefined" && SettingsDialog.getInstance) {
+                    var dialog = SettingsDialog.getInstance();
+                    if (dialog && dialog.hide) dialog.hide();
+                }
+            } catch (e) {}
+            return sweepOverlays();
+        }
+
+        /// Removes any dimming overlay that no longer has a dialog to dim.
+        function sweepOverlays() {
+            var removed = 0;
+            var dialogs = document.querySelectorAll(
+                ".bx-settings-dialog, .bx-navigation-dialog, .bx-centered-dialog, .bx-key-binding-dialog"
+            );
+            var open = false;
+            for (var d = 0; d < dialogs.length; d++) {
+                var node = dialogs[d];
+                if (node.classList.contains("bx-gone")) continue;
+                var box = node.getBoundingClientRect();
+                if (box.width > 8 && box.height > 8) { open = true; break; }
+            }
+            if (open) return "a dialog is still open";
+
+            var overlays = document.querySelectorAll(".bx-dialog-overlay");
+            for (var i = 0; i < overlays.length; i++) {
+                if (overlays[i].parentNode) {
+                    overlays[i].parentNode.removeChild(overlays[i]);
+                    removed++;
+                }
+            }
+            // Anything the script blurred directly, unblurred.
+            var blurred = document.querySelectorAll("[style*=\"blur\"]");
+            for (var b = 0; b < blurred.length; b++) {
+                blurred[b].style.removeProperty("filter");
+                blurred[b].style.removeProperty("-webkit-filter");
+                blurred[b].style.removeProperty("backdrop-filter");
+            }
+            return removed ? ("cleared " + removed + " stale overlay(s)") : "nothing to clear";
+        }
+
+        // A dialog dismissed by tapping outside never routes through our
+        // close command, so the sweep also runs on a slow timer. It is a
+        // cheap query and only acts when there is nothing open.
+        setInterval(function() {
+            try {
+                if (document.querySelector(".bx-dialog-overlay")) sweepOverlays();
+            } catch (e) {}
+        }, 1000);
+
         window.__gsCommand = function(command) {
             var target = null;
 
@@ -716,6 +789,9 @@ enum WebScripts {
                     ".bx-header-settings-button"
                 ], /better\s*xcloud/);
                 enable(target);
+            } else if (command === "bxClose") {
+                note(command, closeBxSettings());
+                return true;
             } else if (command === "quit") {
                 // Ending the session properly is the site's own quit, inside
                 // the guide. Closing the player only stops the picture; the
