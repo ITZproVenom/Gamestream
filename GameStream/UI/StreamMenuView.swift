@@ -126,6 +126,28 @@ struct StreamMenuView: View {
             slider("Zoom", value: $settings.zoom, range: 100...140, step: 2,
                    caption: settings.zoom == 100 ? "Fit" : "\(settings.zoom)%")
 
+            Divider().opacity(0.3)
+
+            Text("Shape").font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Picker("Aspect ratio", selection: $settings.aspectRatio) {
+                Text("As sent").tag("")
+                Text("16:9").tag("16:9")
+                Text("16:10").tag("16:10")
+                Text("18:9").tag("18:9")
+                Text("21:9").tag("21:9")
+                Text("4:3").tag("4:3")
+            }
+            .pickerStyle(.segmented)
+
+            Picker("Position", selection: $settings.videoPosition) {
+                Text("Top").tag("top")
+                Text("Centre").tag("center")
+                Text("Bottom").tag("bottom")
+            }
+            .pickerStyle(.segmented)
+            caption("Where the picture sits when a forced shape leaves room around it.")
+
             Toggle("Fill the screen", isOn: $settings.fillScreen)
             caption("Crops the edges instead of letterboxing. On a phone that usually "
                     + "costs a sliver of the top and bottom.")
@@ -146,6 +168,8 @@ struct StreamMenuView: View {
         .onChange(of: settings.saturation) { _, _ in apply() }
         .onChange(of: settings.zoom) { _, _ in apply() }
         .onChange(of: settings.fillScreen) { _, _ in apply() }
+        .onChange(of: settings.aspectRatio) { _, _ in apply() }
+        .onChange(of: settings.videoPosition) { _, _ in apply() }
     }
 
     // MARK: - Quality
@@ -177,7 +201,39 @@ struct StreamMenuView: View {
             Toggle("Request HDR (H.265)", isOn: $settings.preferHEVC)
             caption(hdrExplanation)
 
-            Toggle("Hide the site's touch controls", isOn: $settings.hideTouchControls)
+            Divider().opacity(0.3)
+
+            Picker("Resolution", selection: $settings.resolutionPref) {
+                Text("Server's choice").tag("")
+                Text("720p").tag("720p")
+                Text("1080p").tag("1080p")
+            }
+            .pickerStyle(.segmented)
+
+            slider("Frame rate cap", value: $settings.maxFps, range: 0...60, step: 10,
+                   caption: settings.maxFps == 0 ? "Uncapped" : "\(settings.maxFps) fps",
+                   help: "A lower cap spends the same bitrate on fewer, better frames. "
+                       + "The sender may ignore it.")
+
+            Toggle("Hold the resolution", isOn: $settings.preventResolutionDrops)
+            caption("Asks the encoder not to drop resolution when the connection dips. "
+                    + "You get stutter instead of blur, which suits slower games and "
+                    + "hurts fast ones.")
+
+            Divider().opacity(0.3)
+
+            Picker("Touch controls", selection: $settings.touchMode) {
+                Text("Off").tag("off")
+                Text("Supported games").tag("default")
+                Text("All games").tag("all")
+            }
+            .pickerStyle(.segmented)
+
+            if settings.touchMode != "off" {
+                slider("Touch opacity", value: $settings.touchOpacity,
+                       range: 20...100, step: 5, caption: "\(settings.touchOpacity)%")
+            }
+
             Toggle("Hide the site's own overlays", isOn: $settings.hideSiteOverlays)
 
             if let stats = stream.stats {
@@ -197,7 +253,8 @@ struct StreamMenuView: View {
                 }
             }
         }
-        .onChange(of: settings.hideTouchControls) { _, _ in apply() }
+        .onChange(of: settings.touchMode) { _, _ in apply() }
+        .onChange(of: settings.touchOpacity) { _, _ in apply() }
         .onChange(of: settings.hideSiteOverlays) { _, _ in apply() }
     }
 
@@ -249,6 +306,12 @@ struct StreamMenuView: View {
                    caption: settings.triggerDeadzone == 0
                        ? "Off" : "\(settings.triggerDeadzone)%")
 
+            slider("Polling floor", value: $settings.pollingRate, range: 0...16, step: 2,
+                   caption: settings.pollingRate == 0
+                       ? "Every frame" : "\(settings.pollingRate) ms",
+                   help: "How often the pad is actually read. Every frame is the most "
+                       + "current; a floor trades a little latency for less work.")
+
             Divider().opacity(0.3)
 
             Toggle("Use the phone when the pad cannot rumble",
@@ -257,6 +320,7 @@ struct StreamMenuView: View {
                     + "is the consolation prize, and it is the phone buzzing, not the pad.")
         }
         .onChange(of: settings.deadzone) { _, _ in apply() }
+        .onChange(of: settings.pollingRate) { _, _ in apply() }
         .onChange(of: settings.triggerDeadzone) { _, _ in apply() }
     }
 
@@ -275,6 +339,10 @@ struct StreamMenuView: View {
                     + "keyword matching catches real API calls and breaks the player.")
 
             Toggle("Skip the launch animation", isOn: $settings.skipSplash)
+            Toggle("Hide the loading artwork", isOn: $settings.hideLoadingArt)
+            Toggle("Hide social panels", isOn: $settings.blockSocial)
+            Toggle("Reduce animations", isOn: $settings.reduceAnimations)
+            Toggle("Hide scrollbars", isOn: $settings.hideScrollbars)
 
             Divider().opacity(0.3)
             Text("Region").font(.subheadline.weight(.semibold))
@@ -288,6 +356,10 @@ struct StreamMenuView: View {
         }
         .onChange(of: settings.blockTracking) { _, _ in apply() }
         .onChange(of: settings.skipSplash) { _, _ in apply() }
+        .onChange(of: settings.hideLoadingArt) { _, _ in apply() }
+        .onChange(of: settings.blockSocial) { _, _ in apply() }
+        .onChange(of: settings.reduceAnimations) { _, _ in apply() }
+        .onChange(of: settings.hideScrollbars) { _, _ in apply() }
     }
 
     /// Said plainly, because a switch that quietly does nothing is worse
@@ -317,6 +389,20 @@ struct StreamMenuView: View {
             Toggle("Reconnect automatically", isOn: $settings.autoReconnect)
             Toggle("Stop if the phone overheats", isOn: $settings.thermalGuard)
             Toggle("Warn on low battery", isOn: $settings.batteryGuard)
+            Divider().opacity(0.3)
+            Text("Statistics").font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Picker("Position", selection: $settings.statsPosition) {
+                Text("Top").tag("top")
+                Text("Bottom").tag("bottom")
+            }
+            .pickerStyle(.segmented)
+            slider("Opacity", value: $settings.statsOpacity, range: 20...100, step: 5,
+                   caption: "\(settings.statsOpacity)%")
+            slider("Text size", value: $settings.statsTextSize, range: 70...150, step: 10,
+                   caption: "\(settings.statsTextSize)%")
+
+            Divider().opacity(0.3)
             slider("Session limit", value: $settings.sessionLimitMinutes,
                    range: 0...240, step: 15,
                    caption: settings.sessionLimitMinutes == 0

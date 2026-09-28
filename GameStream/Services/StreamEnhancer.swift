@@ -42,6 +42,18 @@ enum StreamEnhancer {
         var deadzone: Int             // percent of stick travel ignored
         var triggerDeadzone: Int      // percent of trigger travel ignored
         var vibrationScale: Int       // percent applied to rumble magnitudes
+        var aspectRatio: String       // "", "16:9", "16:10", "18:9", "21:9", "4:3"
+        var videoPosition: String     // "center", "top", "bottom"
+        var maxFps: Int               // 0 = uncapped
+        var resolution: String        // "", "720p", "1080p"
+        var preventResolutionDrops: Bool
+        var touchMode: String         // "default", "all", "off"
+        var touchOpacity: Int         // percent
+        var blockSocial: Bool
+        var reduceAnimations: Bool
+        var hideScrollbars: Bool
+        var hideLoadingArt: Bool
+        var pollingRate: Int          // milliseconds between gamepad reads
     }
 
     static func script(_ configuration: Configuration) -> String {
@@ -194,6 +206,19 @@ enum StreamEnhancer {
             return true;
         }
 
+        /// Replaces or inserts one `a=` attribute in the video section.
+        function setAttribute(lines, section, name, value) {
+            var prefix = "a=" + name + ":";
+            for (var i = section.start + 1; i < section.end; i++) {
+                if (lines[i].indexOf(prefix) === 0) {
+                    lines[i] = prefix + value;
+                    return;
+                }
+            }
+            lines.splice(section.end, 0, prefix + value);
+            section.end++;
+        }
+
         function edit(sdp) {
             if (typeof sdp !== "string" || !sdp.length) return sdp;
             var lines = sdp.split(/\r\n|\n/);
@@ -220,6 +245,19 @@ enum StreamEnhancer {
             }
             if (config.preferIPv6) {
                 if (preferIPv6Candidates(lines)) report.notes.push("IPv6 first");
+            }
+            if (config.maxFps > 0) {
+                // Stated as a receiver framerate on the video section. The
+                // sender is free to ignore it; when it does not, a lower cap
+                // spends the same bitrate on fewer, better frames.
+                setAttribute(lines, section, "framerate", String(config.maxFps));
+                report.notes.push("asked for " + config.maxFps + " fps");
+            }
+            if (config.resolution) {
+                var size = config.resolution === "720p" ? [1280, 720] : [1920, 1080];
+                setAttribute(lines, section, "imageattr",
+                             "* send * recv [x=" + size[0] + ",y=" + size[1] + "]");
+                report.notes.push("asked for " + config.resolution);
             }
             if (config.bitrateKbps > 0) {
                 setBitrate(lines, section, config.bitrateKbps);
@@ -295,11 +333,23 @@ enum StreamEnhancer {
         function installGamepadShaping() {
             var original = navigator.getGamepads;
             if (typeof original !== "function") return;
+            var lastRead = 0;
+            var cached = null;
             navigator.getGamepads = function() {
+                // A polling floor. The page reads pads every animation frame;
+                // on a slow pad that is wasted work, and on a fast one the
+                // extra reads are what make input feel current, so this is a
+                // choice rather than a default.
+                var interval = config.pollingRate || 0;
+                if (interval > 0 && cached) {
+                    var now = Date.now();
+                    if (now - lastRead < interval) return cached;
+                    lastRead = now;
+                }
                 var pads = original.apply(navigator, arguments);
                 var stickCut = (config.deadzone || 0) / 100;
                 var triggerCut = (config.triggerDeadzone || 0) / 100;
-                if (!stickCut && !triggerCut) return pads;
+                if (!stickCut && !triggerCut) { cached = pads; return pads; }
 
                 var shaped = [];
                 for (var i = 0; i < pads.length; i++) {
@@ -332,6 +382,7 @@ enum StreamEnhancer {
                         hapticActuators: pad.hapticActuators
                     });
                 }
+                cached = shaped;
                 return shaped;
             };
         }
@@ -478,6 +529,42 @@ enum StreamEnhancer {
             }
             rules.push("video { object-fit: "
                        + (config.fillScreen ? "cover" : "contain") + " !important; }");
+
+            // A forced ratio is applied to the element, not the picture: the
+            // stream arrives at whatever shape the server sends and the box
+            // it is drawn into decides what is cropped or padded.
+            if (config.aspectRatio) {
+                rules.push("video { aspect-ratio: "
+                           + config.aspectRatio.replace(":", " / ") + " !important; "
+                           + "margin: auto !important; }");
+            }
+            if (config.videoPosition && config.videoPosition !== "center") {
+                rules.push("video { object-position: center "
+                           + (config.videoPosition === "top" ? "top" : "bottom")
+                           + " !important; }");
+            }
+            if (config.touchOpacity && config.touchOpacity !== 100) {
+                rules.push("#TouchControls, [class*=\"TouchControl\"] { opacity: "
+                           + (config.touchOpacity / 100) + " !important; }");
+            }
+            if (config.reduceAnimations) {
+                rules.push("*, *::before, *::after { animation-duration: 0.001s !important; "
+                           + "transition-duration: 0.001s !important; }");
+            }
+            if (config.hideScrollbars) {
+                rules.push("::-webkit-scrollbar { display: none !important; }");
+            }
+            if (config.hideLoadingArt) {
+                rules.push("[class*=\"GameArt\"], [class*=\"BackgroundImage\"] "
+                           + "{ display: none !important; }");
+            }
+            if (config.blockSocial) {
+                // Whole sections of the site the app does not use and that
+                // only cost requests and layout work.
+                rules.push("[class*=\"SocialBar\"], [class*=\"FriendsList\"], "
+                           + "[class*=\"ChatPanel\"], [class*=\"NewsFeed\"] "
+                           + "{ display: none !important; }");
+            }
             var zoom = (config.zoom || 100) / 100;
             if (Math.abs(zoom - 1) > 0.001) {
                 rules.push("video { transform: scale(" + zoom + ") !important; }");

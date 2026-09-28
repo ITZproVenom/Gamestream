@@ -145,6 +145,21 @@ final class AppSettings: ObservableObject {
         static let skipSplash = "settings.skipSplash"
         static let deadzone = "settings.deadzone"
         static let triggerDeadzone = "settings.triggerDeadzone"
+        static let aspectRatio = "settings.aspectRatio"
+        static let videoPosition = "settings.videoPosition"
+        static let maxFps = "settings.maxFps"
+        static let resolutionPref = "settings.resolutionPref"
+        static let preventResolutionDrops = "settings.preventResolutionDrops"
+        static let touchMode = "settings.touchMode"
+        static let touchOpacity = "settings.touchOpacity"
+        static let blockSocial = "settings.blockSocial"
+        static let reduceAnimations = "settings.reduceAnimations"
+        static let hideScrollbars = "settings.hideScrollbars"
+        static let hideLoadingArt = "settings.hideLoadingArt"
+        static let pollingRate = "settings.pollingRate"
+        static let statsPosition = "settings.statsPosition"
+        static let statsOpacity = "settings.statsOpacity"
+        static let statsTextSize = "settings.statsTextSize"
     }
 
     @Published var theme: Theme { didSet { store(theme.rawValue, Key.theme) } }
@@ -209,6 +224,28 @@ final class AppSettings: ObservableObject {
     @Published var triggerDeadzone: Int {
         didSet { store(triggerDeadzone, Key.triggerDeadzone) }
     }
+    @Published var aspectRatio: String { didSet { store(aspectRatio, Key.aspectRatio) } }
+    @Published var videoPosition: String { didSet { store(videoPosition, Key.videoPosition) } }
+    @Published var maxFps: Int { didSet { store(maxFps, Key.maxFps) } }
+    @Published var resolutionPref: String {
+        didSet { store(resolutionPref, Key.resolutionPref) }
+    }
+    @Published var preventResolutionDrops: Bool {
+        didSet { store(preventResolutionDrops, Key.preventResolutionDrops) }
+    }
+    @Published var touchMode: String { didSet { store(touchMode, Key.touchMode) } }
+    @Published var touchOpacity: Int { didSet { store(touchOpacity, Key.touchOpacity) } }
+    @Published var blockSocial: Bool { didSet { store(blockSocial, Key.blockSocial) } }
+    @Published var reduceAnimations: Bool {
+        didSet { store(reduceAnimations, Key.reduceAnimations) }
+    }
+    @Published var hideScrollbars: Bool { didSet { store(hideScrollbars, Key.hideScrollbars) } }
+    @Published var hideLoadingArt: Bool { didSet { store(hideLoadingArt, Key.hideLoadingArt) } }
+    @Published var pollingRate: Int { didSet { store(pollingRate, Key.pollingRate) } }
+    /// Where the app's own statistics sit and how loud they are.
+    @Published var statsPosition: String { didSet { store(statsPosition, Key.statsPosition) } }
+    @Published var statsOpacity: Int { didSet { store(statsOpacity, Key.statsOpacity) } }
+    @Published var statsTextSize: Int { didSet { store(statsTextSize, Key.statsTextSize) } }
 
     private let defaults = UserDefaults.standard
 
@@ -252,6 +289,21 @@ final class AppSettings: ObservableObject {
         skipSplash = defaults.object(forKey: Key.skipSplash) as? Bool ?? true
         deadzone = defaults.object(forKey: Key.deadzone) as? Int ?? 0
         triggerDeadzone = defaults.object(forKey: Key.triggerDeadzone) as? Int ?? 0
+        aspectRatio = defaults.string(forKey: Key.aspectRatio) ?? ""
+        videoPosition = defaults.string(forKey: Key.videoPosition) ?? "center"
+        maxFps = defaults.object(forKey: Key.maxFps) as? Int ?? 0
+        resolutionPref = defaults.string(forKey: Key.resolutionPref) ?? ""
+        preventResolutionDrops = defaults.object(forKey: Key.preventResolutionDrops) as? Bool ?? false
+        touchMode = defaults.string(forKey: Key.touchMode) ?? "off"
+        touchOpacity = defaults.object(forKey: Key.touchOpacity) as? Int ?? 100
+        blockSocial = defaults.object(forKey: Key.blockSocial) as? Bool ?? false
+        reduceAnimations = defaults.object(forKey: Key.reduceAnimations) as? Bool ?? false
+        hideScrollbars = defaults.object(forKey: Key.hideScrollbars) as? Bool ?? true
+        hideLoadingArt = defaults.object(forKey: Key.hideLoadingArt) as? Bool ?? false
+        pollingRate = defaults.object(forKey: Key.pollingRate) as? Int ?? 0
+        statsPosition = defaults.string(forKey: Key.statsPosition) ?? "top"
+        statsOpacity = defaults.object(forKey: Key.statsOpacity) as? Int ?? 90
+        statsTextSize = defaults.object(forKey: Key.statsTextSize) as? Int ?? 100
     }
 
     /// The preferences handed to Better xCloud before it boots.
@@ -281,7 +333,7 @@ final class AppSettings: ObservableObject {
             zoom: zoom,
             fillScreen: fillScreen,
             volumeBoost: volumeBoost,
-            hideTouchControls: hideTouchControls,
+            hideTouchControls: touchMode == "off",
             hideSiteOverlays: hideSiteOverlays,
             codecProfile: codecProfile,
             preferIPv6: preferIPv6,
@@ -289,7 +341,19 @@ final class AppSettings: ObservableObject {
             skipSplash: skipSplash,
             deadzone: deadzone,
             triggerDeadzone: triggerDeadzone,
-            vibrationScale: Int(rumbleIntensity * 100)
+            vibrationScale: Int(rumbleIntensity * 100),
+            aspectRatio: aspectRatio,
+            videoPosition: videoPosition,
+            maxFps: maxFps,
+            resolution: resolutionPref,
+            preventResolutionDrops: preventResolutionDrops,
+            touchMode: touchMode,
+            touchOpacity: touchOpacity,
+            blockSocial: blockSocial,
+            reduceAnimations: reduceAnimations,
+            hideScrollbars: hideScrollbars,
+            hideLoadingArt: hideLoadingArt,
+            pollingRate: pollingRate
         )
     }
 }
