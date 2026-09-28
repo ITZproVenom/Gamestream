@@ -4,6 +4,85 @@ import AVFoundation
 import Photos
 import UIKit
 
+/// Holds the writer and its inputs, and appends samples on whatever queue
+/// ReplayKit delivers them on.
+///
+/// The appending deliberately does not go through the main actor. ReplayKit
+/// hands over samples on its own queue at the frame rate of the screen, and
+/// forwarding each one into a task on another actor changes two things that
+/// matter: the samples can be appended in a different order than they
+/// arrived, which the writer treats as a fatal timeline error, and each
+/// buffer has to stay alive across the hop. A serial queue with the writer
+/// behind it keeps the order the capture had.
+private final class SampleSink: @unchecked Sendable {
+    private let lock = NSLock()
+    private let writer: AVAssetWriter
+    private let video: AVAssetWriterInput
+    private let app: AVAssetWriterInput?
+    private let mic: AVAssetWriterInput?
+    private var sessionStarted = false
+    private var finished = false
+
+    init(writer: AVAssetWriter,
+         video: AVAssetWriterInput,
+         app: AVAssetWriterInput?,
+         mic: AVAssetWriterInput?) {
+        self.writer = writer
+        self.video = video
+        self.app = app
+        self.mic = mic
+    }
+
+    func append(_ sample: CMSampleBuffer, of type: RPSampleBufferType) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !finished, writer.status == .writing, CMSampleBufferDataIsReady(sample) else {
+            return
+        }
+
+        if !sessionStarted {
+            // Only a video sample may open the session: starting on an audio
+            // sample leaves the first frames before the timeline origin and
+            // they are dropped silently.
+            guard type == .video else { return }
+            writer.startSession(atSourceTime: CMSampleBufferGetPresentationTimeStamp(sample))
+            sessionStarted = true
+        }
+
+        let input: AVAssetWriterInput?
+        switch type {
+        case .video: input = video
+        case .audioApp: input = app
+        case .audioMic: input = mic
+        @unknown default: input = nil
+        }
+        guard let input, input.isReadyForMoreMediaData else { return }
+        input.append(sample)
+    }
+
+    /// Closes the inputs and the file. Anything appended after this is
+    /// ignored rather than crashing on a finished writer.
+    func finish() async -> (status: AVAssetWriter.Status, error: Error?) {
+        lock.lock()
+        if finished {
+            lock.unlock()
+            return (writer.status, writer.error)
+        }
+        finished = true
+        if sessionStarted {
+            video.markAsFinished()
+            app?.markAsFinished()
+            mic?.markAsFinished()
+        }
+        let started = sessionStarted
+        lock.unlock()
+
+        guard started else { return (writer.status, writer.error) }
+        await writer.finishWriting()
+        return (writer.status, writer.error)
+    }
+}
+
 /// Records the stream to a video file.
 ///
 /// Screenshots were only ever half the ask: the interesting things in a game
@@ -42,9 +121,6 @@ final class StreamRecorder: NSObject, ObservableObject {
     }
 
     private let recorder = RPScreenRecorder.shared()
-    private var writer: AVAssetWriter?
-    private var videoInput: AVAssetWriterInput?
-    private var audioInput: AVAssetWriterInput?
     /// The microphone gets its own track.
     ///
     /// ReplayKit delivers app audio and microphone audio as two independent
@@ -53,9 +129,8 @@ final class StreamRecorder: NSObject, ObservableObject {
     /// writer refuses the first sample that goes backwards and the whole
     /// recording is lost. Two tracks is the only correct shape, and players
     /// play them together.
-    private var micInput: AVAssetWriterInput?
+    private var sink: SampleSink?
     private var outputURL: URL?
-    private var sessionStarted = false
     private var ticker: Task<Void, Never>?
 
     private override init() { super.init() }
@@ -93,6 +168,10 @@ final class StreamRecorder: NSObject, ObservableObject {
                 AVVideoCodecKey: AVVideoCodecType.h264,
                 AVVideoWidthKey: width,
                 AVVideoHeightKey: height,
+                // The screen can rotate while recording. Saying how a
+                // differently shaped frame should be fitted is better than
+                // leaving it to be decided per sample.
+                AVVideoScalingModeKey: AVVideoScalingModeResizeAspect,
                 AVVideoCompressionPropertiesKey: [
                     AVVideoAverageBitRateKey: AppSettings.shared.recordingBitrateMbps * 1_000_000,
                     AVVideoMaxKeyFrameIntervalKey: 60,
@@ -112,24 +191,23 @@ final class StreamRecorder: NSObject, ObservableObject {
             if writer.canAdd(audio) { writer.add(audio) }
 
             let wantsMicrophone = AppSettings.shared.recordMicrophone
+            var mic: AVAssetWriterInput?
             if wantsMicrophone {
-                let mic = AVAssetWriterInput(mediaType: .audio, outputSettings: [
+                let input = AVAssetWriterInput(mediaType: .audio, outputSettings: [
                     AVFormatIDKey: kAudioFormatMPEG4AAC,
                     AVNumberOfChannelsKey: 1,
                     AVSampleRateKey: 44_100,
                     AVEncoderBitRateKey: 64_000
                 ])
-                mic.expectsMediaDataInRealTime = true
-                if writer.canAdd(mic) {
-                    writer.add(mic)
-                    micInput = mic
+                input.expectsMediaDataInRealTime = true
+                if writer.canAdd(input) {
+                    writer.add(input)
+                    mic = input
                 }
             }
 
-            self.writer = writer
-            videoInput = video
-            audioInput = audio
-            sessionStarted = false
+            let sink = SampleSink(writer: writer, video: video, app: audio, mic: mic)
+            self.sink = sink
 
             recorder.isMicrophoneEnabled = wantsMicrophone
 
@@ -153,7 +231,10 @@ final class StreamRecorder: NSObject, ObservableObject {
                         }
                         return
                     }
-                    self?.append(sample, of: type)
+                    // Captured directly: the sink is safe to touch from this
+                    // queue, and reaching back through the recorder would
+                    // mean crossing an actor boundary per frame.
+                    sink.append(sample, of: type)
                 } completionHandler: { error in
                     if let error {
                         continuation.resume(throwing: error)
@@ -168,6 +249,7 @@ final class StreamRecorder: NSObject, ObservableObject {
             startTicking(from: started)
             return "Recording."
         } catch {
+            recorder.stopCapture { _ in }
             await tearDown()
             state = .failed(error.localizedDescription)
             return "Could not start recording: \(error.localizedDescription)"
@@ -184,19 +266,17 @@ final class StreamRecorder: NSObject, ObservableObject {
             recorder.stopCapture { _ in continuation.resume() }
         }
 
-        videoInput?.markAsFinished()
-        audioInput?.markAsFinished()
-        micInput?.markAsFinished()
-
-        guard let writer, let url = outputURL else {
+        guard let sink, let url = outputURL else {
+            await tearDown()
             state = .idle
             return "Nothing was recorded."
         }
-        await writer.finishWriting()
+        let result = await sink.finish()
 
-        guard writer.status == .completed else {
+        guard result.status == .completed else {
             await tearDown()
-            let reason = writer.error?.localizedDescription ?? "the file could not be written"
+            let reason = result.error?.localizedDescription
+                ?? "nothing was captured before it stopped"
             state = .failed(reason)
             return "Recording failed: \(reason)"
         }
@@ -229,39 +309,6 @@ final class StreamRecorder: NSObject, ObservableObject {
 
     // MARK: - Sample handling
 
-    /// Called on ReplayKit's own queue, not the main actor.
-    private nonisolated func append(_ sample: CMSampleBuffer, of type: RPSampleBufferType) {
-        Task { @MainActor in
-            guard let writer, writer.status == .writing else { return }
-
-            if !sessionStarted {
-                // Only a video sample may open the session: starting on an
-                // audio sample leaves the first frames before the timeline
-                // origin and they are dropped silently.
-                guard type == .video else { return }
-                writer.startSession(atSourceTime: CMSampleBufferGetPresentationTimeStamp(sample))
-                sessionStarted = true
-            }
-
-            switch type {
-            case .video:
-                if videoInput?.isReadyForMoreMediaData == true {
-                    videoInput?.append(sample)
-                }
-            case .audioApp:
-                if audioInput?.isReadyForMoreMediaData == true {
-                    audioInput?.append(sample)
-                }
-            case .audioMic:
-                if let micInput, micInput.isReadyForMoreMediaData {
-                    micInput.append(sample)
-                }
-            @unknown default:
-                break
-            }
-        }
-    }
-
     private func startTicking(from start: Date) {
         elapsed = 0
         ticker = Task { @MainActor in
@@ -280,11 +327,7 @@ final class StreamRecorder: NSObject, ObservableObject {
     }
 
     private func tearDown() async {
-        writer = nil
-        videoInput = nil
-        audioInput = nil
-        micInput = nil
-        sessionStarted = false
+        sink = nil
         if let outputURL { try? FileManager.default.removeItem(at: outputURL) }
         outputURL = nil
         ticker?.cancel()

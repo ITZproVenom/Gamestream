@@ -390,9 +390,7 @@ struct SettingsView: View {
 
             Toggle("Check the connection before starting", isOn: $settings.preflightCheck)
             if let reading = network.latest {
-                Text(reading.reachable
-                     ? "Last check: \(reading.latencyMs) ms, ±\(reading.spreadMs) ms. \(reading.verdict)"
-                     : reading.verdict)
+                Text("Last check: " + reading.detail)
                     .font(.caption)
                     .foregroundStyle(reading.isPoor ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                     .frame(maxWidth: .infinity, alignment: .leading)

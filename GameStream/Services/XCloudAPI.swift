@@ -53,7 +53,20 @@ actor XCloudAPI {
             throw Failure(step: "login", detail: "no HTTP response")
         }
         guard (200...299).contains(http.statusCode) else {
-            throw Failure(step: "login", detail: "HTTP \(http.statusCode)")
+            // The status code alone does not distinguish "your token expired"
+            // from "this account has no cloud gaming", and those need
+            // different answers from the person reading the message.
+            let body = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let reason = body.isEmpty ? "" : " — " + String(body.prefix(200))
+            await MainActor.run {
+                AppLog.shared.error("native", "login: HTTP \(http.statusCode)\(reason)")
+            }
+            throw Failure(step: "login",
+                          detail: http.statusCode == 401 || http.statusCode == 403
+                              ? "the account was refused cloud gaming (HTTP "
+                                + "\(http.statusCode))\(reason)"
+                              : "HTTP \(http.statusCode)\(reason)")
         }
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw Failure(step: "login", detail: "the response was not an object")
@@ -77,6 +90,16 @@ actor XCloudAPI {
             regions: parsed,
             durationSeconds: (object["durationInSeconds"] as? Double) ?? 0
         )
+        // The connection check has no business timing the website's CDN once
+        // the account's own streaming region is known.
+        if let region = parsed.first(where: \.isDefault) ?? parsed.first {
+            let base = region.baseURI
+            let name = region.name
+            await MainActor.run {
+                NetworkCheck.shared.rememberRegion(baseURI: base)
+                AppLog.shared.info("native", "cloud token for region \(name)")
+            }
+        }
         return login
     }
 
