@@ -19,6 +19,8 @@ struct SettingsView: View {
     @State private var copiedReport = false
     @State private var reinstalled: Bool?
     @State private var nativeProbe: String?
+    @State private var sessionProbe: String?
+    @State private var probingSession = false
     @State private var probingNative = false
 
     var body: some View {
@@ -515,6 +517,49 @@ struct SettingsView: View {
 
             if let nativeProbe {
                 Text(nativeProbe)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            SettingsDivider()
+
+            Button {
+                Task {
+                    probingSession = true
+                    defer { probingSession = false }
+                    guard let token = auth.xstsToken else {
+                        sessionProbe = "No cloud-gaming token is available. Sign in first."
+                        return
+                    }
+                    guard let game = library.recents.first ?? catalog.games.first else {
+                        sessionProbe = "Play something first so there is a title to test with."
+                        return
+                    }
+                    do {
+                        let login = try await XCloudAPI.shared.login(xstsToken: token)
+                        sessionProbe = "Signing in to the cloud service…"
+                        sessionProbe = await XCloudSession.shared.probe(
+                            login: login,
+                            titleId: game.id
+                        ) { progress in
+                            Task { @MainActor in sessionProbe = progress }
+                        }
+                    } catch {
+                        sessionProbe = "Could not get a cloud-gaming token: \(error.localizedDescription)"
+                    }
+                }
+            } label: {
+                HStack {
+                    SettingsRowLabel(title: "Test native session", icon: "antenna.radiowaves.left.and.right")
+                    if probingSession { ProgressView().controlSize(.small) }
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(probingSession)
+
+            if let sessionProbe {
+                Text(sessionProbe)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
