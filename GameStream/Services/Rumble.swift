@@ -483,9 +483,31 @@ final class ControllerRumble: ObservableObject {
         return false
     }
 
+    /// Tries the controller, walking to the next locality on each failure.
+    ///
+    /// One attempt per packet was not a sweep: the first failure started a
+    /// four-second backoff, and every later shot in a burst was skipped
+    /// before it could reach the next locality. Five claimed localities were
+    /// reported and exactly one was ever tried.
     private func playOnController(_ profile: RumbleProfile) -> Bool {
         guard Date() >= controllerRetryAfter else { return false }
-        guard let controller = activeController(), controller.haptics != nil else { return false }
+        let localities = controllerLocalities()
+        for _ in 0..<localities.count {
+            switch attemptController(profile) {
+            case .played: return true
+            case .unavailable: return false
+            case .failed: continue
+            }
+        }
+        return false
+    }
+
+    private enum Attempt { case played, failed, unavailable }
+
+    private func attemptController(_ profile: RumbleProfile) -> Attempt {
+        guard let controller = activeController(), controller.haptics != nil else {
+            return .unavailable
+        }
         let identity = ObjectIdentifier(controller)
 
         do {
@@ -507,11 +529,11 @@ final class ControllerRumble: ObservableObject {
             try update(playback, with: profile)
             // A working controller means the phone does not need to step in.
             phoneRetryAfter = .distantPast
-            return true
+            return .played
         } catch {
             shutdownController(identity)
             note(failure: error, route: .controller)
-            return false
+            return .failed
         }
     }
 
@@ -613,16 +635,14 @@ final class ControllerRumble: ObservableObject {
         }
         switch route {
         case .controller:
-            let first = controllerRetryAfter == .distantPast
-            controllerRetryAfter = Date().addingTimeInterval(4)
+            log.warn("rumble", "\(currentLocality ?? "this controller") would not play: \(reason)")
             localityIndex += 1
+            // Backoff only once the whole claimed set has been exhausted;
+            // otherwise the next locality never gets its turn.
             if localityIndex >= controllerLocalities().count {
                 localityIndex = 0
                 controllerRetryAfter = Date().addingTimeInterval(20)
-            }
-            if first {
-                log.warn("rumble", "\(controllerName ?? "this controller") would not play "
-                         + "through \(currentLocality ?? "its haptics") (\(reason))")
+                log.warn("rumble", "every locality this controller claims refused to play")
             }
         default:
             phoneRetryAfter = Date().addingTimeInterval(5)
@@ -888,8 +908,36 @@ final class ControllerRumble: ObservableObject {
         testRun = Task { [weak self] in await self?.fireBurst() }
     }
 
+    /// Tries every claimed locality once and records what each one did.
+    ///
+    /// Reporting five localities while testing one was worse than useless:
+    /// it looked like a sweep and was not. This is the sweep.
+    private func sweepLocalities() {
+        guard let controller = activeController(), controller.haptics != nil else { return }
+        let localities = controllerLocalities()
+        controllerRetryAfter = .distantPast
+        localityIndex = 0
+        let probe = RumbleProfile(weak: 0.6, strong: 0.9)
+
+        for index in 0..<localities.count {
+            localityIndex = index
+            let identity = ObjectIdentifier(controller)
+            shutdownController(identity)
+            if attemptController(probe) == .played {
+                record("\(localities[index].rawValue): PLAYS")
+                log.info("rumble", "locality \(localities[index].rawValue) plays")
+                stop()
+                return
+            }
+            stop()
+        }
+        localityIndex = 0
+    }
+
     /// Six shots and a recoil, which is unmistakable if it plays at all.
     private func fireBurst() async {
+        sweepLocalities()
+
         var played = 0
         for shot in 0..<6 {
             let heavy = shot == 5
