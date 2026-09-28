@@ -201,15 +201,23 @@ final class StreamCoordinator: ObservableObject {
         }
     }
 
-    /// Steps the stream down a resolution, once per session.
+    /// Says the connection cannot hold the quality, once per session.
+    ///
+    /// It does not claim to have fixed it. The bitrate ceiling is written
+    /// into the session description when the connection is negotiated, so
+    /// nothing set during a session changes what is being sent — an earlier
+    /// build wrote the preference mid-stream and reported success, which was
+    /// simply untrue. Lowering it for real needs a reconnect.
     func reduceQuality(reason: String) {
         guard !reducedQuality else { return }
         reducedQuality = true
-        log.warn("stream", "reducing quality: \(reason)")
-        XboxWebView.Registry.shared.run(
-            "window.BX_STREAM_SETTINGS && (window.BX_STREAM_SETTINGS['stream.video.maxBitrate'] = 6000000);"
-        )
-        show(notice: "Quality reduced because \(reason).")
+        log.warn("stream", "the stream is struggling: \(reason)")
+        let cap = AppSettings.shared.maxBitrateMbps
+        show(notice: cap > 0
+             ? "The connection is struggling because \(reason). Reconnect to apply "
+                + "your \(cap) Mbps limit, or lower it in Settings."
+             : "The connection is struggling because \(reason). Setting a bitrate "
+                + "limit in Settings and reconnecting would steady it.")
     }
 
     /// Ten seconds of genuinely bad numbers, not one unlucky sample.

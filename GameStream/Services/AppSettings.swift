@@ -127,6 +127,7 @@ final class AppSettings: ObservableObject {
         static let batteryGuard = "settings.batteryGuard"
         static let adaptiveQuality = "settings.adaptiveQuality"
         static let preflightCheck = "settings.preflightCheck"
+        static let maxBitrate = "settings.maxBitrateMbps"
     }
 
     @Published var theme: Theme { didSet { store(theme.rawValue, Key.theme) } }
@@ -159,6 +160,9 @@ final class AppSettings: ObservableObject {
     @Published var adaptiveQuality: Bool { didSet { store(adaptiveQuality, Key.adaptiveQuality) } }
     /// Measure the connection before a game starts.
     @Published var preflightCheck: Bool { didSet { store(preflightCheck, Key.preflightCheck) } }
+    /// Ceiling in megabits per second. Zero means no cap, which is Xbox's own
+    /// maximum of 15 Mbps — there is nothing above that to ask for.
+    @Published var maxBitrateMbps: Int { didSet { store(maxBitrateMbps, Key.maxBitrate) } }
 
     private let defaults = UserDefaults.standard
 
@@ -184,6 +188,7 @@ final class AppSettings: ObservableObject {
         batteryGuard = defaults.object(forKey: Key.batteryGuard) as? Bool ?? true
         adaptiveQuality = defaults.object(forKey: Key.adaptiveQuality) as? Bool ?? true
         preflightCheck = defaults.object(forKey: Key.preflightCheck) as? Bool ?? true
+        maxBitrateMbps = defaults.object(forKey: Key.maxBitrate) as? Int ?? 0
     }
 
     /// The preferences handed to Better xCloud before it boots.
@@ -204,6 +209,15 @@ final class AppSettings: ObservableObject {
             // different styles is worse than one.
             "stream.stats.showWhenPlaying": "false"
         ]
+        // Bits per second. Zero is the enhancement's "unlimited", which is
+        // its maximum of 15 Mbps rather than genuinely uncapped: the server
+        // decides the bitrate and Xbox does not send more than that.
+        //
+        // This is negotiated into the session description when the connection
+        // is set up, so it can only ever apply to the next session.
+        if maxBitrateMbps > 0 {
+            values["stream.video.maxBitrate"] = String(maxBitrateMbps * 1_000_000)
+        }
         if matchStreamStyle {
             // The dark base is the only one of its themes that a translucent
             // skin can sit on without fighting a light panel underneath.

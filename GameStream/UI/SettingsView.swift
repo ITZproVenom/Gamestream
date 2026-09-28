@@ -292,8 +292,30 @@ struct SettingsView: View {
             Toggle("Rejoin automatically if the stream drops", isOn: $settings.autoReconnect)
             SettingsDivider()
 
-            Toggle("Lower the quality when the connection struggles",
+            Toggle("Warn when the connection cannot hold the quality",
                    isOn: $settings.adaptiveQuality)
+            SettingsDivider()
+
+            VStack(alignment: .leading, spacing: 7) {
+                HStack {
+                    Text("Bitrate limit").font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Text(settings.maxBitrateMbps == 0
+                         ? "Unlimited" : "\(settings.maxBitrateMbps) Mbps")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                Slider(value: Binding(
+                    get: { Double(settings.maxBitrateMbps) },
+                    set: { settings.maxBitrateMbps = Int($0) }
+                ), in: 0...15, step: 1)
+                Text("Unlimited means Xbox's own maximum of 15 Mbps; there is nothing "
+                     + "above that to ask for. A limit is negotiated when a session "
+                     + "starts, so it applies to the next game you launch.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             SettingsDivider()
 
             Toggle("Check the connection before starting", isOn: $settings.preflightCheck)
