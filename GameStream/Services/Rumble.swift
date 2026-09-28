@@ -315,6 +315,22 @@ final class ControllerRumble: ObservableObject {
     private var currentLocality: String?
     private var audioSessionReady = false
 
+    /// The guided test: press a trigger, feel a burst.
+    enum TestPhase: Equatable {
+        case idle
+        case waitingForTrigger
+        case playing
+        case finished(String)
+    }
+
+    @Published private(set) var testPhase: TestPhase = .idle
+    private var testTimeout: Task<Void, Never>?
+    private var testRun: Task<Void, Never>?
+    /// The pad that pressed the trigger. Using the controller the player is
+    /// actually holding beats guessing from `GCController.current`, which can
+    /// name a different device entirely.
+    private var preferredController: GCController?
+
     private var stopTimer: Task<Void, Never>?
     private var stopDeadline: Date?
     private var tapticTask: Task<Void, Never>?
@@ -427,26 +443,104 @@ final class ControllerRumble: ObservableObject {
         engineKind = nil
     }
 
-    /// Settings' test button. Uses whichever route is live, and says what it
-    /// did, so a silent controller is explained rather than mysterious.
-    func test() {
-        if path == .page, XboxWebView.Registry.shared.streamView != nil {
-            let scaleValue = AppSettings.shared.rumbleIntensity
-            XboxWebView.Registry.shared.run(
-                "window.__gsRumbleScale = \(scaleValue);"
-                + "window.__gsRumbleTest && window.__gsRumbleTest(90, 90, 500);"
-            )
-            log.info("rumble", "test sent to the stream page")
-            return
+    /// The guided test: ask for a real trigger pull, then fire a burst.
+    ///
+    /// Waiting for input does more than make the test obvious. It names the
+    /// pad the player is holding, and it guarantees the controller is awake
+    /// and delivering input to this app before any engine is asked for —
+    /// which is the state a haptic engine is meant to be created in.
+    func beginGuidedTest() {
+        cancelTest()
+        retryAllRoutes(reason: "guided test")
+        testPhase = .waitingForTrigger
+        log.info("rumble", "guided test: waiting for a trigger pull")
+
+        for controller in GCController.controllers() {
+            controller.extendedGamepad?.valueChangedHandler = { [weak self] pad, element in
+                guard let self else { return }
+                let pulled = pad.rightTrigger.value > 0.4 || pad.leftTrigger.value > 0.4
+                guard pulled else { return }
+                Task { @MainActor in
+                    self.triggerPulled(on: pad.controller, element: element)
+                }
+            }
         }
 
-        let route = path
-        let played = play(left: 0.9, right: 0.9, durationMs: 600, force: true)
-        if played {
-            log.info("rumble", "test played through \(path.title.lowercased())")
-        } else {
-            log.warn("rumble", "test produced nothing via \(route.rawValue): \(diagnosis)")
+        testTimeout = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(20))
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard self?.testPhase == .waitingForTrigger else { return }
+                self?.finishTest("No trigger was pressed. Is the controller connected to this app?")
+            }
         }
+    }
+
+    func cancelTest() {
+        testTimeout?.cancel()
+        testTimeout = nil
+        testRun?.cancel()
+        testRun = nil
+        for controller in GCController.controllers() {
+            controller.extendedGamepad?.valueChangedHandler = nil
+        }
+        stop()
+        if testPhase != .idle, case .finished = testPhase {} else { testPhase = .idle }
+    }
+
+    private func triggerPulled(on controller: GCController?, element: GCControllerElement) {
+        guard testPhase == .waitingForTrigger else { return }
+        testTimeout?.cancel()
+        testTimeout = nil
+        testPhase = .playing
+
+        if let controller {
+            preferredController = controller
+            controllerName = controller.vendorName
+            supportsHaptics = controller.haptics != nil
+            log.info("rumble", "trigger pulled on \(controller.vendorName ?? "a controller")"
+                     + " (\(controller.haptics != nil ? "reports haptics" : "no haptics"))")
+            updatePath(reason: "trigger pulled")
+        }
+
+        testRun = Task { [weak self] in
+            await self?.fireBurst()
+        }
+    }
+
+    /// Six shots and a recoil, which is unmistakable if it plays at all.
+    private func fireBurst() async {
+        var played = 0
+        for shot in 0..<6 {
+            let heavy = shot == 5
+            if play(left: heavy ? 1 : 0.85, right: heavy ? 0.9 : 0.5,
+                    durationMs: heavy ? 260 : 80, force: true) {
+                played += 1
+            }
+            try? await Task.sleep(for: .milliseconds(heavy ? 300 : 120))
+            stop()
+            try? await Task.sleep(for: .milliseconds(heavy ? 0 : 45))
+            if Task.isCancelled { return }
+        }
+
+        for controller in GCController.controllers() {
+            controller.extendedGamepad?.valueChangedHandler = nil
+        }
+
+        if played == 0 {
+            finishTest("Nothing played: \(diagnosis).")
+        } else {
+            let where_ = path == .controller
+                ? "the controller\(currentLocality.map { " (\($0))" } ?? "")"
+                : path.title.lowercased()
+            finishTest("Fired six shots through \(where_). "
+                       + "If you felt nothing, this route reports success but produces no motion.")
+        }
+    }
+
+    private func finishTest(_ message: String) {
+        testPhase = .finished(message)
+        log.info("rumble", "guided test: \(message)")
     }
 
     /// Plain-language reason there is or is not rumble, for Settings.
@@ -593,6 +687,10 @@ final class ControllerRumble: ObservableObject {
     }
 
     private func activeController() -> GCController? {
+        if let preferred = preferredController,
+           GCController.controllers().contains(where: { $0 === preferred }) {
+            return preferred
+        }
         if let current = GCController.current, current.haptics != nil { return current }
         let all = GCController.controllers()
         return all.first { $0.haptics != nil } ?? all.first

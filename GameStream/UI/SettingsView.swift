@@ -263,13 +263,52 @@ struct SettingsView: View {
 
                 SettingsDivider()
 
-                Button {
-                    rumble.test()
-                } label: {
-                    SettingsRowLabel(title: "Test rumble", icon: "waveform")
+                switch rumble.testPhase {
+                case .waitingForTrigger:
+                    HStack(spacing: 10) {
+                        Image(systemName: "r.joystick.tilt.up")
+                            .foregroundStyle(.tint)
+                            .symbolEffect(.pulse)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Pull RT on your controller")
+                                .font(.subheadline.weight(.semibold))
+                            Text("Waiting for a trigger, so the test uses the pad "
+                                 + "you are actually holding.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                        Button("Cancel") { rumble.cancelTest() }
+                            .font(.caption.weight(.semibold))
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.tint)
+                    }
+                case .playing:
+                    HStack(spacing: 10) {
+                        ProgressView().controlSize(.small)
+                        Text("Firing…").font(.subheadline.weight(.semibold))
+                    }
+                case .finished(let message):
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Button {
+                            rumble.beginGuidedTest()
+                        } label: {
+                            SettingsRowLabel(title: "Test again", icon: "arrow.clockwise")
+                        }
+                        .buttonStyle(.plain)
+                    }
+                case .idle:
+                    Button {
+                        rumble.beginGuidedTest()
+                    } label: {
+                        SettingsRowLabel(title: "Test rumble", icon: "waveform")
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-                .disabled(rumble.path == .unavailable)
 
                 SettingsDivider()
 
