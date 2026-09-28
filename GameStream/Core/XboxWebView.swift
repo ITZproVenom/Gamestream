@@ -52,43 +52,6 @@ struct XboxWebView: UIViewRepresentable {
             }
         }
 
-        /// Wipes what Better xCloud stored inside the page.
-        ///
-        /// A live page is cleaned immediately; the flag makes the next page
-        /// clean itself before the script runs, which is the case that
-        /// matters when nothing is streaming at the time.
-        func purgeBetterXCloudStorage() {
-            UserDefaults.standard.set(true, forKey: "betterXCloud.purgePending")
-            guard let view = streamView else { return }
-            view.evaluateJavaScript(BetterXCloud.purgeJS) { result, _ in
-                let removed = (result as? String) ?? ""
-                AppLog.shared.info("betterxcloud", removed.isEmpty
-                                   ? "nothing stored in the page to clear"
-                                   : "cleared from the page: \(removed)")
-            }
-        }
-
-        /// Runs a snippet and hands back what it evaluated to.
-        func evaluate(_ javaScript: String, completion: @escaping (String) -> Void) {
-            guard let view = streamView else { return completion("") }
-            view.evaluateJavaScript(javaScript) { result, _ in
-                completion((result as? String) ?? "")
-            }
-        }
-
-        /// Awaits an async snippet and hands back its resolved value.
-        func evaluateAsync(_ javaScript: String) async -> Any? {
-            guard let view = streamView else { return nil }
-            return try? await view.callAsyncJavaScript(javaScript,
-                                                       contentWorld: .page)
-        }
-
-        /// Ends the session for real.
-        ///
-        /// Because the player webview is deliberately kept alive between
-        /// presentations, leaving the stream is the only point at which it can
-        /// be stopped. Without this the page keeps running after exit, still
-        /// holding the Xbox session open and still pulling video.
         func release() {
             guard let view = streamView else { return }
             streamView = nil
@@ -209,36 +172,6 @@ struct XboxWebView: UIViewRepresentable {
             source: StreamEnhancer.script(settings.enhancerConfiguration()),
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true))
-        controller.addUserScript(WKUserScript(source: WebScripts.betterXCloudPrefsJS(
-            global: AppSettings.shared.betterXCloudGlobalPreferences(),
-            stream: AppSettings.shared.betterXCloudStreamPreferences()),
-                                              injectionTime: .atDocumentStart,
-                                              forMainFrameOnly: true))
-        // A pending reinstall cleans the page before the script sees it, so
-        // the new copy cannot pick the old patch cache back up.
-        if UserDefaults.standard.bool(forKey: "betterXCloud.purgePending") {
-            UserDefaults.standard.set(false, forKey: "betterXCloud.purgePending")
-            controller.addUserScript(WKUserScript(source: BetterXCloud.purgeJS,
-                                                  injectionTime: .atDocumentStart,
-                                                  forMainFrameOnly: true))
-            AppLog.shared.info("betterxcloud", "the next page load starts from clean storage")
-        }
-        if let script = BetterXCloud.shared.cachedScript {
-            controller.addUserScript(WKUserScript(source: script,
-                                                  injectionTime: .atDocumentStart,
-                                                  forMainFrameOnly: true))
-        }
-        // The skin has to land after Better xCloud's own stylesheet, so it
-        // goes in at document end like the rest of the page dressing.
-        if AppSettings.shared.matchStreamStyle {
-            controller.addUserScript(WKUserScript(
-                source: WebScripts.betterXCloudSkinJS(
-                    accentRGB: AppSettings.shared.accent.rgbTriple
-                ),
-                injectionTime: .atDocumentEnd,
-                forMainFrameOnly: true))
-        }
-
         for source in [WebScripts.streamStateJS, WebScripts.streamChromeJS,
                        WebScripts.streamStatsJS, WebScripts.streamCommandsJS,
                        WebScripts.captureJS, WebScripts.autoStartJS] {

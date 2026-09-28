@@ -77,9 +77,7 @@ struct GameStreamApp: App {
         UIApplication.shared.isIdleTimerDisabled = settings.keepAwake
         rumble.start()
 
-        async let session = auth.refresh(reason: "launch")
-        async let script: Void = BetterXCloud.shared.refreshIfNeeded()
-        _ = await (session, script)
+        await auth.refresh(reason: "launch")
 
         if auth.state.isSignedIn {
             await catalog.refresh()

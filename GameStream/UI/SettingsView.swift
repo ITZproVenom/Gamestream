@@ -16,9 +16,7 @@ struct SettingsView: View {
     @State private var cacheSize = 0
     @State private var showingDiagnostics = false
     @State private var showingSignOut = false
-    @State private var refreshingScript = false
     @State private var copiedReport = false
-    @State private var reinstalled: Bool?
     @State private var nativeProbe: String?
     @State private var sessionProbe: String?
     @State private var probingSession = false
@@ -177,48 +175,7 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             SettingsDivider()
-            VStack(alignment: .leading, spacing: 5) {
-                Toggle("Match the in-stream menus to GameStream", isOn: $settings.matchStreamStyle)
-                Text("Restyles the streaming enhancement's own menus with the app's "
-                     + "accent colour, translucency and type. Takes effect the next "
-                     + "time a game starts.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            SettingsDivider()
             Toggle("Keep the screen awake", isOn: $settings.keepAwake)
-            SettingsDivider()
-
-            HStack {
-                Text("Better xCloud").font(.subheadline)
-                Spacer()
-                Text(BetterXCloud.shared.version.map { "v\($0)" } ?? "not installed")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-
-            SettingsDivider()
-
-            Button {
-                Task {
-                    refreshingScript = true
-                    reinstalled = await BetterXCloud.shared.reinstall()
-                    refreshingScript = false
-                }
-            } label: {
-                HStack {
-                    SettingsRowLabel(title: "Reinstall Better xCloud",
-                                     icon: "arrow.trianglehead.2.clockwise")
-                    if refreshingScript { ProgressView().controlSize(.small) }
-                }
-            }
-            .buttonStyle(.plain)
-            .disabled(refreshingScript)
-
-            Text(reinstalledMessage)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -647,22 +604,6 @@ struct SettingsView: View {
     }
 
     /// Says what the reinstall did, rather than only when it last ran.
-    private var reinstalledMessage: String {
-        if refreshingScript {
-            return "Clearing the old copy and its stored settings, then downloading again…"
-        }
-        if reinstalled == true {
-            return "Reinstalled. The stored settings and patch cache were cleared; "
-                + "the next game you start uses the fresh copy."
-        }
-        if reinstalled == false {
-            return "The download failed. The previous copy is still in place."
-        }
-        return BetterXCloud.shared.lastFetched.map {
-            "Installed \($0.formatted(date: .abbreviated, time: .shortened)). "
-                + "Reinstalling clears its stored settings and patch cache too."
-        } ?? "Not downloaded yet. It installs itself the first time you start a game."
-    }
 
     private func measureCache() async {
         cacheSize = await PosterCache.shared.diskUsage()

@@ -29,7 +29,12 @@ enum StreamEnhancer {
         var sharpness: Int            // 0-5
         var saturation: Int           // percent
         var contrast: Int             // percent
+        var brightness: Int           // percent
+        var zoom: Int                 // percent, 100 = fit
+        var fillScreen: Bool          // crop to fill instead of letterboxing
+        var volumeBoost: Int          // percent, 100 = untouched
         var hideTouchControls: Bool
+        var hideSiteOverlays: Bool
     }
 
     static func script(_ configuration: Configuration) -> String {
@@ -231,6 +236,34 @@ enum StreamEnhancer {
             return true;
         }
 
+        /// Raises the stream past the element's own volume ceiling.
+        ///
+        /// A media element cannot go above 1.0. A gain node can, and it is
+        /// built once per element: taking a second source from the same
+        /// element is an error that silences it for good.
+        var amplified = null;
+        var gain = null;
+        function applyVolume(video) {
+            var boost = (config.volumeBoost || 100) / 100;
+            try {
+                if (boost <= 1.001) {
+                    if (gain) gain.gain.value = 1;
+                    return;
+                }
+                if (amplified !== video) {
+                    var Context = window.AudioContext || window.webkitAudioContext;
+                    if (!Context) return;
+                    var context = new Context();
+                    var source = context.createMediaElementSource(video);
+                    gain = context.createGain();
+                    source.connect(gain);
+                    gain.connect(context.destination);
+                    amplified = video;
+                }
+                if (gain) gain.gain.value = Math.min(boost, 4);
+            } catch (e) {}
+        }
+
         function applyPicture() {
             var parts = [];
             if (config.saturation && config.saturation !== 100) {
@@ -238,6 +271,9 @@ enum StreamEnhancer {
             }
             if (config.contrast && config.contrast !== 100) {
                 parts.push("contrast(" + (config.contrast / 100) + ")");
+            }
+            if (config.brightness && config.brightness !== 100) {
+                parts.push("brightness(" + (config.brightness / 100) + ")");
             }
             if (installSharpen(config.sharpness || 0)) {
                 parts.push("url(#gamestream-sharpen-filter)");
@@ -247,10 +283,22 @@ enum StreamEnhancer {
             if (parts.length) {
                 rules.push("video { filter: " + parts.join(" ") + " !important; }");
             }
+            rules.push("video { object-fit: "
+                       + (config.fillScreen ? "cover" : "contain") + " !important; }");
+            var zoom = (config.zoom || 100) / 100;
+            if (Math.abs(zoom - 1) > 0.001) {
+                rules.push("video { transform: scale(" + zoom + ") !important; }");
+            }
             if (config.hideTouchControls) {
                 rules.push("#TouchControls, [class*=\"TouchControl\"], "
                            + "[class*=\"touch-control\"] { display: none !important; }");
             }
+            if (config.hideSiteOverlays) {
+                rules.push("#StreamHud, .bx-stats-bar, #bx-game-bar { display: none !important; }");
+            }
+
+            var video = document.querySelector("video");
+            if (video) applyVolume(video);
 
             var style = document.getElementById(STYLE_ID);
             if (!rules.length) {

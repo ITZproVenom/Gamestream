@@ -72,7 +72,7 @@ final class AppSettings: ObservableObject {
         }
 
         /// The value Better xCloud expects for `stream.video.resolution`.
-        var betterXCloudValue: String {
+        var wireValue: String {
             switch self {
             case .auto: return "auto"
             case .p720: return "720p"
@@ -97,7 +97,7 @@ final class AppSettings: ObservableObject {
             }
         }
 
-        var betterXCloudValue: String {
+        var wireValue: String {
             switch self {
             case .auto: return ""
             case .northAmerica: return "us"
@@ -134,6 +134,11 @@ final class AppSettings: ObservableObject {
         static let saturation = "settings.saturation"
         static let contrast = "settings.contrast"
         static let hideTouchControls = "settings.hideTouchControls"
+        static let brightness = "settings.brightness"
+        static let zoom = "settings.zoom"
+        static let fillScreen = "settings.fillScreen"
+        static let volumeBoost = "settings.volumeBoost"
+        static let hideSiteOverlays = "settings.hideSiteOverlays"
     }
 
     @Published var theme: Theme { didSet { store(theme.rawValue, Key.theme) } }
@@ -181,6 +186,13 @@ final class AppSettings: ObservableObject {
     @Published var hideTouchControls: Bool {
         didSet { store(hideTouchControls, Key.hideTouchControls) }
     }
+    @Published var brightness: Int { didSet { store(brightness, Key.brightness) } }
+    @Published var zoom: Int { didSet { store(zoom, Key.zoom) } }
+    @Published var fillScreen: Bool { didSet { store(fillScreen, Key.fillScreen) } }
+    @Published var volumeBoost: Int { didSet { store(volumeBoost, Key.volumeBoost) } }
+    @Published var hideSiteOverlays: Bool {
+        didSet { store(hideSiteOverlays, Key.hideSiteOverlays) }
+    }
 
     private let defaults = UserDefaults.standard
 
@@ -213,6 +225,11 @@ final class AppSettings: ObservableObject {
         saturation = defaults.object(forKey: Key.saturation) as? Int ?? 100
         contrast = defaults.object(forKey: Key.contrast) as? Int ?? 100
         hideTouchControls = defaults.object(forKey: Key.hideTouchControls) as? Bool ?? true
+        brightness = defaults.object(forKey: Key.brightness) as? Int ?? 100
+        zoom = defaults.object(forKey: Key.zoom) as? Int ?? 100
+        fillScreen = defaults.object(forKey: Key.fillScreen) as? Bool ?? false
+        volumeBoost = defaults.object(forKey: Key.volumeBoost) as? Int ?? 100
+        hideSiteOverlays = defaults.object(forKey: Key.hideSiteOverlays) as? Bool ?? true
     }
 
     /// The preferences handed to Better xCloud before it boots.
@@ -222,43 +239,8 @@ final class AppSettings: ObservableObject {
     /// value below went into the global blob, so the stream-scoped ones were
     /// silently ignored and the script ran on its defaults — which is why its
     /// own statistics bar kept appearing over ours.
-    func betterXCloudGlobalPreferences() -> [String: String] {
-        var values: [String: String] = [
-            "stream.video.resolution": quality.betterXCloudValue
-        ]
-        // Bits per second. Zero is the script's "unlimited", which is its
-        // maximum of 15 Mbps rather than genuinely uncapped: the server
-        // decides the bitrate and Xbox does not send more than that.
-        //
-        // This is negotiated into the session description when the connection
-        // is set up, so it can only ever apply to the next session.
-        if maxBitrateMbps > 0 {
-            values["stream.video.maxBitrate"] = String(maxBitrateMbps * 1_000_000)
-        }
-        if matchStreamStyle {
-            // The dark base is the only one of its themes that a translucent
-            // skin can sit on without fighting a light panel underneath.
-            values["ui.theme"] = "dark-oled"
-            values["ui.streamMenu.simplify"] = "true"
-        }
-        if !region.betterXCloudValue.isEmpty {
-            values["server.region"] = region.betterXCloudValue
-        }
-        return values
-    }
 
     /// Settings the script scopes to a stream.
-    func betterXCloudStreamPreferences() -> [String: String] {
-        [
-            // Always off: GameStream draws its own statistics panel from the
-            // peer connection, and two overlays reporting the same numbers in
-            // different styles is worse than one.
-            "stats.showWhenPlaying": "false",
-            // Its phone-vibration path uses navigator.vibrate, which WebKit
-            // does not implement; the native fallback covers that instead.
-            "deviceVibration.mode": "off"
-        ]
-    }
 
     private func store(_ value: Any, _ key: String) {
         defaults.set(value, forKey: key)
@@ -273,7 +255,12 @@ final class AppSettings: ObservableObject {
             sharpness: sharpness,
             saturation: saturation,
             contrast: contrast,
-            hideTouchControls: hideTouchControls
+            brightness: brightness,
+            zoom: zoom,
+            fillScreen: fillScreen,
+            volumeBoost: volumeBoost,
+            hideTouchControls: hideTouchControls,
+            hideSiteOverlays: hideSiteOverlays
         )
     }
 }

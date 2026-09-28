@@ -12,6 +12,7 @@ struct StreamView: View {
     @State private var elapsed: TimeInterval = 0
     @State private var startedAt = Date()
     @State private var showingStats = false
+    @State private var showingMenu = false
 
     @Namespace private var glass
 
@@ -85,6 +86,11 @@ struct StreamView: View {
             guard stream.phase == .playing else { return }
             withAnimation(.smooth(duration: 0.25)) { showingControls.toggle() }
             if showingControls { scheduleHide() }
+        }
+        .sheet(isPresented: $showingMenu) {
+            StreamMenuView()
+                .presentationDetents([.medium, .large])
+                .presentationBackground(.clear)
         }
         .onChange(of: stream.overlayRequest) { _, _ in
             withAnimation(.smooth(duration: 0.25)) { showingControls = true }
@@ -207,12 +213,10 @@ struct StreamView: View {
                         stream.pressGuide()
                     }
 
-                    hudIcon(stream.enhancementMenuOpen
-                            ? "slider.horizontal.3" : "slider.horizontal.3",
-                            label: stream.enhancementMenuOpen
-                            ? "Close enhancements" : "Streaming enhancements",
+                    // Our own menu, native. The site's dialog is gone.
+                    hudIcon("slider.horizontal.3", label: "Stream settings",
                             id: "enhance") {
-                        stream.toggleEnhancementMenu()
+                        showingMenu = true
                     }
 
                     hudIcon("camera.fill", label: "Screenshot", id: "shot") {

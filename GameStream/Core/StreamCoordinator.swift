@@ -150,6 +150,7 @@ final class StreamCoordinator: ObservableObject {
 
     /// Leaves the stream and writes the session into Activity.
     func exit() {
+        rendererChanged(to: .none)
         watchdog?.cancel()
         watchdog = nil
         leaveCheck?.cancel()
@@ -366,6 +367,40 @@ final class StreamCoordinator: ObservableObject {
         }
     }
 
+    /// Which engine is actually drawing frames right now.
+    ///
+    /// Recorded rather than assumed. "Is this still a browser?" is a
+    /// question the app should be able to answer from what it is doing, not
+    /// from what it intended.
+    enum Renderer: String {
+        case none = "Nothing is streaming"
+        case webKit = "WebKit — the site's player"
+        case native = "Metal — native WebRTC, no WebKit"
+    }
+
+    @Published private(set) var renderer: Renderer = .none
+
+    var rendererDescription: String { renderer.rawValue }
+
+    func rendererChanged(to value: Renderer) {
+        renderer = value
+        log.info("stream", "renderer: \(value.rawValue)")
+    }
+
+    /// Pushes the picture settings into a running web player.
+    ///
+    /// The native player reads the same settings directly, so this is a
+    /// no-op there rather than a second code path.
+    func applyEnhancements() {
+        guard renderer == .webKit else { return }
+        let configuration = AppSettings.shared.enhancerConfiguration()
+        guard let data = try? JSONEncoder().encode(configuration),
+              let json = String(data: data, encoding: .utf8) else { return }
+        XboxWebView.Registry.shared.run(
+            "window.__gsEnhanceApply && window.__gsEnhanceApply(\(json));"
+        )
+    }
+
     /// What the enhancement layer saw in the session description.
     ///
     /// This is the only truthful source for which codecs are actually on
@@ -405,6 +440,7 @@ final class StreamCoordinator: ObservableObject {
     }
 
     func streamStarted(width: Int, height: Int) {
+        rendererChanged(to: .webKit)
         watchdog?.cancel()
         watchdog = nil
         if width > 0, height > 0 {
