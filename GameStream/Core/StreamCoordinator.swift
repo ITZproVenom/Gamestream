@@ -71,6 +71,17 @@ final class StreamCoordinator: ObservableObject {
     @Published private(set) var notice: String?
     private var noticeTask: Task<Void, Never>?
     private var leaveCheck: Task<Void, Never>?
+    private var reconnectTask: Task<Void, Never>?
+    private var reconnectAttempts = 0
+    /// Running totals, so a session can report how it actually played.
+    private var sampleCount = 0
+    private var fpsTotal = 0
+    private var rttTotal = 0
+    private var bitrateTotal = 0
+    private var poorSince: Date?
+    private var reducedQuality = false
+    /// Set when a controller chord asks the interface to show itself.
+    @Published var overlayRequest = 0
     @Published private(set) var resolution: String = ""
     /// Bumping this asks the player's webview to reload the launch page.
     @Published private(set) var reloadToken = 0
@@ -107,7 +118,25 @@ final class StreamCoordinator: ObservableObject {
         // A new session deserves a clean attempt at every rumble route, even
         // one that refused to start earlier.
         ControllerRumble.shared.retryAllRoutes(reason: "stream start")
+        sampleCount = 0
+        fpsTotal = 0
+        rttTotal = 0
+        bitrateTotal = 0
+        poorSince = nil
+        reducedQuality = false
+        reconnectAttempts = 0
+        SessionGuard.shared.begin()
         startWatchdog()
+
+        // Measuring afterwards would be pointless; this runs alongside the
+        // launch and only speaks up when the answer is bad.
+        if AppSettings.shared.preflightCheck {
+            Task { [weak self] in
+                let reading = await NetworkCheck.shared.measure()
+                guard let self, reading.isPoor else { return }
+                self.show(notice: reading.verdict)
+            }
+        }
     }
 
     func retry() {
@@ -124,6 +153,9 @@ final class StreamCoordinator: ObservableObject {
         watchdog = nil
         leaveCheck?.cancel()
         leaveCheck = nil
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        SessionGuard.shared.end()
         ControllerRumble.shared.stop()
         // The player webview is kept alive across presentations, so this is
         // the point where the page has to actually be shut down.
@@ -134,9 +166,13 @@ final class StreamCoordinator: ObservableObject {
             let seconds = Date().timeIntervalSince(startedAt)
             // Anything shorter than this is a mis-tap, not a play session.
             if seconds >= 15 {
+                let samples = max(sampleCount, 1)
                 LibraryStore.shared.record(
                     PlayRecord(gameID: game.id, title: game.title,
-                               startedAt: startedAt, seconds: seconds)
+                               startedAt: startedAt, seconds: seconds,
+                               averageFPS: sampleCount > 0 ? fpsTotal / samples : 0,
+                               averageLatencyMs: sampleCount > 0 ? rttTotal / samples : 0,
+                               averageBitrateKbps: sampleCount > 0 ? bitrateTotal / samples : 0)
                 )
                 log.info("stream", "session ended after \(Int(seconds))s")
             }
@@ -147,6 +183,70 @@ final class StreamCoordinator: ObservableObject {
         resolution = ""
         stats = nil
         phase = .idle
+    }
+
+    /// Ends the Xbox session itself rather than only leaving the app.
+    ///
+    /// Closing the player stops streaming, but the console session stays open
+    /// for a while and the next launch resumes into it. Pressing the site's
+    /// own quit is the only way to end it deliberately.
+    func quitGame() {
+        log.info("stream", "quitting the game")
+        XboxWebView.Registry.shared.run(
+            "window.__gsCommand && window.__gsCommand('quit');"
+        )
+        // The page needs a moment to send the quit before the view goes away.
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(900))
+            await MainActor.run { self?.exit() }
+        }
+    }
+
+    /// Asked for by a controller chord.
+    func requestOverlay() { overlayRequest &+= 1 }
+
+    /// Steps the stream down a resolution, once per session.
+    func reduceQuality(reason: String) {
+        guard !reducedQuality else { return }
+        reducedQuality = true
+        log.warn("stream", "reducing quality: \(reason)")
+        XboxWebView.Registry.shared.run(
+            "window.BX_STREAM_SETTINGS && (window.BX_STREAM_SETTINGS['stream.video.maxBitrate'] = 6000000);"
+        )
+        show(notice: "Quality reduced because \(reason).")
+    }
+
+    /// Ten seconds of genuinely bad numbers, not one unlucky sample.
+    private func considerReducingQuality(for value: StreamStats) {
+        guard AppSettings.shared.adaptiveQuality, !reducedQuality else { return }
+        let bad = value.rttMs > 140 || value.packetsLost > 40 || value.fps < 35
+        guard bad else {
+            poorSince = nil
+            return
+        }
+        let since = poorSince ?? Date()
+        poorSince = since
+        guard Date().timeIntervalSince(since) >= 10 else { return }
+        reduceQuality(reason: "the connection could not hold the quality")
+    }
+
+    /// Rejoins after a drop, backing off and giving up rather than looping.
+    func connectionLost(_ detail: String) {
+        guard AppSettings.shared.autoReconnect, reconnectAttempts < 3 else {
+            phase = .failed(detail.isEmpty ? "The stream was interrupted." : detail)
+            return
+        }
+        reconnectAttempts += 1
+        let wait = Double(reconnectAttempts) * 2
+        log.warn("stream", "connection lost (\(detail)); reconnecting in \(Int(wait))s "
+                 + "(attempt \(reconnectAttempts) of 3)")
+        phase = .connecting("Reconnecting… attempt \(reconnectAttempts) of 3")
+        reconnectTask?.cancel()
+        reconnectTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(wait))
+            guard !Task.isCancelled else { return }
+            await MainActor.run { self?.retry() }
+        }
     }
 
     /// Starts the next queued game without returning to the library first.
@@ -227,6 +327,13 @@ final class StreamCoordinator: ObservableObject {
 
     func statsUpdated(_ value: StreamStats) {
         stats = value
+        if phase == .playing {
+            sampleCount += 1
+            fpsTotal += value.fps
+            rttTotal += value.rttMs
+            bitrateTotal += value.bitrateKbps
+            considerReducingQuality(for: value)
+        }
         // The page knows the true frame size; use it rather than whatever the
         // launch page reported when the picture first appeared.
         if !value.resolution.isEmpty, resolution != value.resolution {
@@ -264,8 +371,12 @@ final class StreamCoordinator: ObservableObject {
     }
 
     func streamFailed(message: String) {
-        // Once the picture is up, transient page errors are noise.
-        guard phase != .playing else { return }
+        // Losing a stream that was running is a disconnection, not a failed
+        // launch, and it is the case worth rejoining automatically.
+        if phase == .playing {
+            connectionLost(message.trimmingCharacters(in: .whitespacesAndNewlines))
+            return
+        }
         guard case .connecting = phase else { return }
         watchdog?.cancel()
         watchdog = nil

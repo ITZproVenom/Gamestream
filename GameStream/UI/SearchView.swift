@@ -7,6 +7,7 @@ struct SearchView: View {
     @StateObject private var history = SearchHistory.shared
 
     @State private var query = ""
+    @StateObject private var navigator = RootView.Navigator.shared
 
     private let columns = [GridItem(.adaptive(minimum: 116, maximum: 190), spacing: 16)]
 
@@ -44,6 +45,12 @@ struct SearchView: View {
             .searchable(text: $query, prompt: "Games, genres, anything")
             .searchToolbarBehavior(.minimize)
             .onSubmit(of: .search) { history.record(query) }
+            // A search handed in from a Shortcut or a link arrives here.
+            .onChange(of: navigator.searchSeed) { _, seed in
+                guard let seed, !seed.isEmpty else { return }
+                query = seed
+                navigator.searchSeed = nil
+            }
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
         }
     }

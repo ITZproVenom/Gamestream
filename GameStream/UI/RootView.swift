@@ -6,12 +6,31 @@ struct RootView: View {
     @EnvironmentObject private var stream: StreamCoordinator
     @EnvironmentObject private var library: LibraryStore
 
-    @State private var tab: MainTab = .home
+    @StateObject private var navigator = Navigator.shared
     @State private var showingBrowser = false
 
     /// Named MainTab, not Tab: SwiftUI's own `Tab` view is used below, and a
     /// nested type with the same name shadows it.
     enum MainTab: Hashable { case home, library, search, stats, settings }
+
+    /// Where the app goes when something outside it asks — a Shortcut, a
+    /// Spotlight result, a `gamestream://` link. Keeping one object means
+    /// those routes cannot each grow their own half-working navigation.
+    @MainActor
+    final class Navigator: ObservableObject {
+        static let shared = Navigator()
+        @Published var tab: MainTab = .home
+        @Published var presented: Game?
+        @Published var searchSeed: String?
+        private init() {}
+
+        func show(_ game: Game) { presented = game }
+        func showLibrary() { tab = .library }
+        func search(_ text: String) {
+            searchSeed = text
+            tab = .search
+        }
+    }
 
     var body: some View {
         Group {
@@ -44,7 +63,7 @@ struct RootView: View {
     }
 
     private var shell: some View {
-        TabView(selection: $tab) {
+        TabView(selection: $navigator.tab) {
             Tab("Home", systemImage: "house.fill", value: .home) {
                 HomeView(showingBrowser: $showingBrowser)
             }
@@ -81,6 +100,16 @@ struct RootView: View {
         }
         .sheet(isPresented: $showingBrowser) {
             BrowserView()
+        }
+        .sheet(item: $navigator.presented) { game in
+            NavigationStack {
+                GameDetailView(game: game)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { navigator.presented = nil }
+                        }
+                    }
+            }
         }
     }
 }

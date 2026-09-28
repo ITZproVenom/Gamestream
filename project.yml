@@ -42,6 +42,17 @@ targets:
           - arm64
         NSMicrophoneUsageDescription: "Used for in-game voice chat."
         NSLocalNetworkUsageDescription: "Used to reach Xbox Cloud Gaming servers on your network."
+        NSPhotoLibraryAddUsageDescription: "Used to save screenshots of your stream."
+        CFBundleURLTypes:
+          - CFBundleURLName: com.gamestream.app
+            CFBundleURLSchemes:
+              - gamestream
+        # Shortcuts and Spotlight both start games, so the app has to be
+        # allowed to act on a request that arrives while it is not running.
+        NSUserActivityTypes:
+          - PlayGameIntent
+          - OpenLibraryIntent
+          - ResumeLastGameIntent
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.gamestream.app

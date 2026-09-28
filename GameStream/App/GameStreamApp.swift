@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import CoreSpotlight
 
 @main
 struct GameStreamApp: App {
@@ -12,6 +13,28 @@ struct GameStreamApp: App {
     @StateObject private var stream = StreamCoordinator.shared
     @StateObject private var rumble = ControllerRumble.shared
 
+    /// One entry point for every way the app can be asked to do something
+    /// from outside: a URL, a Spotlight result, or a Shortcut.
+    @MainActor
+    private func perform(_ action: DeepLink.Action) {
+        switch action {
+        case .play(let identifier):
+            guard let game = DeepLink.game(for: identifier, in: catalog) else {
+                AppLog.shared.warn("deeplink", "no game matches \(identifier)")
+                return
+            }
+            AppLog.shared.info("deeplink", "playing \(game.title)")
+            stream.play(game)
+        case .open(let identifier):
+            guard let game = DeepLink.game(for: identifier, in: catalog) else { return }
+            RootView.Navigator.shared.show(game)
+        case .search(let text):
+            RootView.Navigator.shared.search(text)
+        case .library:
+            RootView.Navigator.shared.showLibrary()
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -21,7 +44,19 @@ struct GameStreamApp: App {
                 .environmentObject(library)
                 .environmentObject(stream)
                 .environmentObject(rumble)
+                .environmentObject(PendingIntent.shared)
                 .task { await startUp() }
+                .onOpenURL { url in
+                    if let action = DeepLink.action(for: url) { perform(action) }
+                }
+                .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                    if let action = DeepLink.action(for: activity) { perform(action) }
+                }
+                .onChange(of: PendingIntent.shared.request) { _, request in
+                    guard let request else { return }
+                    PendingIntent.shared.request = nil
+                    perform(request)
+                }
                 .onChange(of: scenePhase) { _, phase in
                     handle(phase)
                 }
@@ -41,6 +76,7 @@ struct GameStreamApp: App {
         AppLog.shared.info("app", "GameStream \(AppInfo.versionLine) starting")
         UIApplication.shared.isIdleTimerDisabled = settings.keepAwake
         rumble.start()
+        ControllerShortcuts.shared.start()
 
         async let session = auth.refresh(reason: "launch")
         async let script: Void = BetterXCloud.shared.refreshIfNeeded()
@@ -48,6 +84,7 @@ struct GameStreamApp: App {
 
         if auth.state.isSignedIn {
             await catalog.refresh()
+            SpotlightIndex.update(with: catalog.games)
         }
     }
 

@@ -66,15 +66,41 @@ struct PlayRecord: Identifiable, Hashable, Codable, Sendable {
     let title: String
     let startedAt: Date
     var seconds: TimeInterval
+    /// How the session actually ran, averaged over its samples. Zero means
+    /// the session predates this or never reported statistics.
+    var averageFPS: Int
+    var averageLatencyMs: Int
+    var averageBitrateKbps: Int
 
     init(id: UUID = UUID(), gameID: String, title: String,
-         startedAt: Date, seconds: TimeInterval) {
+         startedAt: Date, seconds: TimeInterval,
+         averageFPS: Int = 0, averageLatencyMs: Int = 0, averageBitrateKbps: Int = 0) {
         self.id = id
         self.gameID = gameID
         self.title = title
         self.startedAt = startedAt
         self.seconds = seconds
+        self.averageFPS = averageFPS
+        self.averageLatencyMs = averageLatencyMs
+        self.averageBitrateKbps = averageBitrateKbps
     }
+
+    /// Decoded by hand so records written before these fields existed still
+    /// load. Synthesised decoding would throw on the missing keys and take
+    /// the whole activity history with it.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        gameID = try container.decode(String.self, forKey: .gameID)
+        title = try container.decode(String.self, forKey: .title)
+        startedAt = try container.decode(Date.self, forKey: .startedAt)
+        seconds = try container.decode(TimeInterval.self, forKey: .seconds)
+        averageFPS = try container.decodeIfPresent(Int.self, forKey: .averageFPS) ?? 0
+        averageLatencyMs = try container.decodeIfPresent(Int.self, forKey: .averageLatencyMs) ?? 0
+        averageBitrateKbps = try container.decodeIfPresent(Int.self, forKey: .averageBitrateKbps) ?? 0
+    }
+
+    var hasPerformance: Bool { averageFPS > 0 || averageLatencyMs > 0 }
 }
 
 /// A user-made collection of games.

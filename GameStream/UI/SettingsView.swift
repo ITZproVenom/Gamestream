@@ -7,6 +7,8 @@ struct SettingsView: View {
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var catalog: Catalog
     @EnvironmentObject private var rumble: ControllerRumble
+    @StateObject private var network = NetworkCheck.shared
+    @StateObject private var guardian = SessionGuard.shared
 
     @Binding var showingBrowser: Bool
 
@@ -25,6 +27,7 @@ struct SettingsView: View {
                     appearance
                     streaming
                     controller
+                    session
                     storage
                     about
                 }
@@ -280,6 +283,83 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
             }
+        }
+    }
+
+    /// Everything that governs a running session rather than how it looks.
+    private var session: some View {
+        SettingsGroup("Session", icon: "timer") {
+            Toggle("Rejoin automatically if the stream drops", isOn: $settings.autoReconnect)
+            SettingsDivider()
+
+            Toggle("Lower the quality when the connection struggles",
+                   isOn: $settings.adaptiveQuality)
+            SettingsDivider()
+
+            Toggle("Check the connection before starting", isOn: $settings.preflightCheck)
+            if let reading = network.latest {
+                Text(reading.reachable
+                     ? "Last check: \(reading.latencyMs) ms, ±\(reading.spreadMs) ms. \(reading.verdict)"
+                     : reading.verdict)
+                    .font(.caption)
+                    .foregroundStyle(reading.isPoor ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Button {
+                Task { await network.measure() }
+            } label: {
+                HStack {
+                    SettingsRowLabel(title: "Test the connection now", icon: "wifi")
+                    if network.isChecking { ProgressView().controlSize(.small) }
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(network.isChecking)
+
+            SettingsDivider()
+
+            VStack(alignment: .leading, spacing: 7) {
+                HStack {
+                    Text("Session limit").font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Text(settings.sessionLimitMinutes == 0
+                         ? "Off" : "\(settings.sessionLimitMinutes) min")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                Slider(value: Binding(
+                    get: { Double(settings.sessionLimitMinutes) },
+                    set: { settings.sessionLimitMinutes = Int($0) }
+                ), in: 0...240, step: 15)
+                Text("The game ends itself when the time is up, with warnings at "
+                     + "five minutes and one minute.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsDivider()
+
+            Toggle("Stop if the phone overheats", isOn: $settings.thermalGuard)
+            HStack {
+                Text("Thermal state").font(.caption)
+                Spacer()
+                Text(guardian.thermalDescription)
+                    .font(.caption)
+                    .foregroundStyle(guardian.thermalState == .nominal
+                                     ? AnyShapeStyle(.secondary) : AnyShapeStyle(.orange))
+            }
+
+            SettingsDivider()
+
+            Toggle("Warn on low battery", isOn: $settings.batteryGuard)
+            SettingsDivider()
+
+            Toggle("Controller shortcuts", isOn: $settings.controllerShortcuts)
+            Text("Hold both shoulder buttons with View for the overlay, Menu for "
+                 + "the Xbox guide, A for the enhancement menu, Y for statistics.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

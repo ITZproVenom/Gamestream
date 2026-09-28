@@ -712,6 +712,19 @@ enum WebScripts {
                     ".bx-header-settings-button"
                 ], /better\s*xcloud/);
                 enable(target);
+            } else if (command === "quit") {
+                // Ending the session properly is the site's own quit, inside
+                // the guide. Closing the player only stops the picture; the
+                // session stays open and the next launch resumes into it.
+                expandHud();
+                var quit = document.querySelector("a[class*=QuitGameButton], button[class*=QuitGameButton]");
+                if (!quit) {
+                    var guide = guideButton();
+                    if (guide) { click(guide); }
+                    quit = document.querySelector("a[class*=QuitGameButton], button[class*=QuitGameButton]");
+                }
+                target = quit;
+                enable(target);
             } else if (command === "guide") {
                 expandHud();
                 target = guideButton();

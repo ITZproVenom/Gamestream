@@ -7,6 +7,7 @@ struct StreamView: View {
     @EnvironmentObject private var rumble: ControllerRumble
 
     @State private var showingControls = true
+    @StateObject private var guardian = SessionGuard.shared
     @State private var hideTask: Task<Void, Never>?
     @State private var elapsed: TimeInterval = 0
     @State private var startedAt = Date()
@@ -61,6 +62,10 @@ struct StreamView: View {
             guard stream.phase == .playing else { return }
             withAnimation(.smooth(duration: 0.25)) { showingControls.toggle() }
             if showingControls { scheduleHide() }
+        }
+        .onChange(of: stream.overlayRequest) { _, _ in
+            withAnimation(.smooth(duration: 0.25)) { showingControls = true }
+            scheduleHide()
         }
         .onChange(of: stream.phase) { _, phase in
             if phase == .playing {
@@ -161,6 +166,16 @@ struct StreamView: View {
                         .glassEffect(.regular, in: Capsule())
                         .glassEffectID("timer", in: glass)
 
+                    if let remaining = guardian.remaining {
+                        Text("−\(Format.clock(remaining))")
+                            .font(.caption.weight(.semibold).monospacedDigit())
+                            .foregroundStyle(remaining < 300 ? .orange : .secondary)
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 9)
+                            .glassEffect(.regular, in: Capsule())
+                            .glassEffectID("limit", in: glass)
+                    }
+
                     if let stats = stream.stats {
                         qualityBadge(stats)
                     }
@@ -172,6 +187,17 @@ struct StreamView: View {
                     hudIcon("slider.horizontal.3", label: "Streaming enhancements",
                             id: "enhance") {
                         stream.openEnhancementMenu()
+                    }
+
+                    hudIcon("camera.fill", label: "Screenshot", id: "shot") {
+                        Task {
+                            let outcome = await StreamCapture.capture()
+                            stream.show(notice: outcome.message)
+                        }
+                    }
+
+                    hudIcon("power", label: "Quit the game", id: "quit") {
+                        stream.quitGame()
                     }
 
                     hudIcon(showingStats ? "chart.bar.fill" : "chart.bar",

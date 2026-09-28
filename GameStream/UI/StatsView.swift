@@ -24,6 +24,7 @@ struct StatsView: View {
                     } else {
                         totals
                         weekChart
+                        performanceChart
                         topGames
                         if let longest = library.longestSession {
                             longestCard(longest)
@@ -69,6 +70,59 @@ struct StatsView: View {
             }
         }
         .padding(.horizontal, Theme.pageInset)
+    }
+
+    /// How recent sessions actually ran.
+    ///
+    /// Playtime says what was played; this says whether it was worth playing.
+    /// A run of sessions at 90 ms is a connection problem the player can act
+    /// on, and it is invisible in any total.
+    @ViewBuilder
+    private var performanceChart: some View {
+        let measured = library.activity.filter(\.hasPerformance).prefix(20).reversed()
+        if measured.count >= 2 {
+            GlassCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    SectionHeader(title: "Stream quality")
+                    Text("Average frame rate and latency across your last "
+                         + "\(measured.count) measured sessions.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Chart(Array(measured)) { record in
+                        LineMark(
+                            x: .value("Session", record.startedAt),
+                            y: .value("Frames per second", record.averageFPS)
+                        )
+                        .foregroundStyle(by: .value("Measure", "FPS"))
+                        .interpolationMethod(.monotone)
+
+                        LineMark(
+                            x: .value("Session", record.startedAt),
+                            y: .value("Latency", record.averageLatencyMs)
+                        )
+                        .foregroundStyle(by: .value("Measure", "Latency (ms)"))
+                        .interpolationMethod(.monotone)
+                    }
+                    .chartLegend(position: .bottom, spacing: 8)
+                    .frame(height: 170)
+
+                    HStack(spacing: 10) {
+                        StatChip(value: "\(averageOf(measured, \.averageFPS))",
+                                 caption: "Average FPS", systemImage: "speedometer")
+                        StatChip(value: "\(averageOf(measured, \.averageLatencyMs)) ms",
+                                 caption: "Average latency", systemImage: "timer")
+                    }
+                }
+            }
+            .padding(.horizontal, Theme.pageInset)
+        }
+    }
+
+    private func averageOf(_ records: some Collection<PlayRecord>,
+                           _ path: KeyPath<PlayRecord, Int>) -> Int {
+        guard !records.isEmpty else { return 0 }
+        return records.reduce(0) { $0 + $1[keyPath: path] } / records.count
     }
 
     private var weekChart: some View {
