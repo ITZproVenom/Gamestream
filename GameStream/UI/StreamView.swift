@@ -14,6 +14,10 @@ struct StreamView: View {
     @State private var showingStats = false
     @State private var showingMenu = false
     @StateObject private var recorder = StreamRecorder.shared
+    /// Observed, not read once: the stats panel's position, size and opacity
+    /// are changed from the menu while the stream is running, and a value
+    /// read through the singleton does not redraw anything.
+    @ObservedObject private var settings = AppSettings.shared
 
     @Namespace private var glass
 
@@ -283,7 +287,7 @@ struct StreamView: View {
             .padding(.horizontal, 16)
             .padding(.top, 12)
 
-            if showingStats, AppSettings.shared.statsPosition == "top" {
+            if showingStats, settings.statsPosition == "top" {
                 statsPanel
                     .padding(.horizontal, 16)
                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -291,7 +295,7 @@ struct StreamView: View {
 
             Spacer()
 
-            if showingStats, AppSettings.shared.statsPosition != "top" {
+            if showingStats, settings.statsPosition != "top" {
                 statsPanel
                     .padding(.horizontal, 16)
                     .padding(.bottom, 16)
@@ -381,8 +385,8 @@ struct StreamView: View {
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         // The panel sits over the game, so how loud it is and how big it
         // reads are the player's call, not ours.
-        .scaleEffect(CGFloat(AppSettings.shared.statsTextSize) / 100, anchor: .topLeading)
-        .opacity(Double(AppSettings.shared.statsOpacity) / 100)
+        .scaleEffect(CGFloat(settings.statsTextSize) / 100, anchor: .topLeading)
+        .opacity(Double(settings.statsOpacity) / 100)
     }
 
     private func statCell(_ value: String, _ caption: String) -> some View {

@@ -203,12 +203,16 @@ final class StreamCoordinator: ObservableObject {
     /// own quit is the only way to end it deliberately.
     func quitGame() {
         log.info("stream", "quitting the game")
+        show(notice: "Ending the session on Xbox…")
         XboxWebView.Registry.shared.run(
             "window.__gsCommand && window.__gsCommand('quit');"
         )
-        // The page needs a moment to send the quit before the view goes away.
+        // The page needs a moment to send the quit before the view goes
+        // away, and it has to open the guide to reach the control at all.
+        // Leaving before it gets there ends the app's session and leaves the
+        // console one running, which is the whole thing this avoids.
         Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(900))
+            try? await Task.sleep(for: .milliseconds(2600))
             await MainActor.run { self?.exit() }
         }
     }
@@ -406,9 +410,6 @@ final class StreamCoordinator: ObservableObject {
     /// Presses the site's Xbox guide button.
     func pressGuide() {
         log.info("stream", "pressing the Xbox guide")
-        XboxWebView.Registry.shared.run(
-            "window.__gsCommand ? '' : 'the command bridge is not installed on this page';"
-        )
         XboxWebView.Registry.shared.run("window.__gsCommand && window.__gsCommand('guide');")
     }
 
@@ -416,6 +417,11 @@ final class StreamCoordinator: ObservableObject {
         rendererChanged(to: .webKit)
         watchdog?.cancel()
         watchdog = nil
+        // A reconnect that worked has spent none of the budget. Counting
+        // attempts for the lifetime of the session meant the fourth drop of
+        // a long evening was never rejoined, however well the first three
+        // recoveries went.
+        reconnectAttempts = 0
         if width > 0, height > 0 {
             resolution = "\(width)×\(height)"
         }

@@ -239,12 +239,17 @@ enum WebScripts {
         setInterval(scan, 700);
 
         // Surface the site's own error dialogs instead of leaving a black screen.
+        // Said once per distinct message: the dialog stays on screen, and
+        // reporting it every poll drove the app's reconnect budget to zero
+        // in a few seconds.
+        var lastError = "";
         setInterval(function() {
             try {
                 var node = document.querySelector('[class*="ErrorScreen"], [class*="error-screen"], [data-testid*="error"]');
-                if (!node) return;
+                if (!node) { lastError = ""; return; }
                 var text = (node.innerText || "").trim();
-                if (text.length > 4 && text.length < 400) {
+                if (text.length > 4 && text.length < 400 && text !== lastError) {
+                    lastError = text;
                     post("streamError", { message: text });
                 }
             } catch (e) {}
@@ -323,6 +328,7 @@ enum WebScripts {
             return pc;
         };
         window.RTCPeerConnection.prototype = Native.prototype;
+        window.RTCPeerConnection.generateCertificate = Native.generateCertificate;
 
         var previous = {};
 
@@ -333,9 +339,13 @@ enum WebScripts {
         }
 
         async function sample() {
+            // A page that reconnects builds a new connection each time and
+            // the old ones are never useful again.
+            connections = connections.filter(function(pc) {
+                return pc && pc.connectionState !== "closed";
+            });
             for (var i = 0; i < connections.length; i++) {
                 var pc = connections[i];
-                if (!pc || pc.connectionState === "closed") continue;
 
                 var report_ = null;
                 try { report_ = await pc.getStats(); } catch (e) { continue; }
@@ -343,7 +353,14 @@ enum WebScripts {
                 var video = null, pair = null, codecName = "";
                 report_.forEach(function(entry) {
                     if (entry.type === "inbound-rtp" && entry.kind === "video") video = entry;
-                    if (entry.type === "candidate-pair" && entry.nominated) pair = entry;
+                    // `nominated` is not always set. A succeeded pair is the
+                    // one carrying the media either way, and without this
+                    // fallback the round trip reads as zero for the whole
+                    // session.
+                    if (entry.type === "candidate-pair") {
+                        if (entry.nominated) pair = entry;
+                        else if (!pair && entry.state === "succeeded") pair = entry;
+                    }
                 });
                 if (!video) continue;
 
@@ -355,15 +372,22 @@ enum WebScripts {
 
                 var last = previous[video.id] || null;
                 var bitrate = 0;
+                // Packet loss is reported by WebRTC as a total for the
+                // session. Sent on as-is it only ever grows, so anything
+                // judging the connection by it decides the stream is
+                // struggling a few minutes in and never changes its mind.
+                var lost = 0;
                 if (last && video.timestamp > last.timestamp) {
                     var seconds = (video.timestamp - last.timestamp) / 1000;
                     bitrate = Math.max(0, Math.round(
                         ((video.bytesReceived - last.bytesReceived) * 8) / seconds / 1000
                     ));
+                    lost = Math.max(0, (video.packetsLost || 0) - (last.packetsLost || 0));
                 }
                 previous[video.id] = {
                     timestamp: video.timestamp,
-                    bytesReceived: video.bytesReceived || 0
+                    bytesReceived: video.bytesReceived || 0,
+                    packetsLost: video.packetsLost || 0
                 };
 
                 report({
@@ -373,7 +397,7 @@ enum WebScripts {
                     rttMs: pair && pair.currentRoundTripTime
                         ? Math.round(pair.currentRoundTripTime * 1000) : 0,
                     jitterMs: video.jitter ? Math.round(video.jitter * 1000) : 0,
-                    packetsLost: video.packetsLost || 0,
+                    packetsLost: lost,
                     framesDropped: video.framesDropped || 0,
                     decodeMs: video.totalDecodeTime && video.framesDecoded
                         ? Math.round((video.totalDecodeTime / video.framesDecoded) * 1000)
@@ -485,14 +509,40 @@ enum WebScripts {
                 // the guide. Closing the player only stops the picture; the
                 // session stays open and the next launch resumes into it.
                 expandHud();
-                var quit = document.querySelector("a[class*=QuitGameButton], button[class*=QuitGameButton]");
-                if (!quit) {
-                    var guide = guideButton();
-                    if (guide) { click(guide); }
-                    quit = document.querySelector("a[class*=QuitGameButton], button[class*=QuitGameButton]");
+                var QUIT = "a[class*=QuitGameButton], button[class*=QuitGameButton]";
+                var quit = document.querySelector(QUIT);
+                if (quit) {
+                    enable(quit);
+                    if (click(quit)) {
+                        note(command, "pressed " + describe(quit));
+                        return true;
+                    }
                 }
-                target = quit;
-                enable(target);
+                // The guide has to open before its quit button exists, and
+                // it opens with an animation. Looking for the button in the
+                // same breath as opening the guide always found nothing, so
+                // quitting fell through to the "no control found" report
+                // while the guide sat open on screen.
+                var guide = guideButton();
+                if (guide) { enable(guide); click(guide); }
+                var tries = 0;
+                var timer = setInterval(function() {
+                    tries++;
+                    var found = document.querySelector(QUIT);
+                    if (found && visible(found)) {
+                        clearInterval(timer);
+                        enable(found);
+                        note(command, click(found)
+                            ? "pressed " + describe(found)
+                            : "found the quit control but could not press it");
+                        return;
+                    }
+                    if (tries > 12) {
+                        clearInterval(timer);
+                        note(command, "the guide did not offer a quit control");
+                    }
+                }, 150);
+                return true;
             } else if (command === "guide") {
                 expandHud();
                 target = guideButton();

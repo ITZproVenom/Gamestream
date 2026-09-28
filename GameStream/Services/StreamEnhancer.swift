@@ -153,7 +153,15 @@ enum StreamEnhancer {
                     return;
                 }
             }
-            lines.splice(section.start + 1, 0, "b=AS:" + kbps);
+            // A bandwidth line belongs after the connection line, which is
+            // the order the format requires. Put before it, a parser is
+            // entitled to reject the whole description.
+            var at = section.start + 1;
+            for (var c = section.start + 1; c < section.end; c++) {
+                if (lines[c].indexOf("c=") === 0) { at = c + 1; break; }
+            }
+            lines.splice(at, 0, "b=AS:" + kbps);
+            section.end++;
         }
 
         /// H.264 profiles are distinguished by the first byte of
@@ -292,6 +300,16 @@ enum StreamEnhancer {
                                 type: description.type,
                                 sdp: edit(description.sdp)
                             };
+                        } else {
+                            // The page can let the browser build and set its
+                            // own description in one step. There is no text
+                            // to edit in that case, and saying so is better
+                            // than reporting settings that were never
+                            // applied to anything.
+                            report.notes = ["the page set its description "
+                                            + "without one, so nothing could be edited"];
+                            post({ type: "enhance", codecs: "",
+                                   notes: report.notes[0] });
                         }
                     } catch (e) {}
                     return setLocal(description);
@@ -432,7 +450,10 @@ enum StreamEnhancer {
                 window.fetch = function(input) {
                     var url = typeof input === "string" ? input : (input && input.url);
                     if (url && blocked(url)) {
-                        return Promise.resolve(new Response("", { status: 204 }));
+                        // A 204 may not carry a body at all: constructing
+                        // one with even an empty string throws, which would
+                        // turn a blocked tracker into a page error.
+                        return Promise.resolve(new Response(null, { status: 204 }));
                     }
                     return fetchOriginal.apply(window, arguments);
                 };
@@ -637,10 +658,26 @@ enum StreamEnhancer {
         function watch() {
             applyPicture();
             var tries = 0;
+            var settled = 0;
             var timer = setInterval(function() {
                 tries++;
-                if (tries > 40) { clearInterval(timer); return; }
-                if (!document.getElementById(STYLE_ID)) applyPicture();
+                // Long enough to outlast a queue. Twenty seconds of trying
+                // was shorter than the wait for a busy region, and a player
+                // that appeared after that was never touched at all.
+                if (tries > 600) { clearInterval(timer); return; }
+                var video = document.querySelector("video");
+                // The style being present is not proof the work is done: the
+                // audio boost attaches to the video element, and that element
+                // is created long after the first style is written.
+                if (!document.getElementById(STYLE_ID)
+                    || (video && amplified !== video && on()
+                        && (config.volumeBoost || 100) > 100)) {
+                    applyPicture();
+                }
+                if (video) {
+                    settled++;
+                    if (settled > 20) { clearInterval(timer); }
+                }
             }, 500);
         }
 

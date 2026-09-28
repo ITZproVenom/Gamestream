@@ -312,6 +312,22 @@ struct XboxWebView: UIViewRepresentable {
             report(error)
         }
 
+        /// WebKit runs pages in a separate process, and that process can be
+        /// killed under memory pressure. When it is, the view goes blank and
+        /// nothing else reports anything: the stream simply stops with no
+        /// error and no end. This is the only notice the app gets.
+        @MainActor
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            AppLog.shared.warn("web", "\(role) page process was terminated")
+            guard role == .stream else {
+                webView.reload()
+                return
+            }
+            StreamCoordinator.shared.streamFailed(
+                message: "The player ran out of memory and was shut down by iOS."
+            )
+        }
+
         // MARK: Popups
         //
         // Microsoft's sign-in can open a new window. A webview with no

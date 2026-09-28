@@ -208,7 +208,7 @@ struct NativeStreamView: View {
         UIApplication.shared.isIdleTimerDisabled = true
         do {
             note("Signing in to the cloud service")
-            let login = try await XCloudAPI.shared.login(xstsToken: xsts)
+            let login = try await signIn(with: xsts)
             token = login.gsToken
             note("Token obtained; \(login.regions.count) region(s)")
 
@@ -238,6 +238,23 @@ struct NativeStreamView: View {
             await peer.connect(handle: handle, token: login.gsToken)
         } catch {
             await fail(error.localizedDescription)
+        }
+    }
+
+    /// The token read from the page can be minutes past its expiry, and the
+    /// service says so with a 401. Re-reading it and trying once more is the
+    /// difference between a working bolt button and one that fails every
+    /// time the app has been open for a while.
+    private func signIn(with xsts: String) async throws -> XCloudAPI.Login {
+        do {
+            return try await XCloudAPI.shared.login(xstsToken: xsts)
+        } catch let failure as XCloudAPI.Failure where failure.detail.contains("401") {
+            note("The token had expired; reading a fresh one")
+            _ = await auth.refresh(reason: "native login refused")
+            guard let renewed = auth.xstsToken else {
+                throw failure
+            }
+            return try await XCloudAPI.shared.login(xstsToken: renewed)
         }
     }
 
