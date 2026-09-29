@@ -546,10 +546,22 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 Toggle("Record your voice", isOn: $settings.recordMicrophone)
-                Text("Off by default. A clip of a game should not record the room unless asked.")
+                Text("Off by default. A clip of a game should not record the room "
+                     + "unless asked. Voice is only added when a clip has to be "
+                     + "captured from the screen; clips taken from the stream "
+                     + "itself carry the game's own sound.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            SettingsDivider()
+
+            Text("Clips are recorded from the stream, so they hold the game and "
+                 + "nothing drawn over it. The player's controls and the on-screen "
+                 + "pad stay visible to you and stay out of the video.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

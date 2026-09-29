@@ -241,7 +241,8 @@ struct XboxWebView: UIViewRepresentable {
 
         for source in [WebScripts.streamStateJS, WebScripts.streamChromeJS,
                        WebScripts.streamStatsJS, WebScripts.streamCommandsJS,
-                       WebScripts.captureJS, WebScripts.autoStartJS] {
+                       WebScripts.captureJS, WebScripts.clipJS,
+                       WebScripts.autoStartJS] {
             controller.addUserScript(WKUserScript(source: source,
                                                   injectionTime: .atDocumentEnd,
                                                   forMainFrameOnly: true))
@@ -317,6 +318,13 @@ struct XboxWebView: UIViewRepresentable {
                 let codecs = body["codecs"] as? String ?? ""
                 let notes = body["notes"] as? String ?? ""
                 StreamCoordinator.shared.enhancementReported(codecs: codecs, notes: notes)
+            case "clipChunk":
+                StreamRecorder.shared.pageChunk(index: body["index"] as? Int ?? 0,
+                                                base64: body["data"] as? String ?? "")
+            case "clipEnd":
+                StreamRecorder.shared.pageStopped()
+            case "clipFailed":
+                StreamRecorder.shared.pageFailed(body["message"] as? String ?? "")
             case "rumble":
                 RumbleBridge.handle(payload: body)
             case "rumbleCaps":

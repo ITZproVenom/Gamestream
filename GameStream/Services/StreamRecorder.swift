@@ -164,15 +164,16 @@ private final class SampleSink: @unchecked Sendable {
 /// Records the stream to a video file.
 ///
 /// Screenshots were only ever half the ask: the interesting things in a game
-/// happen over seconds, not in one frame. There is no way to pull frames out
-/// of the player fast enough to build a video — the canvas read that makes a
-/// screenshot work costs far too much at sixty frames a second — so this
-/// records the screen instead, through ReplayKit.
+/// happen over seconds, not in one frame.
 ///
-/// Recording the screen rather than the video element has a real consequence
-/// worth knowing: the app's own HUD is in the recording if it is on screen
-/// when you capture. The overlay hides itself a few seconds after a tap, so
-/// in practice a clip started and left alone is clean.
+/// There are two ways to get those seconds, and they are not equivalent.
+/// Capturing the screen records everything on the glass, which means the
+/// app's own HUD and the site's on-screen pad are in the video, and the only
+/// way to keep them out is to take them away from the player too. So the
+/// first choice is to record the media the page is already receiving: the
+/// clip is then the game and its sound, at source quality, and the interface
+/// drawn over it is simply not part of the picture. Screen capture through
+/// ReplayKit remains the fallback for when the page cannot do it.
 ///
 /// Samples are written straight through to an MP4. Holding them in memory to
 /// write later is how a long recording ends as an out-of-memory crash with
@@ -210,18 +211,26 @@ final class StreamRecorder: NSObject, ObservableObject {
     private var sink: SampleSink?
     private var overlayVisible = false
 
-    /// Told by the player whenever the app draws over the game.
+    /// How the clip is being captured.
     ///
-    /// ReplayKit captures the screen, so the controls would otherwise be
-    /// burnt into the clip. Those frames are left out and the time they
-    /// took is removed from the timeline, so a clip holds the game and
-    /// nothing else. System interface such as Control Centre and
-    /// notifications is never captured by an in-app recording in the first
-    /// place, so only the app's own overlay had to be dealt with.
+    /// Screen capture records the glass, which means the app's own controls
+    /// and the site's on-screen pad end up in the video, and the only way
+    /// around that is to take them off the screen the player is looking at.
+    /// The page route asks the player to record the media it is already
+    /// receiving, so the clip is the game and its sound and nothing else
+    /// while everything drawn over it stays visible.
+    enum Route: Equatable { case page, screen }
+
+    private(set) var route: Route = .screen
+
+    /// Told by the player whenever the app draws over the game. Only the
+    /// screen route cares: it is capturing what is on the glass, so those
+    /// frames are left out and the time they took is removed from the
+    /// timeline. The page route is already looking at the game alone.
     func setOverlayVisible(_ visible: Bool) {
         guard overlayVisible != visible else { return }
         overlayVisible = visible
-        guard let sink else { return }
+        guard route == .screen, let sink else { return }
         sink.setSuppressed(visible, at: CMClockGetTime(CMClockGetHostTimeClock()))
     }
     private var outputURL: URL?
@@ -237,6 +246,20 @@ final class StreamRecorder: NSObject, ObservableObject {
 
     func start() async -> String {
         guard !isRecording else { return "Already recording." }
+        state = .starting
+        if await startFromPage() {
+            route = .page
+            let began = Date()
+            state = .recording(since: began)
+            startTicking(from: began)
+            AppLog.shared.info("recorder", "recording the stream itself")
+            return "Recording the game only."
+        }
+        route = .screen
+        return await startScreenCapture()
+    }
+
+    private func startScreenCapture() async -> String {
         guard recorder.isAvailable else {
             state = .failed("unavailable")
             return "Screen recording is not available right now."
@@ -352,6 +375,7 @@ final class StreamRecorder: NSObject, ObservableObject {
 
     func stop() async -> String {
         guard isRecording else { return "Not recording." }
+        if route == .page { return await stopPageClip() }
         state = .saving
         ticker?.cancel()
         ticker = nil
@@ -375,30 +399,169 @@ final class StreamRecorder: NSObject, ObservableObject {
             return "Recording failed: \(reason)"
         }
 
+        let length = Int(elapsed)
+        let problem = await saveToPhotos(url)
+        await tearDown()
+        if let problem {
+            state = .failed(problem)
+            return problem
+        }
+        state = .idle
+        AppLog.shared.info("recorder", "saved a \(length)s clip")
+        return "Saved a \(length)s clip to Photos."
+    }
+
+    /// Adds a finished file to Photos. Returns nil when it worked, or what
+    /// to tell the player when it did not.
+    private func saveToPhotos(_ url: URL) async -> String? {
         let status = await withCheckedContinuation { (continuation: CheckedContinuation<PHAuthorizationStatus, Never>) in
             PHPhotoLibrary.requestAuthorization(for: .addOnly) { continuation.resume(returning: $0) }
         }
         guard status == .authorized || status == .limited else {
-            await tearDown()
-            state = .idle
             return "GameStream cannot add to Photos. Allow it in iOS Settings."
         }
-
         do {
             try await PHPhotoLibrary.shared().performChanges {
                 PHAssetCreationRequest.forAsset()
                     .addResource(with: .video, fileURL: url, options: nil)
             }
-            let length = Int(elapsed)
-            await tearDown()
-            state = .idle
-            AppLog.shared.info("recorder", "saved a \(length)s clip")
-            return "Saved a \(length)s clip to Photos."
+            return nil
         } catch {
-            await tearDown()
-            state = .failed(error.localizedDescription)
             return "Could not save the clip: \(error.localizedDescription)"
         }
+    }
+
+    // MARK: - Recording from the page
+
+    private var pageHandle: FileHandle?
+    private var pageURL: URL?
+    private var pageNext = 0
+    private var pageHeld: [Int: Data] = [:]
+    private var pageBytes = 0
+    private var pageFinish: CheckedContinuation<Void, Never>?
+    /// So a late timeout from one clip cannot cut short the next.
+    private var pageGeneration = 0
+
+    private func startFromPage() async -> Bool {
+        let registry = XboxWebView.Registry.shared
+        let available = await registry.evaluateAsync(
+            "return typeof window.__gsClipAvailable === 'function'"
+            + " && window.__gsClipAvailable();"
+        ) as? Bool
+        guard available == true else {
+            AppLog.shared.debug("recorder", "the page cannot record this stream; "
+                                + "capturing the screen instead")
+            return false
+        }
+
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gamestream-\(Int(Date().timeIntervalSince1970)).mp4")
+        try? FileManager.default.removeItem(at: url)
+        guard FileManager.default.createFile(atPath: url.path, contents: nil),
+              let handle = try? FileHandle(forWritingTo: url) else { return false }
+        pageURL = url
+        pageHandle = handle
+        pageNext = 0
+        pageHeld = [:]
+        pageBytes = 0
+
+        let bitrate = max(1, AppSettings.shared.recordingBitrateMbps) * 1_000_000
+        let started = await registry.evaluateAsync(
+            "return window.__gsClipStart(\(bitrate));"
+        ) as? Bool
+        guard started == true else {
+            try? handle.close()
+            try? FileManager.default.removeItem(at: url)
+            pageHandle = nil
+            pageURL = nil
+            return false
+        }
+        if AppSettings.shared.recordMicrophone {
+            AppLog.shared.info("recorder", "voice is not mixed in when the clip "
+                               + "comes from the stream itself")
+        }
+        return true
+    }
+
+    /// A piece of the clip, as the page finishes encoding it.
+    func pageChunk(index: Int, base64: String) {
+        guard route == .page, pageHandle != nil,
+              let data = Data(base64Encoded: base64) else { return }
+        pageHeld[index] = data
+        // Written in order or not at all: turning a blob into text happens
+        // asynchronously inside the page, so pieces can arrive swapped.
+        while let next = pageHeld.removeValue(forKey: pageNext) {
+            try? pageHandle?.write(contentsOf: next)
+            pageBytes += next.count
+            pageNext += 1
+        }
+    }
+
+    func pageStopped() {
+        pageFinish?.resume()
+        pageFinish = nil
+    }
+
+    func pageFailed(_ message: String) {
+        AppLog.shared.warn("recorder", "the page could not record: \(message)")
+        pageFinish?.resume()
+        pageFinish = nil
+    }
+
+    private func stopPageClip() async -> String {
+        state = .saving
+        ticker?.cancel()
+        ticker = nil
+        let length = Int(elapsed)
+
+        pageGeneration += 1
+        let generation = pageGeneration
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            pageFinish = continuation
+            XboxWebView.Registry.shared.run("window.__gsClipStop && window.__gsClipStop();")
+            // The last piece arrives before the page says it has finished.
+            // A page that has gone away says nothing at all, so waiting on
+            // it forever is not an option.
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 6_000_000_000)
+                guard self.pageGeneration == generation else { return }
+                self.pageStopped()
+            }
+        }
+        // One more turn for a chunk already in flight.
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        try? pageHandle?.close()
+        pageHandle = nil
+
+        guard let url = pageURL, pageBytes > 0 else {
+            await tearDownPage()
+            state = .failed("nothing was captured")
+            return "Recording failed: nothing was captured."
+        }
+
+        let problem = await saveToPhotos(url)
+        await tearDownPage()
+        if let problem {
+            state = .failed(problem)
+            return problem
+        }
+        state = .idle
+        AppLog.shared.info("recorder", "saved a \(length)s clip of the game only")
+        return "Saved a \(length)s clip to Photos."
+    }
+
+    private func tearDownPage() async {
+        try? pageHandle?.close()
+        pageHandle = nil
+        if let pageURL { try? FileManager.default.removeItem(at: pageURL) }
+        pageURL = nil
+        pageHeld = [:]
+        pageNext = 0
+        pageBytes = 0
+        ticker?.cancel()
+        ticker = nil
+        elapsed = 0
     }
 
     // MARK: - Sample handling
