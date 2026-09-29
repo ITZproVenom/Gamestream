@@ -141,17 +141,25 @@ actor XCloudSession {
             "titleId": titleId,
             "systemUpdateGroup": "",
             "serverId": "",
-            "fallbackRegionNames": [],
+            "fallbackRegionNames": login.fallbackRegionNames,
+            "clientSessionId": UUID().uuidString.lowercased(),
             "settings": [
-                "nanoVersion": "V3;RtcTransport",
+                // The service checks this string against a list. Anything it
+                // does not recognise is refused outright, which is why this
+                // is the site's exact value rather than a tidier one.
+                "nanoVersion": "V3;WebrtcTransport.dll",
                 "enableTextToSpeech": false,
+                "magnifier": false,
                 "highContrast": 0,
                 "locale": Locale.current.identifier.replacingOccurrences(of: "_", with: "-"),
-                // We do trade ICE candidates over /ice, so saying otherwise
-                // here would describe a transport this client does not use.
-                "useIceConnection": true,
+                // We do exchange ICE over /ice, but so does the site with
+                // this set to false: the flag selects a different transport
+                // negotiation, not whether candidates are traded.
+                "useIceConnection": false,
                 "timezoneOffsetMinutes": TimeZone.current.secondsFromGMT() / 60,
-                "osName": osName
+                "sdkType": "web",
+                "osName": osName,
+                "enableOptionalDataCollection": false
             ]
         ]
 

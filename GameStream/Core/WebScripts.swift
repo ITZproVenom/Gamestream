@@ -820,16 +820,39 @@ enum WebScripts {
         if (window.__gsAutoStart) return;
         window.__gsAutoStart = true;
 
-        var LABELS = ["play", "play now", "play with ads", "resume", "continue playing"];
+        // Anything that starts the game. Deliberately no "buy", "get",
+        // "install", "subscribe" or "join": those spend money.
+        var STARTS = ["play", "resume", "continue playing", "stream"];
+        var NEVER = ["buy", "get ", "install", "download", "subscribe",
+                     "join", "upgrade", "trial", "purchase", "$", "\u00a3",
+                     "\u20ac", "\u20b9"];
         var attempts = 0;
-        var maxAttempts = 40;      // ~30 seconds at 750 ms
+        var maxAttempts = 120;     // ~90 seconds at 750 ms
+        // A click needs a moment to take effect. Without this the same
+        // button is hammered five times a second while the page works.
+        var lastClick = -99;
+
+        function startsGame(text) {
+            for (var n = 0; n < NEVER.length; n++) {
+                if (text.indexOf(NEVER[n]) !== -1) return false;
+            }
+            for (var s = 0; s < STARTS.length; s++) {
+                if (text.indexOf(STARTS[s]) === 0) return true;
+            }
+            return false;
+        }
 
         var timer = setInterval(function() {
             try {
                 attempts++;
                 if (attempts > maxAttempts) { clearInterval(timer); return; }
 
-                if ((location.href || "").toLowerCase().indexOf("/play/launch") === -1) return;
+                // The site bounces some titles from the launch URL to their
+                // store page. The store page has its own Play button, so
+                // that is a page to act on rather than one to give up on.
+                var here = (location.href || "").toLowerCase();
+                if (here.indexOf("/play/launch") === -1 &&
+                    here.indexOf("/play/games") === -1) return;
 
                 var videos = document.querySelectorAll("video");
                 for (var i = 0; i < videos.length; i++) {
@@ -844,9 +867,12 @@ enum WebScripts {
                     var node = nodes[j];
                     if (node.disabled) continue;
                     var text = (node.innerText || node.textContent ||
-                                node.getAttribute("aria-label") || "").trim().toLowerCase();
-                    if (!text) continue;
-                    if (LABELS.indexOf(text) === -1) continue;
+                                node.getAttribute("aria-label") || "")
+                                .replace(/\s+/g, " ").trim().toLowerCase();
+                    if (!text || text.length > 40) continue;
+                    if (!startsGame(text)) continue;
+                    if (attempts - lastClick < 8) return;
+                    lastClick = attempts;
                     node.click();
                     try {
                         window.webkit.messageHandlers.gamestream.postMessage({

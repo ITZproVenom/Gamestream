@@ -91,6 +91,7 @@ final class StreamCoordinator: ObservableObject {
 
     private var startedAt: Date?
     private var watchdog: Task<Void, Never>?
+    private var storeBounce: Task<Void, Never>?
     private let log = AppLog.shared
 
     private init() {}
@@ -153,6 +154,8 @@ final class StreamCoordinator: ObservableObject {
         rendererChanged(to: .none)
         watchdog?.cancel()
         watchdog = nil
+        storeBounce?.cancel()
+        storeBounce = nil
         leaveCheck?.cancel()
         leaveCheck = nil
         reconnectTask?.cancel()
@@ -301,12 +304,44 @@ final class StreamCoordinator: ObservableObject {
             Task { await XboxAuth.shared.refresh(reason: "stream bounced to login") }
         }
 
+        // Some titles bounce from the launch URL straight to their store
+        // page. The page's own Play button is tried first; if that does
+        // nothing then the account genuinely cannot start this game, and
+        // waiting out the watchdog only to say "the service is busy" is
+        // both slow and wrong.
+        if kind == "store", case .connecting = phase {
+            watchStoreBounce()
+        } else {
+            storeBounce?.cancel()
+            storeBounce = nil
+        }
+
         // Quitting from the Xbox guide, or Better xCloud's "back to home",
         // navigates the page away from the launch URL. The player was still
         // on screen showing xbox.com, so leaving a game dumped you on the
         // cloud gaming website instead of back in the app.
         if phase == .playing, kind != "launch" {
             confirmLeftTheGame(reportedKind: kind)
+        }
+    }
+
+    /// Gives the store page's own Play button a chance to work before
+    /// calling the launch a failure.
+    private func watchStoreBounce() {
+        guard storeBounce == nil else { return }
+        log.warn("stream", "the launch page redirected to the store page")
+        storeBounce = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(18))
+            guard let self, !Task.isCancelled else { return }
+            self.storeBounce = nil
+            guard case .connecting = self.phase else { return }
+            let name = self.game?.title ?? "this game"
+            self.phase = .failed(
+                "Xbox sent the app to the store page for \(name) instead of "
+                + "starting it. That usually means the account cannot stream "
+                + "it right now: it may need Game Pass Ultimate, a purchase, "
+                + "or it may not be available in your region."
+            )
         }
     }
 
@@ -415,6 +450,8 @@ final class StreamCoordinator: ObservableObject {
 
     func streamStarted(width: Int, height: Int) {
         rendererChanged(to: .webKit)
+        storeBounce?.cancel()
+        storeBounce = nil
         watchdog?.cancel()
         watchdog = nil
         // A reconnect that worked has spent none of the budget. Counting

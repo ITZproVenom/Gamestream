@@ -23,12 +23,25 @@ actor XCloudAPI {
         var gsToken: String
         var regions: [Region]
         var durationSeconds: Double
+
+        /// The regions the service may move the session to if the chosen one
+        /// cannot take it, in its own priority order. The default region and
+        /// anything marked -1 are left out, which is what the site does.
+        var fallbackRegionNames: [String] {
+            regions
+                .filter { !$0.isDefault && $0.fallbackPriority >= 0 }
+                .sorted { $0.fallbackPriority < $1.fallbackPriority }
+                .map(\.name)
+        }
     }
 
     struct Region: Sendable {
         var name: String
         var baseURI: String
         var isDefault: Bool
+        /// Where this region sits in the service's own fallback order.
+        /// -1 means "never fall back to me".
+        var fallbackPriority: Int
     }
 
     private static let loginURL = URL(
@@ -82,7 +95,8 @@ actor XCloudAPI {
                   let base = entry["baseUri"] as? String else { return nil }
             return Region(name: name,
                           baseURI: base,
-                          isDefault: entry["isDefault"] as? Bool ?? false)
+                          isDefault: entry["isDefault"] as? Bool ?? false,
+                          fallbackPriority: entry["fallbackPriority"] as? Int ?? -1)
         }
 
         let login = Login(
