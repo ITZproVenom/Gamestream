@@ -5,14 +5,6 @@ options:
     iOS: "26.0"
   xcodeVersion: "26"
 
-# The native player needs a real WebRTC stack. iOS has no system framework
-# for it, and hand-rolling DTLS/SCTP/SRTP is months of work for nothing, so
-# this is Google's libwebrtc packaged as a binary xcframework.
-packages:
-  WebRTC:
-    url: https://github.com/stasel/WebRTC
-    from: "125.0.0"
-
 targets:
   GameStream:
     type: application
@@ -61,8 +53,6 @@ targets:
           - PlayGameIntent
           - OpenLibraryIntent
           - ResumeLastGameIntent
-    dependencies:
-      - package: WebRTC
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.gamestream.app
