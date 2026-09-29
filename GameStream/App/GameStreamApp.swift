@@ -13,6 +13,12 @@ struct GameStreamApp: App {
     @StateObject private var stream = StreamCoordinator.shared
     @StateObject private var rumble = ControllerRumble.shared
 
+    init() {
+        // Before anything else, so the first thing that can fail is already
+        // being watched.
+        CrashReporter.install()
+    }
+
     /// One entry point for every way the app can be asked to do something
     /// from outside: a URL, a Spotlight result, or a Shortcut.
     @MainActor
@@ -95,6 +101,23 @@ struct GameStreamApp: App {
     /// deciding which screen to show, and do the slower work alongside it.
     private func startUp() async {
         AppLog.shared.info("app", "GameStream \(AppInfo.versionLine) starting")
+        if let summary = CrashReporter.pendingSummary {
+            AppLog.shared.error("app", "the previous run ended in \(summary); "
+                                + "the report is in Settings, Diagnostics")
+        }
+        // The app is most likely to be reclaimed for memory mid-stream, and
+        // that death runs no code of ours. A warning beforehand is the only
+        // trace left, so it goes in the log rather than being ignored.
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated {
+                AppLog.shared.warn("app", "the system warned about memory"
+                                   + (StreamCoordinator.shared.phase.isActive
+                                      ? " during a stream" : ""))
+            }
+        }
         UIApplication.shared.isIdleTimerDisabled = settings.keepAwake
         rumble.start()
 
