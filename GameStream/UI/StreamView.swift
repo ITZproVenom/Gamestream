@@ -23,6 +23,11 @@ struct StreamView: View {
                         reloadToken: stream.reloadToken)
                 .ignoresSafeArea()
                 .opacity(stream.phase == .playing ? 1 : 0.001)
+                // Invisible is not the same as inert. While connecting, the
+                // page is still there at one thousandth opacity and was
+                // still taking touches, so a stray tap pressed something
+                // nobody could see.
+                .allowsHitTesting(stream.phase == .playing)
 
             switch stream.phase {
             case .connecting(let detail):
@@ -248,11 +253,11 @@ struct StreamView: View {
                         stream.pressGuide()
                     }
 
-                    hudIcon(stream.enhancementMenuOpen
-                            ? "slider.horizontal.3" : "slider.horizontal.3",
+                    hudIcon("slider.horizontal.3",
                             label: stream.enhancementMenuOpen
                             ? "Close enhancements" : "Streaming enhancements",
-                            id: "enhance") {
+                            id: "enhance",
+                            active: stream.enhancementMenuOpen) {
                         stream.toggleEnhancementMenu()
                     }
 
@@ -287,7 +292,10 @@ struct StreamView: View {
 
     private func hudButton(_ title: String, icon: String, id: String,
                            action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        // Every press restarts the four second timer. Without this the
+        // controls could vanish underneath a finger halfway through using
+        // them, which read as the button having failed.
+        Button { action(); scheduleHide() } label: {
             Label(title, systemImage: icon)
                 .font(.footnote.weight(.semibold))
                 .padding(.horizontal, 4)
@@ -300,7 +308,7 @@ struct StreamView: View {
     private func hudIcon(_ icon: String, label: String, id: String,
                          active: Bool = false,
                          action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button { action(); scheduleHide() } label: {
             Image(systemName: icon)
                 .font(.footnote.weight(.semibold))
                 .frame(width: 20, height: 20)
