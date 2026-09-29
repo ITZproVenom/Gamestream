@@ -92,6 +92,8 @@ final class StreamCoordinator: ObservableObject {
     private var startedAt: Date?
     private var watchdog: Task<Void, Never>?
     private var storeBounce: Task<Void, Never>?
+    /// What the store page itself said about why it will not start.
+    private var storeReason: String?
     private let log = AppLog.shared
 
     private init() {}
@@ -103,6 +105,7 @@ final class StreamCoordinator: ObservableObject {
     // MARK: - Session control
 
     func play(_ game: Game) {
+        storeReason = nil
         guard XboxAuth.shared.state.isSignedIn else {
             log.warn("stream", "refused to launch \(game.title): not signed in")
             phase = .failed("Sign in to your Microsoft account before starting a game.")
@@ -146,6 +149,7 @@ final class StreamCoordinator: ObservableObject {
         log.info("stream", "retrying \(game.title)")
         phase = .connecting("Reconnecting to \(game.title)")
         reloadToken &+= 1
+        storeReason = nil
         startWatchdog()
     }
 
@@ -328,6 +332,11 @@ final class StreamCoordinator: ObservableObject {
         }
     }
 
+    /// Records what the store page said about itself.
+    func noteStoreReason(_ text: String) {
+        storeReason = text
+    }
+
     /// Gives the store page's own Play button a chance to work before
     /// calling the launch a failure.
     private func watchStoreBounce() {
@@ -339,6 +348,14 @@ final class StreamCoordinator: ObservableObject {
             self.storeBounce = nil
             guard case .connecting = self.phase else { return }
             let name = self.game?.title ?? "this game"
+            // If the page explained itself, quote it. A message in Xbox's
+            // own words is worth more than any sentence I could guess at.
+            if let said = self.storeReason, !said.isEmpty {
+                self.log.error("stream", "gave up on \(name): \(said)")
+                self.phase = .failed("Xbox would not start \(name). The store "
+                                     + "page says: \(said)")
+                return
+            }
             self.log.error("stream", "gave up: the store page for \(name) "
                            + "never started the game")
             self.phase = .failed(

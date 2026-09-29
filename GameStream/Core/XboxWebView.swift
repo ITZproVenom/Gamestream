@@ -285,9 +285,14 @@ struct XboxWebView: UIViewRepresentable {
             case "autoStartStuck":
                 let labels = body["labels"] as? String ?? ""
                 let count = body["count"] as? Int ?? 0
+                let reason = body["reason"] as? String ?? ""
                 log.warn("stream", "nothing on the store page starts the game "
                          + "(\(count) controls). Buttons: "
                          + "\(labels.isEmpty ? "none found" : labels)")
+                if !reason.isEmpty {
+                    log.warn("stream", "the page says: \(reason)")
+                    StreamCoordinator.shared.noteStoreReason(reason)
+                }
             case "stats":
                 StreamCoordinator.shared.statsUpdated(StreamStats(payload: body))
             case "command":

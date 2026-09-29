@@ -867,6 +867,35 @@ enum WebScripts {
             return text.replace(/\s+/g, " ").trim().toLowerCase();
         }
 
+        // The store page usually says why it will not start the game:
+        // a subscription is required, the free allowance is spent, the
+        // title is not in this region. Quoting the page beats guessing.
+        var TELLS = ["subscription is required", "game pass", "come back",
+                     "limit", "not available", "region", "purchase required",
+                     "ad-supported", "free with ads", "sign in"];
+
+        function pageReason() {
+            var found = [];
+            try {
+                var nodes = document.querySelectorAll(
+                    '[role="alert"], [role="status"], h1, h2, h3, p, span, div');
+                for (var i = 0; i < nodes.length && found.length < 3; i++) {
+                    if (nodes[i].children.length > 0) continue;
+                    var text = (nodes[i].innerText || "")
+                                 .replace(/\s+/g, " ").trim();
+                    if (text.length < 12 || text.length > 200) continue;
+                    var lower = text.toLowerCase();
+                    for (var t = 0; t < TELLS.length; t++) {
+                        if (lower.indexOf(TELLS[t]) !== -1) {
+                            if (found.indexOf(text) === -1) found.push(text);
+                            break;
+                        }
+                    }
+                }
+            } catch (e) {}
+            return found.join(" / ");
+        }
+
         function rank(text) {
             for (var n = 0; n < NEVER.length; n++) {
                 if (text.indexOf(NEVER[n]) !== -1) return 0;
@@ -953,7 +982,8 @@ enum WebScripts {
                 // the log rather than a guess.
                 if (onStore && !reported && attempts > 6) {
                     reported = true;
-                    post({ type: "autoStartStuck", labels: seen.join(" | "), count: nodes.length });
+                    post({ type: "autoStartStuck", labels: seen.join(" | "),
+                           count: nodes.length, reason: pageReason() });
                 }
             } catch (e) {}
         }, 750);
