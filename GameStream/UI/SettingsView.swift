@@ -19,6 +19,7 @@ struct SettingsView: View {
     @State private var refreshingScript = false
     @State private var copiedReport = false
     @State private var reinstalled: Bool?
+    @State private var crashSummary: String?
 
     var body: some View {
         NavigationStack {
@@ -45,7 +46,10 @@ struct SettingsView: View {
             .background { AuroraBackground() }
             .navigationTitle("Settings")
             .task { await measureCache() }
-            .sheet(isPresented: $showingDiagnostics) { DiagnosticsView() }
+            .sheet(isPresented: $showingDiagnostics,
+                   onDismiss: { crashSummary = CrashReporter.pendingSummary }) {
+                DiagnosticsView()
+            }
             .confirmationDialog("Sign out of Xbox?", isPresented: $showingSignOut,
                                 titleVisibility: .visible) {
                 Button("Sign out", role: .destructive) {
@@ -627,9 +631,24 @@ struct SettingsView: View {
             Button {
                 showingDiagnostics = true
             } label: {
-                SettingsRowLabel(title: "Diagnostics", icon: "stethoscope")
+                HStack {
+                    SettingsRowLabel(title: "Diagnostics", icon: "stethoscope")
+                    if crashSummary != nil {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .foregroundStyle(.orange)
+                    }
+                }
             }
             .buttonStyle(.plain)
+
+            // Worth saying out loud rather than leaving buried a screen away.
+            if let crashSummary {
+                Text("The previous run ended in \(crashSummary). The report is "
+                     + "in Diagnostics.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 
@@ -653,6 +672,7 @@ struct SettingsView: View {
 
     private func measureCache() async {
         cacheSize = await PosterCache.shared.diskUsage()
+        crashSummary = CrashReporter.pendingSummary
     }
 }
 
@@ -717,10 +737,31 @@ struct DiagnosticsView: View {
     @StateObject private var stream = StreamCoordinator.shared
     @StateObject private var guardian = SessionGuard.shared
     @Environment(\.dismiss) private var dismiss
+    @State private var crashReport: String?
+    @State private var crashSummary: String?
 
     var body: some View {
         NavigationStack {
             List {
+                if let crashReport {
+                    Section("Last crash") {
+                        Text(crashSummary ?? "The previous run ended unexpectedly")
+                            .font(.subheadline.weight(.semibold))
+                        Text(crashReport)
+                            .font(.caption2.monospaced())
+                            .textSelection(.enabled)
+                            .lineLimit(16)
+                        ShareLink(item: crashReport) {
+                            Label("Share the report", systemImage: "square.and.arrow.up")
+                        }
+                        Button("Discard", role: .destructive) {
+                            CrashReporter.clearPending()
+                            self.crashReport = nil
+                            self.crashSummary = nil
+                        }
+                    }
+                }
+
                 Section("Session") {
                     LabeledContent("State", value: auth.state.isSignedIn ? "Signed in" : "Signed out")
                     if let tag = auth.state.gamertag {
@@ -761,6 +802,10 @@ struct DiagnosticsView: View {
             .scrollContentBackground(.hidden)
             .background { AuroraBackground() }
             .navigationTitle("Diagnostics")
+            .task {
+                crashReport = CrashReporter.pendingReport()
+                crashSummary = CrashReporter.pendingSummary
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
