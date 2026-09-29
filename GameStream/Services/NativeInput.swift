@@ -200,19 +200,18 @@ private extension Data {
     }
 
     mutating func writeLittle(_ value: Double, at offset: Int) {
-        withUnsafeBytes(of: value.bitPattern.littleEndian) { bytes in
-            for (i, byte) in bytes.enumerated() { self[offset + i] = byte }
-        }
+        let bits = value.bitPattern
+        for i in 0..<8 { self[offset + i] = UInt8((bits >> (8 * UInt64(i))) & 0xFF) }
     }
 
     func readLittle<T: FixedWidthInteger>(at offset: Int) -> T {
         var value: T = 0
         let size = MemoryLayout<T>.size
         guard offset + size <= count else { return 0 }
-        withUnsafeMutableBytes(of: &value) { destination in
-            copyBytes(to: destination, from: (startIndex + offset)..<(startIndex + offset + size))
+        for i in 0..<size {
+            value |= T(self[startIndex + offset + i]) << T(8 * i)
         }
-        return T(littleEndian: value)
+        return value
     }
 }
 
