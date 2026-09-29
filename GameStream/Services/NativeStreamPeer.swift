@@ -46,6 +46,8 @@ final class NativeStreamPeer: NSObject, ObservableObject {
     /// rumble out, which is the channel the whole rumble path depends on.
     private var inputChannel: RTCDataChannel?
     private var controlChannel: RTCDataChannel?
+    private var messageChannel: RTCDataChannel?
+    private var chatChannel: RTCDataChannel?
     private var pendingCandidates: [RTCIceCandidate] = []
     private var handle: XCloudSession.Handle?
     private var token: String?
@@ -81,7 +83,10 @@ final class NativeStreamPeer: NSObject, ObservableObject {
         configuration.bundlePolicy = .maxBundle
         configuration.rtcpMuxPolicy = .require
         configuration.continualGatheringPolicy = .gatherContinually
-        configuration.iceServers = [RTCIceServer(urlStrings: ["stun:stun.l.google.com:19302"])]
+        // No STUN. The service signals its own candidates over HTTP, and
+        // pointing at Google's public server told a third party which
+        // addresses this device streams from for no benefit at all.
+        configuration.iceServers = []
 
         let constraints = RTCMediaConstraints(mandatoryConstraints: nil,
                                               optionalConstraints: nil)
@@ -101,9 +106,15 @@ final class NativeStreamPeer: NSObject, ObservableObject {
         peer.addTransceiver(of: .audio, init: receive)
 
         // The channels have to exist in the offer, because the service reads
-        // them from the description rather than opening them itself.
-        inputChannel = channel(on: peer, label: "input", id: 3, ordered: true)
-        controlChannel = channel(on: peer, label: "control", id: 4, ordered: true)
+        // them from the description rather than opening them itself, and it
+        // expects all four with these sub-protocols. Their stream ids are
+        // SCTP's business: naming one while saying the channel is not
+        // pre-negotiated is a contradiction, and the id we picked could
+        // collide with whatever the stack assigned.
+        messageChannel = channel(on: peer, label: "message", protocolName: "messageV1")
+        controlChannel = channel(on: peer, label: "control", protocolName: "controlV1")
+        inputChannel = channel(on: peer, label: "input", protocolName: "1.0")
+        chatChannel = channel(on: peer, label: "chat", protocolName: "chatV1")
 
         do {
             state = .negotiating("Offering")
@@ -138,15 +149,12 @@ final class NativeStreamPeer: NSObject, ObservableObject {
 
     private func channel(on peer: RTCPeerConnection,
                          label: String,
-                         id: Int32,
-                         ordered: Bool,
-                         protocolName: String = "1.0") -> RTCDataChannel? {
+                         protocolName: String,
+                         ordered: Bool = true) -> RTCDataChannel? {
         let configuration = RTCDataChannelConfiguration()
         configuration.isOrdered = ordered
         // The service matches on the sub-protocol as well as the label.
         configuration.protocol = protocolName
-        configuration.isNegotiated = false
-        configuration.channelId = id
         let created = peer.dataChannel(forLabel: label, configuration: configuration)
         created?.delegate = self
         return created
@@ -216,10 +224,13 @@ final class NativeStreamPeer: NSObject, ObservableObject {
     func close() {
         trickle?.cancel()
         trickle = nil
-        inputChannel?.close()
-        controlChannel?.close()
+        for open in [inputChannel, controlChannel, messageChannel, chatChannel] {
+            open?.close()
+        }
         inputChannel = nil
         controlChannel = nil
+        messageChannel = nil
+        chatChannel = nil
         inputReady = false
         connection?.close()
         connection = nil
@@ -374,6 +385,8 @@ extension NativeStreamPeer: RTCPeerConnectionDelegate {
                 inputReady = dataChannel.readyState == .open
             }
             if dataChannel.label == "control" { controlChannel = dataChannel }
+            if dataChannel.label == "message" { messageChannel = dataChannel }
+            if dataChannel.label == "chat" { chatChannel = dataChannel }
         }
     }
 
@@ -413,8 +426,19 @@ extension NativeStreamPeer: RTCDataChannelDelegate {
         let label = dataChannel.label
         let data = buffer.data
         Task { @MainActor in
-            guard label == "input" else { return }
-            onRumble?(data)
+            guard label != "input" else {
+                onRumble?(data)
+                return
+            }
+            // The other channels carry the service's own words about the
+            // session: why it disconnected, what it thinks the title is
+            // doing. Throwing them away was why a session that ended on
+            // its own never said why.
+            if let text = String(data: data, encoding: .utf8), !text.isEmpty {
+                AppLog.shared.info("native", "\(label): \(text.prefix(300))")
+            } else {
+                AppLog.shared.debug("native", "\(label): \(data.count) bytes")
+            }
         }
     }
 }
