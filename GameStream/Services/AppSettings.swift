@@ -112,7 +112,6 @@ final class AppSettings: ObservableObject {
         static let theme = "settings.theme"
         static let accent = "settings.accent"
         static let keepAwake = "settings.keepAwake"
-        static let showActivity = "settings.showActivity"
         static let quality = "settings.quality"
         static let region = "settings.region"
         static let rumbleEnabled = "settings.rumbleEnabled"
@@ -142,11 +141,17 @@ final class AppSettings: ObservableObject {
     @Published var theme: Theme { didSet { store(theme.rawValue, Key.theme) } }
     @Published var accent: Accent { didSet { store(accent.rawValue, Key.accent) } }
     @Published var keepAwake: Bool { didSet { store(keepAwake, Key.keepAwake) } }
-    @Published var showActivity: Bool { didSet { store(showActivity, Key.showActivity) } }
     @Published var quality: Quality { didSet { store(quality.rawValue, Key.quality) } }
     @Published var region: Region { didSet { store(region.rawValue, Key.region) } }
-    @Published var rumbleEnabled: Bool { didSet { store(rumbleEnabled, Key.rumbleEnabled) } }
-    @Published var rumbleIntensity: Float { didSet { store(Double(rumbleIntensity), Key.rumbleIntensity) } }
+    @Published var rumbleEnabled: Bool {
+        didSet { store(rumbleEnabled, Key.rumbleEnabled); applyRumbleToLiveStream() }
+    }
+    @Published var rumbleIntensity: Float {
+        didSet {
+            store(Double(rumbleIntensity), Key.rumbleIntensity)
+            applyRumbleToLiveStream()
+        }
+    }
     @Published var autoStart: Bool { didSet { store(autoStart, Key.autoStart) } }
     @Published var showStreamStats: Bool { didSet { store(showStreamStats, Key.showStats) } }
     /// Vibrate the phone when no controller route can rumble.
@@ -171,7 +176,9 @@ final class AppSettings: ObservableObject {
     @Published var preflightCheck: Bool { didSet { store(preflightCheck, Key.preflightCheck) } }
     /// Ceiling in megabits per second. Zero means no cap, which is Xbox's own
     /// maximum of 15 Mbps — there is nothing above that to ask for.
-    @Published var maxBitrateMbps: Int { didSet { store(maxBitrateMbps, Key.maxBitrate) } }
+    @Published var maxBitrateMbps: Int {
+        didSet { store(maxBitrateMbps, Key.maxBitrate); applyToLiveStream() }
+    }
 
     /// Clip recording.
     @Published var recordingBitrateMbps: Int {
@@ -188,15 +195,25 @@ final class AppSettings: ObservableObject {
     }
 
     /// GameStream's own in-page enhancement layer.
-    @Published var enhancerEnabled: Bool { didSet { store(enhancerEnabled, Key.enhancer) } }
+    @Published var enhancerEnabled: Bool {
+        didSet { store(enhancerEnabled, Key.enhancer); applyToLiveStream() }
+    }
     /// Ask for H.265 when the server offers it. Whether it does is reported,
     /// never assumed.
-    @Published var preferHEVC: Bool { didSet { store(preferHEVC, Key.preferHEVC) } }
-    @Published var sharpness: Int { didSet { store(sharpness, Key.sharpness) } }
-    @Published var saturation: Int { didSet { store(saturation, Key.saturation) } }
-    @Published var contrast: Int { didSet { store(contrast, Key.contrast) } }
+    @Published var preferHEVC: Bool {
+        didSet { store(preferHEVC, Key.preferHEVC); applyToLiveStream() }
+    }
+    @Published var sharpness: Int {
+        didSet { store(sharpness, Key.sharpness); applyToLiveStream() }
+    }
+    @Published var saturation: Int {
+        didSet { store(saturation, Key.saturation); applyToLiveStream() }
+    }
+    @Published var contrast: Int {
+        didSet { store(contrast, Key.contrast); applyToLiveStream() }
+    }
     @Published var hideTouchControls: Bool {
-        didSet { store(hideTouchControls, Key.hideTouchControls) }
+        didSet { store(hideTouchControls, Key.hideTouchControls); applyToLiveStream() }
     }
 
     private let defaults = UserDefaults.standard
@@ -206,7 +223,6 @@ final class AppSettings: ObservableObject {
         theme = Theme(rawValue: defaults.string(forKey: Key.theme) ?? "") ?? .system
         accent = Accent(rawValue: defaults.string(forKey: Key.accent) ?? "") ?? .purple
         keepAwake = defaults.object(forKey: Key.keepAwake) as? Bool ?? true
-        showActivity = defaults.object(forKey: Key.showActivity) as? Bool ?? true
         quality = Quality(rawValue: defaults.string(forKey: Key.quality) ?? "") ?? .auto
         region = Region(rawValue: defaults.string(forKey: Key.region) ?? "") ?? .auto
         rumbleEnabled = defaults.object(forKey: Key.rumbleEnabled) as? Bool ?? true
@@ -285,6 +301,26 @@ final class AppSettings: ObservableObject {
     }
 
     /// The configuration handed to GameStream's own enhancement layer.
+    /// Pushes the picture settings into a stream that is already running.
+    ///
+    /// The page has always been able to accept a new configuration, and
+    /// nothing ever sent it one, so moving a slider did nothing at all
+    /// until the next launch. Rumble is carried the same way: it is read
+    /// from two globals that were only ever written when the page loaded.
+    private func applyToLiveStream() {
+        let config = StreamEnhancer.json(enhancerConfiguration())
+        XboxWebView.Registry.shared.run(
+            "window.__gsEnhanceApply && window.__gsEnhanceApply(\(config));"
+        )
+    }
+
+    private func applyRumbleToLiveStream() {
+        XboxWebView.Registry.shared.run(
+            "window.__gsRumbleMode = \"\(rumbleEnabled ? "page" : "off")\";"
+            + "window.__gsRumbleScale = \(rumbleIntensity);"
+        )
+    }
+
     func enhancerConfiguration() -> StreamEnhancer.Configuration {
         StreamEnhancer.Configuration(
             enabled: enhancerEnabled,
