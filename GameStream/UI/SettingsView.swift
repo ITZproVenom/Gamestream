@@ -29,6 +29,7 @@ struct SettingsView: View {
                     streaming
                     controller
                     session
+                    clips
                     storage
                     about
                 }
@@ -487,6 +488,55 @@ struct SettingsView: View {
             SettingsDivider()
 
             Toggle("Warn on low battery", isOn: $settings.batteryGuard)
+        }
+    }
+
+    private var clips: some View {
+        SettingsGroup("Clips", icon: "record.circle") {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack {
+                    Text("Quality").font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Text("\(settings.recordingBitrateMbps) Mbps")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                Slider(value: Binding(
+                    get: { Double(settings.recordingBitrateMbps) },
+                    set: { settings.recordingBitrateMbps = Int($0) }
+                ), in: 4...40, step: 2)
+                Text("How much detail a recorded clip keeps. Higher costs storage.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsDivider()
+
+            VStack(alignment: .leading, spacing: 7) {
+                HStack {
+                    Text("Stop after").font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Text("\(settings.recordingLimitMinutes) min")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                Slider(value: Binding(
+                    get: { Double(settings.recordingLimitMinutes) },
+                    set: { settings.recordingLimitMinutes = Int($0) }
+                ), in: 1...30, step: 1)
+                Text("A recording left running cannot fill the device.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsDivider()
+
+            VStack(alignment: .leading, spacing: 5) {
+                Toggle("Record your voice", isOn: $settings.recordMicrophone)
+                Text("Off by default. A clip of a game should not record the room unless asked.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 

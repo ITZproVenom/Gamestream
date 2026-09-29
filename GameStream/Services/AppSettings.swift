@@ -128,6 +128,9 @@ final class AppSettings: ObservableObject {
         static let adaptiveQuality = "settings.adaptiveQuality"
         static let preflightCheck = "settings.preflightCheck"
         static let maxBitrate = "settings.maxBitrateMbps"
+        static let recordingBitrate = "settings.recordingBitrate"
+        static let recordMicrophone = "settings.recordMicrophone"
+        static let recordingLimit = "settings.recordingLimit"
         static let enhancer = "settings.enhancer"
         static let preferHEVC = "settings.preferHEVC"
         static let sharpness = "settings.sharpness"
@@ -170,6 +173,20 @@ final class AppSettings: ObservableObject {
     /// maximum of 15 Mbps — there is nothing above that to ask for.
     @Published var maxBitrateMbps: Int { didSet { store(maxBitrateMbps, Key.maxBitrate) } }
 
+    /// Clip recording.
+    @Published var recordingBitrateMbps: Int {
+        didSet { store(recordingBitrateMbps, Key.recordingBitrate) }
+    }
+    /// Off by default: a clip of a game should not record the room unless
+    /// that was asked for.
+    @Published var recordMicrophone: Bool {
+        didSet { store(recordMicrophone, Key.recordMicrophone) }
+    }
+    /// A ceiling so a forgotten recording cannot fill the device.
+    @Published var recordingLimitMinutes: Int {
+        didSet { store(recordingLimitMinutes, Key.recordingLimit) }
+    }
+
     /// GameStream's own in-page enhancement layer.
     @Published var enhancerEnabled: Bool { didSet { store(enhancerEnabled, Key.enhancer) } }
     /// Ask for H.265 when the server offers it. Whether it does is reported,
@@ -207,6 +224,9 @@ final class AppSettings: ObservableObject {
         adaptiveQuality = defaults.object(forKey: Key.adaptiveQuality) as? Bool ?? true
         preflightCheck = defaults.object(forKey: Key.preflightCheck) as? Bool ?? true
         maxBitrateMbps = defaults.object(forKey: Key.maxBitrate) as? Int ?? 0
+        recordingBitrateMbps = defaults.object(forKey: Key.recordingBitrate) as? Int ?? 12
+        recordMicrophone = defaults.object(forKey: Key.recordMicrophone) as? Bool ?? false
+        recordingLimitMinutes = defaults.object(forKey: Key.recordingLimit) as? Int ?? 10
         enhancerEnabled = defaults.object(forKey: Key.enhancer) as? Bool ?? true
         preferHEVC = defaults.object(forKey: Key.preferHEVC) as? Bool ?? false
         sharpness = defaults.object(forKey: Key.sharpness) as? Int ?? 0
