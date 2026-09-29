@@ -183,6 +183,13 @@ final class StreamCoordinator: ObservableObject {
         game = nil
         resolution = ""
         stats = nil
+        // Leaving with the enhancement menu open used to carry that belief
+        // into the next session, so the button that opens it tried to close
+        // something that was not there and appeared to do nothing. A notice
+        // left on screen would likewise reappear over the next launch.
+        enhancementMenuOpen = false
+        offeredCodecs = ""
+        notice = nil
         phase = .idle
     }
 
