@@ -32,10 +32,13 @@ enum StreamEnhancer {
         var hideTouchControls: Bool
     }
 
-    static func script(_ configuration: Configuration) -> String {
-        let json = (try? JSONEncoder().encode(configuration))
+    static func json(_ configuration: Configuration) -> String {
+        (try? JSONEncoder().encode(configuration))
             .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
-        return "window.__gsEnhanceConfig = \(json);\n" + core
+    }
+
+    static func script(_ configuration: Configuration) -> String {
+        "window.__gsEnhanceConfig = \(json(configuration));\n" + core
     }
 
     private static let core = #"""
