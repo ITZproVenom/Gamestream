@@ -48,6 +48,7 @@ struct NativeVideoView: UIViewRepresentable {
 struct NativeStreamView: View {
     let game: Game
     @StateObject private var peer = NativeStreamPeer()
+    @StateObject private var input = NativeInputDriver()
     @EnvironmentObject private var auth: XboxAuth
     @Environment(\.dismiss) private var dismiss
     @State private var status = "Starting"
@@ -136,11 +137,18 @@ struct NativeStreamView: View {
                 Spacer()
                 // Said plainly, because a stream you cannot play looks like
                 // a broken stream rather than an unfinished one.
-                if peer.videoTrack != nil {
-                    Text("Video only for now: this path does not send controller "
-                         + "input yet. Use Play for a playable stream.")
+                if peer.videoTrack != nil, !input.isRunning {
+                    Text("The controller channel has not opened yet, so nothing "
+                         + "is being sent to the game.")
                         .font(.caption)
                         .multilineTextAlignment(.center)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .padding(.bottom, 18)
+                } else if peer.videoTrack != nil, input.controllerName == nil {
+                    Text("Connect a controller to play.")
+                        .font(.caption)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(.ultraThinMaterial, in: Capsule())
@@ -150,9 +158,24 @@ struct NativeStreamView: View {
         }
         .task { await start() }
         .onDisappear {
+            input.stop()
             heartbeat?.cancel()
             heartbeat = nil
             UIApplication.shared.isIdleTimerDisabled = AppSettings.shared.keepAwake
+        }
+        .onChange(of: peer.inputReady) { _, ready in
+            let driver = input
+            let connection = peer
+            if ready {
+                // Rumble is only routed once the channel is live, so a
+                // stale closure from a previous attempt cannot fire.
+                connection.onRumble = { [weak driver] data in driver?.receive(data) }
+                driver.start { [weak connection] payload in
+                    connection?.sendInput(payload) ?? false
+                }
+            } else {
+                driver.stop()
+            }
         }
         .onChange(of: peer.state) { _, value in
             switch value {

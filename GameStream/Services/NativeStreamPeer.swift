@@ -60,6 +60,11 @@ final class NativeStreamPeer: NSObject, ObservableObject {
     /// the existing native rumble code can stay exactly as it is.
     var onRumble: (@MainActor (Data) -> Void)?
 
+    /// True once the input channel is open in both directions. The driver
+    /// waits for this rather than for video, because a picture arriving is
+    /// no promise that the channel carrying the controller came up.
+    @Published private(set) var inputReady = false
+
     // MARK: - Connecting
 
     func connect(handle: XCloudSession.Handle, token: String) async {
@@ -134,9 +139,12 @@ final class NativeStreamPeer: NSObject, ObservableObject {
     private func channel(on peer: RTCPeerConnection,
                          label: String,
                          id: Int32,
-                         ordered: Bool) -> RTCDataChannel? {
+                         ordered: Bool,
+                         protocolName: String = "1.0") -> RTCDataChannel? {
         let configuration = RTCDataChannelConfiguration()
         configuration.isOrdered = ordered
+        // The service matches on the sub-protocol as well as the label.
+        configuration.protocol = protocolName
         configuration.isNegotiated = false
         configuration.channelId = id
         let created = peer.dataChannel(forLabel: label, configuration: configuration)
@@ -212,6 +220,7 @@ final class NativeStreamPeer: NSObject, ObservableObject {
         controlChannel?.close()
         inputChannel = nil
         controlChannel = nil
+        inputReady = false
         connection?.close()
         connection = nil
         videoTrack = nil
@@ -360,7 +369,10 @@ extension NativeStreamPeer: RTCPeerConnectionDelegate {
         Task { @MainActor in
             AppLog.shared.debug("native", "channel '\(dataChannel.label)' opened by the server")
             dataChannel.delegate = self
-            if dataChannel.label == "input" { inputChannel = dataChannel }
+            if dataChannel.label == "input" {
+                inputChannel = dataChannel
+                inputReady = dataChannel.readyState == .open
+            }
             if dataChannel.label == "control" { controlChannel = dataChannel }
         }
     }
@@ -385,7 +397,16 @@ extension NativeStreamPeer: RTCPeerConnectionDelegate {
 // MARK: - Data channel events
 
 extension NativeStreamPeer: RTCDataChannelDelegate {
-    nonisolated func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {}
+    nonisolated func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
+        let label = dataChannel.label
+        let open = dataChannel.readyState == .open
+        let state = dataChannel.readyState.rawValue
+        Task { @MainActor in
+            AppLog.shared.debug("native", "channel '\(label)' state \(state)")
+            guard label == "input" else { return }
+            inputReady = open
+        }
+    }
 
     nonisolated func dataChannel(_ dataChannel: RTCDataChannel,
                                  didReceiveMessageWith buffer: RTCDataBuffer) {
