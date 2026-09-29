@@ -286,6 +286,15 @@ enum WebScripts {
             // back is scoped to that one button's subtree, which sits inside
             // a HUD that is itself unclickable while hidden.
             "[title=\"Better xCloud\"], [title=\"Better xCloud\"] * { pointer-events: auto !important; }",
+            // The same applies to everything the script opens. Its dialogs
+            // inherit that dead state, so the menu could be opened and read
+            // but not used: no control answered a press and the list would
+            // not scroll. Scoped to dialogs, which exist only while one is
+            // open, so nothing here can reach the game's own touches.
+            ".bx-dialog, .bx-dialog *, .bx-settings-dialog, .bx-settings-dialog *, .bx-centered-dialog, .bx-centered-dialog *, .bx-navigation-dialog, .bx-navigation-dialog *, .bx-key-binding-dialog, .bx-key-binding-dialog * { pointer-events: auto !important; }",
+            // A dialog that cannot scroll is unusable on a phone in
+            // landscape, where the list is taller than the screen.
+            ".bx-dialog, .bx-settings-dialog, .bx-centered-dialog, .bx-navigation-dialog { max-height: 92vh !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; touch-action: pan-y !important; }",
             // The site's own HUD is redundant now that the app has its own,
             // and it overlaps it. Hidden with opacity rather than display so
             // the elements keep their layout and still answer a programmatic
@@ -323,8 +332,47 @@ enum WebScripts {
             if (existing.textContent !== css) existing.textContent = css;
         }
 
-        apply();
-        setInterval(apply, 1200);
+        /// The dimming layer behind the enhancement menu outlives it.
+        ///
+        /// Closing the menu with the app's own button already swept this up,
+        /// but closing it with the script's own close button did not, and
+        /// the game was left dimmed until the stream was restarted. Hidden
+        /// rather than removed, and cleared again the moment a dialog is
+        /// genuinely open, so the script keeps control of its own element.
+        function sweepOverlay() {
+            if (!onLaunchPage()) return;
+            var dialogs = document.querySelectorAll(
+                ".bx-settings-dialog, .bx-navigation-dialog, .bx-centered-dialog, .bx-key-binding-dialog"
+            );
+            var open = false;
+            for (var d = 0; d < dialogs.length; d++) {
+                var node = dialogs[d];
+                if (node.classList.contains("bx-gone")) continue;
+                var box = node.getBoundingClientRect();
+                if (box.width > 8 && box.height > 8) { open = true; break; }
+            }
+            var overlays = document.querySelectorAll(".bx-dialog-overlay");
+            for (var i = 0; i < overlays.length; i++) {
+                var overlay = overlays[i];
+                if (open) {
+                    if (overlay.style.display === "none") {
+                        overlay.style.display = "";
+                        overlay.style.pointerEvents = "";
+                    }
+                } else if (overlay.style.display !== "none") {
+                    overlay.style.display = "none";
+                    overlay.style.pointerEvents = "none";
+                }
+            }
+        }
+
+        function tick() {
+            apply();
+            sweepOverlay();
+        }
+
+        tick();
+        setInterval(tick, 500);
     })();
     """#
 
