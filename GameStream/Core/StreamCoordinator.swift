@@ -295,7 +295,10 @@ final class StreamCoordinator: ObservableObject {
             return
         }
         guard role == .stream else { return }
-        log.debug("stream", "page is now \(kind)")
+        // The kind alone hid a real bug once: two different pages both
+        // read as "store" and only the address said which.
+        let where_ = URL(string: href)?.path ?? href
+        log.debug("stream", "page is now \(kind) (\(where_))")
 
         // Being bounced back to the store or sign-in page means the launch did
         // not take. Saying so beats leaving a spinner on screen.
@@ -339,10 +342,11 @@ final class StreamCoordinator: ObservableObject {
             self.log.error("stream", "gave up: the store page for \(name) "
                            + "never started the game")
             self.phase = .failed(
-                "Xbox sent the app to the store page for \(name) instead of "
-                + "starting it. That usually means the account cannot stream "
-                + "it right now: it may need Game Pass Ultimate, a purchase, "
-                + "or it may not be available in your region."
+                "Xbox sent the app to the store page for \(name) and its "
+                + "Play button did not start a stream. Without Game Pass the "
+                + "only way in is the ad-supported session, and Xbox will "
+                + "not always grant one: it may be busy, out of free time, "
+                + "or the game may need a subscription in your region."
             )
         }
     }

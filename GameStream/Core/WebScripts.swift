@@ -820,12 +820,30 @@ enum WebScripts {
         if (window.__gsAutoStart) return;
         window.__gsAutoStart = true;
 
-        // Anything that starts the game. Deliberately no "buy", "get",
-        // "install", "subscribe" or "join": those spend money.
-        var STARTS = ["play", "resume", "continue playing", "stream"];
+        // The site's own wording, taken from its strings: "Play now",
+        // "Play for free", "Stream for free with ads", and the gesture
+        // gate the player shows on phones before it will start playback.
+        // Nothing here spends money: no buy, get, install or subscribe.
         var NEVER = ["buy", "get ", "install", "download", "subscribe",
-                     "join", "upgrade", "trial", "purchase", "$", "\u00a3",
-                     "\u20ac", "\u20b9"];
+                     "join", "upgrade", "trial", "purchase", "no ads",
+                     "learn more", "sign in", "sign up", "month", "/mo",
+                     "pricing", "redeem", "$", "\u00a3", "\u20ac", "\u20b9"];
+
+        // Higher wins. Several of these can be on screen at once and the
+        // first one in the document is often the wrong one.
+        function score(text) {
+            if (text === "play now" || text === "play for free" ||
+                text === "play") return 95;
+            if (text.indexOf("tap to start") === 0 ||
+                text.indexOf("click to start") === 0) return 90;
+            if (text.indexOf("resume") === 0 ||
+                text.indexOf("continue playing") === 0) return 80;
+            if (text.indexOf("play") === 0) return 70;
+            if (text.indexOf("stream for free") === 0 ||
+                text.indexOf("stream free") === 0) return 60;
+            if (text.indexOf("stream") === 0) return 30;
+            return 0;
+        }
         var attempts = 0;
         var maxAttempts = 120;     // ~90 seconds at 750 ms
         // A click needs a moment to take effect. Without this the same
@@ -845,14 +863,11 @@ enum WebScripts {
             return text.replace(/\s+/g, " ").trim().toLowerCase();
         }
 
-        function startsGame(text) {
+        function rank(text) {
             for (var n = 0; n < NEVER.length; n++) {
-                if (text.indexOf(NEVER[n]) !== -1) return false;
+                if (text.indexOf(NEVER[n]) !== -1) return 0;
             }
-            for (var s = 0; s < STARTS.length; s++) {
-                if (text.indexOf(STARTS[s]) === 0) return true;
-            }
-            return false;
+            return score(text);
         }
 
         // Parts of the site are built from web components, and a button
@@ -904,21 +919,28 @@ enum WebScripts {
 
                 var nodes = candidates(document, [], 0);
                 var seen = [];
+                var best = null, bestScore = 0, bestText = "";
                 for (var j = 0; j < nodes.length; j++) {
                     var node = nodes[j];
                     if (!visible(node)) continue;
                     var text = label(node);
                     var href = (node.getAttribute && node.getAttribute("href")) || "";
                     var isLaunchLink = href.toLowerCase().indexOf("/play/launch") !== -1;
-                    if (text && text.length < 40 && seen.length < 14) seen.push(text);
-                    if (!isLaunchLink) {
-                        if (!text || text.length > 40) continue;
-                        if (!startsGame(text)) continue;
+                    if (text && text.length < 44 && seen.length < 14) seen.push(text);
+                    var value = isLaunchLink ? 100
+                              : (text && text.length <= 44 ? rank(text) : 0);
+                    if (value > bestScore) {
+                        best = node;
+                        bestScore = value;
+                        bestText = isLaunchLink ? "launch link" : text;
                     }
+                }
+
+                if (best) {
                     if (attempts - lastClick < 8) return;
                     lastClick = attempts;
-                    node.click();
-                    post({ type: "autoStart", label: isLaunchLink ? "launch link" : text });
+                    best.click();
+                    post({ type: "autoStart", label: bestText });
                     return;
                 }
 
