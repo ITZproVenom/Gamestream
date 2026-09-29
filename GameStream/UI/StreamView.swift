@@ -33,8 +33,22 @@ struct StreamView: View {
                 EmptyView()
             }
 
-            if stream.phase == .playing, showingControls {
-                hud.transition(.opacity.combined(with: .move(edge: .top)))
+            if stream.phase == .playing {
+                // The controls hide themselves after a few seconds. The
+                // statistics used to be inside them and went with them, so
+                // the button that turned them on looked like it did nothing.
+                // They are their own layer now and stay until turned off.
+                VStack(spacing: 10) {
+                    if showingControls {
+                        hud.transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                    if showingStats {
+                        statsStrip
+                            .padding(.horizontal, 16)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                    Spacer(minLength: 0)
+                }
             }
 
             // A guaranteed way back to the overlay. The page owns the touches
@@ -80,12 +94,15 @@ struct StreamView: View {
         .animation(.smooth(duration: 0.2), value: stream.notice)
         .statusBarHidden(stream.phase == .playing)
         .persistentSystemOverlays(stream.phase == .playing ? .hidden : .automatic)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            guard stream.phase == .playing else { return }
-            withAnimation(.smooth(duration: 0.25)) { showingControls.toggle() }
-            if showingControls { scheduleHide() }
-        }
+        // There is deliberately no tap gesture over the whole view.
+        //
+        // A tap recogniser on the container cancels the touches it observes
+        // in the view underneath once it fires, so a single tap never
+        // reached the page: the enhancement menu could be opened and seen
+        // but nothing in it could be pressed, and the site's own on-screen
+        // buttons were dead while the thumbstick, being a drag, still
+        // worked. The controls hide themselves on a timer and the grab
+        // handle above brings them back.
         .onChange(of: stream.overlayRequest) { _, _ in
             withAnimation(.smooth(duration: 0.25)) { showingControls = true }
             scheduleHide()
@@ -165,9 +182,31 @@ struct StreamView: View {
     /// right. The statistics panel is native, driven by WebRTC rather than by
     /// the enhancement script's own overlay.
     private var hud: some View {
-        VStack(spacing: 12) {
-            GlassEffectContainer(spacing: 10) {
-                HStack(spacing: 10) {
+        GlassEffectContainer(spacing: 10) {
+            HStack(spacing: 10) {
+                hudSessionControls
+
+                // Fourteen controls do not fit across a phone held in
+                // landscape, and the last of them was being cut off by the
+                // edge of the screen. They scroll now instead of falling off
+                // it, anchored to the trailing edge so the buttons stay put
+                // and the read-outs are what slide away.
+                ScrollView(.horizontal) {
+                    HStack(spacing: 10) {
+                        hudReadouts
+                    }
+                }
+                .scrollIndicators(.hidden)
+                .defaultScrollAnchor(.trailing)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+    }
+
+    /// Ending, skipping and reconnecting. These never scroll away.
+    @ViewBuilder
+    private var hudSessionControls: some View {
                     hudButton("Exit", icon: "xmark", id: "exit") { stream.exit() }
 
                     if !library.queue.isEmpty {
@@ -179,9 +218,11 @@ struct StreamView: View {
                     hudIcon("arrow.clockwise", label: "Reconnect", id: "reload") {
                         stream.retry()
                     }
+    }
 
-                    Spacer(minLength: 0)
-
+    /// Read-outs and the controls that press the site's own buttons.
+    @ViewBuilder
+    private var hudReadouts: some View {
                     Text(Format.clock(elapsed))
                         .font(.caption.weight(.semibold).monospacedDigit())
                         .padding(.horizontal, 11)
@@ -232,27 +273,16 @@ struct StreamView: View {
                         withAnimation(.smooth(duration: 0.25)) { showingStats.toggle() }
                     }
 
-                    Image(systemName: rumble.supportsHaptics
-                          ? "gamecontroller.fill" : "gamecontroller")
-                        .font(.footnote)
-                        .foregroundStyle(rumble.controllerName == nil ? .secondary : .primary)
-                        .padding(10)
-                        .glassEffect(.regular, in: Circle())
-                        .glassEffectID("controller", in: glass)
-                        .accessibilityLabel(rumble.controllerName ?? "No controller connected")
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-
-            if showingStats {
-                statsPanel
-                    .padding(.horizontal, 16)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-
-            Spacer()
-        }
+                    // This was a plain image, so pressing it did nothing.
+                    // It reports what is connected and how rumble is being
+                    // delivered, and gives the pad a nudge so the answer can
+                    // be felt rather than just read.
+                    hudIcon(rumble.supportsHaptics ? "gamecontroller.fill" : "gamecontroller",
+                            label: rumble.controllerName ?? "No controller connected",
+                            id: "controller") {
+                        stream.show(notice: controllerSummary)
+                        _ = rumble.play(left: 0.7, right: 0.7, durationMs: 450)
+                    }
     }
 
     private func hudButton(_ title: String, icon: String, id: String,
@@ -298,54 +328,66 @@ struct StreamView: View {
     }
 
     /// The statistics panel: the numbers that explain a bad session.
-    private var statsPanel: some View {
+    /// One line rather than a card.
+    ///
+    /// The old panel was a six-cell grid that covered a good part of the
+    /// picture, which is the opposite of what a read-out during a game is
+    /// for. Everything it said still fits on one strip.
+    private var statsStrip: some View {
         let stats = stream.stats ?? StreamStats()
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Circle().fill(color(for: stats.quality)).frame(width: 8, height: 8)
-                Text(label(for: stats.quality))
-                    .font(.footnote.weight(.bold))
-                Spacer(minLength: 0)
-                if !stats.codec.isEmpty {
-                    Text(stats.codec)
-                        .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .glassEffect(.regular, in: Capsule())
-                }
-                if !stats.resolution.isEmpty {
-                    Text(stats.resolution)
-                        .font(.caption2.weight(.semibold).monospacedDigit())
-                }
-            }
+        let mbps = Double(stats.bitrateKbps) / 1000
+        return HStack(spacing: 10) {
+            Circle()
+                .fill(color(for: stats.quality))
+                .frame(width: 7, height: 7)
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3),
-                      spacing: 12) {
-                statCell("\(stats.fps)", "FPS")
-                statCell(stats.bitrateKbps >= 1000
-                         ? String(format: "%.1f", Double(stats.bitrateKbps) / 1000) : "\(stats.bitrateKbps)",
-                         stats.bitrateKbps >= 1000 ? "Mbps" : "kbps")
-                statCell("\(stats.rttMs)", "Latency ms")
-                statCell("\(stats.jitterMs)", "Jitter ms")
-                statCell("\(stats.decodeMs)", "Decode ms")
-                statCell("\(stats.framesDropped)", "Dropped")
+            statChip("\(stats.fps)", "fps")
+            if stats.bitrateKbps >= 1000 {
+                statChip(String(format: "%.1f", mbps), "Mbps")
+            } else {
+                statChip("\(stats.bitrateKbps)", "kbps")
+            }
+            statChip("\(stats.rttMs)", "ms")
+            statChip("\(stats.jitterMs)", "jitter")
+            statChip("\(stats.decodeMs)", "decode")
+            statChip("\(stats.framesDropped)", "dropped")
+
+            if !stats.codec.isEmpty {
+                Text(stats.codec)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            if !stats.resolution.isEmpty {
+                Text(stats.resolution)
+                    .font(.caption2.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(.secondary)
             }
         }
-        .padding(16)
-        .frame(maxWidth: 460, alignment: .leading)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .padding(.horizontal, 13)
+        .padding(.vertical, 8)
+        .glassEffect(.regular, in: Capsule())
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(label(for: stats.quality))
     }
 
-    private func statCell(_ value: String, _ caption: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+    private func statChip(_ value: String, _ caption: String) -> some View {
+        HStack(spacing: 3) {
             Text(value)
-                .font(.title3.weight(.bold).monospacedDigit())
+                .font(.caption.weight(.bold).monospacedDigit())
                 .contentTransition(.numericText())
             Text(caption)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// What is connected and how rumble is reaching it.
+    private var controllerSummary: String {
+        guard let name = rumble.controllerName else {
+            return "No controller connected"
+        }
+        return "\(name) - \(rumble.path.title)"
     }
 
     private func color(for quality: StreamStats.Quality) -> Color {

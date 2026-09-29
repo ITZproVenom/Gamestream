@@ -286,6 +286,15 @@ enum WebScripts {
             // back is scoped to that one button's subtree, which sits inside
             // a HUD that is itself unclickable while hidden.
             "[title=\"Better xCloud\"], [title=\"Better xCloud\"] * { pointer-events: auto !important; }",
+            // The same applies to everything the script opens. Its dialogs
+            // inherit that dead state, so the menu could be opened and read
+            // but not used: no control answered a press and the list would
+            // not scroll. Scoped to dialogs, which exist only while one is
+            // open, so nothing here can reach the game's own touches.
+            ".bx-dialog, .bx-dialog *, .bx-settings-dialog, .bx-settings-dialog *, .bx-centered-dialog, .bx-centered-dialog *, .bx-navigation-dialog, .bx-navigation-dialog *, .bx-key-binding-dialog, .bx-key-binding-dialog *, .bx-dialog-overlay { pointer-events: auto !important; }",
+            // A dialog that cannot scroll is unusable on a phone in
+            // landscape, where the list is taller than the screen.
+            ".bx-dialog, .bx-settings-dialog, .bx-centered-dialog, .bx-navigation-dialog { max-height: 92vh !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; touch-action: pan-y !important; }",
             // The site's own HUD is redundant now that the app has its own,
             // and it overlaps it. Hidden with opacity rather than display so
             // the elements keep their layout and still answer a programmatic
