@@ -79,7 +79,11 @@ final class AppLog: ObservableObject {
     func clear() { entries.removeAll() }
 
     /// Newest last, ready to paste into a bug report.
-    func exportText() -> String {
+    ///
+    /// `context` is whatever the caller knows about the state the log was
+    /// taken in. A log on its own says what happened but not what the app
+    /// was: which renderer, which controller, what the connection measured.
+    func exportText(context: [String] = []) -> String {
         let header = [
             "GameStream diagnostics",
             "Version \(AppInfo.fullVersionLine)",
@@ -87,7 +91,8 @@ final class AppLog: ObservableObject {
             "Exported \(Date().formatted(date: .abbreviated, time: .standard))",
             ""
         ]
-        return (header + entries.map(\.line)).joined(separator: "\n")
+        let state = context.isEmpty ? [] : (["State"] + context.map { "  " + $0 } + [""])
+        return (header + state + entries.map(\.line)).joined(separator: "\n")
     }
 }
 

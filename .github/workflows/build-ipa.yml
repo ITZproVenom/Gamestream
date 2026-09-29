@@ -14,6 +14,16 @@ on:
       - "project.yml"
       - "scripts/**"
       - ".github/workflows/build-ipa.yml"
+  # CI is the only compiler this project has, so a pull request has to prove
+  # it builds before main moves. These runs stop after the archive: they
+  # publish no release and never touch the beta pointer.
+  pull_request:
+    branches: [main]
+    paths:
+      - "GameStream/**"
+      - "project.yml"
+      - "scripts/**"
+      - ".github/workflows/build-ipa.yml"
 
 permissions:
   contents: write
@@ -237,6 +247,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish beta release
+        if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.notes.outputs.tag }}
@@ -250,6 +261,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Move the latest-ios-beta pointer
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
