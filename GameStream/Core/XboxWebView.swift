@@ -354,6 +354,21 @@ struct XboxWebView: UIViewRepresentable {
             report(error)
         }
 
+        /// iOS kills a web content process that uses too much memory, and the
+        /// view it leaves behind is blank and inert. Without this the player
+        /// looked frozen with no reason given.
+        @MainActor
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            AppLog.shared.warn("web", "\(role) page process was terminated")
+            guard role == .stream else {
+                webView.reload()
+                return
+            }
+            StreamCoordinator.shared.streamFailed(
+                message: "The player ran out of memory and was shut down by iOS."
+            )
+        }
+
         // MARK: Popups
         //
         // Microsoft's sign-in can open a new window. A webview with no
