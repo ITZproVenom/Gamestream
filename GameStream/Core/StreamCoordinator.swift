@@ -195,6 +195,7 @@ final class StreamCoordinator: ObservableObject {
         // left on screen would likewise reappear over the next launch.
         enhancementMenuOpen = false
         offeredCodecs = ""
+        codecOutcome = ""
         notice = nil
         phase = .idle
     }
@@ -386,9 +387,15 @@ final class StreamCoordinator: ObservableObject {
     /// setting the user turned on.
     @Published private(set) var offeredCodecs = ""
 
+    /// What the layer did with the offer, in its own words. Logged only
+    /// before, so whether asking for H.265 had worked was invisible unless
+    /// the log was exported.
+    @Published private(set) var codecOutcome = ""
+
     func enhancementReported(codecs: String, notes: String) {
         if !codecs.isEmpty { offeredCodecs = codecs }
-        log.info("stream", "codecs: \(codecs)" + (notes.isEmpty ? "" : " — \(notes)"))
+        if !notes.isEmpty { codecOutcome = notes }
+        log.info("stream", "codecs: \(codecs)" + (notes.isEmpty ? "" : " - \(notes)"))
     }
 
     /// Opens the streaming enhancement's own menu.
