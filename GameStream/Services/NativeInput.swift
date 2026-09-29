@@ -93,7 +93,7 @@ enum XCloudInputPacket {
 
     /// Sent once when the channel opens. Without it the service never
     /// starts reading gamepad reports, so this is not optional.
-    static func clientMetadata(sequence: UInt32, maxTouchPoints: UInt8 = 0) -> Data {
+    static func clientMetadata(sequence: UInt32, maxTouchPoints: UInt8 = 1) -> Data {
         var packet = header(.clientMetadata, sequence: sequence, payload: 1)
         packet[headerSize] = maxTouchPoints
         return packet
