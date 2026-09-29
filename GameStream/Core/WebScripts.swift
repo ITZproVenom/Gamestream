@@ -877,7 +877,6 @@ enum WebScripts {
             if (text.indexOf("play") === 0) return 70;
             if (text.indexOf("stream for free") === 0 ||
                 text.indexOf("stream free") === 0) return 60;
-            if (text.indexOf("get ready to play") === 0) return 50;
             if (text.indexOf("stream") === 0) return 30;
             return 0;
         }
@@ -886,6 +885,8 @@ enum WebScripts {
         // A click needs a moment to take effect. Without this the same
         // button is hammered five times a second while the page works.
         var lastClick = -99;
+        var lastText = "";
+        var clicks = 0;
         var reported = false;
 
         function post(message) {
@@ -903,7 +904,8 @@ enum WebScripts {
         // The store page usually says why it will not start the game:
         // a subscription is required, the free allowance is spent, the
         // title is not in this region. Quoting the page beats guessing.
-        var TELLS = ["subscription is required", "game pass", "come back",
+        var TELLS = ["controller", "mouse & keyboard", "touch",
+                     "subscription is required", "game pass", "come back",
                      "limit", "not available", "region", "purchase required",
                      "ad-supported", "free with ads", "sign in"];
 
@@ -1004,15 +1006,26 @@ enum WebScripts {
 
                 if (best) {
                     if (attempts - lastClick < 8) return;
-                    lastClick = attempts;
-                    best.click();
-                    post({ type: "autoStart", label: bestText });
-                    return;
+                    // Three goes at the same control is enough to know it
+                    // is not the one that starts the game.
+                    if (bestText === lastText && clicks >= 3) {
+                        best = null;
+                    } else {
+                        lastClick = attempts;
+                        clicks = bestText === lastText ? clicks + 1 : 1;
+                        lastText = bestText;
+                        best.click();
+                        post({ type: "autoStart", label: bestText });
+                        return;
+                    }
                 }
 
                 // Nothing matched. Say what the page is actually offering,
                 // once, so a game that cannot be started is a sentence in
                 // the log rather than a guess.
+                // Report the page's own explanation even when something was
+                // clicked: pressing a heading is not progress, and the
+                // reason mattered more than the click did.
                 if (onStore && !reported && attempts > 6) {
                     reported = true;
                     post({ type: "autoStartStuck", labels: seen.join(" | "),
