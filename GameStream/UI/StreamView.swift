@@ -28,13 +28,15 @@ struct StreamView: View {
             XboxWebView(role: .stream, url: stream.launchURL,
                         reloadToken: stream.reloadToken)
                 .ignoresSafeArea()
-                .opacity(stream.phase == .playing ? 1 : 0.001)
+                .opacity(stream.isPageVisible ? 1 : 0.001)
 
             switch stream.phase {
             case .connecting(let detail):
                 connecting(detail)
             case .failed(let message):
                 failure(message)
+            case .showingPage(let message):
+                handedOver(message)
             case .playing, .idle:
                 EmptyView()
             }
@@ -414,6 +416,28 @@ struct StreamView: View {
         case .good: return "Connection looks good"
         case .fair: return "Connection is workable"
         case .poor: return "Connection is struggling"
+        }
+    }
+
+    /// Shown when the launch did not take and the site's own page is on
+    /// screen to be used by hand. Deliberately small: the page underneath
+    /// is the point, so this sits at the top and leaves it alone.
+    private func handedOver(_ message: String) -> some View {
+        VStack {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "hand.tap")
+                Text(message)
+                    .font(.footnote)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Button("Exit") { stream.exit() }
+                    .font(.footnote.weight(.semibold))
+            }
+            .padding(14)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .padding(.horizontal, 14)
+            .padding(.top, 8)
+            Spacer()
         }
     }
 

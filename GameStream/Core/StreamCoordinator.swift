@@ -57,10 +57,21 @@ final class StreamCoordinator: ObservableObject {
     enum Phase: Equatable {
         case idle
         case connecting(String)
+        /// The launch did not take and the site's own page is on screen to
+        /// be used by hand. The page stays live; only our overlay changes.
+        case showingPage(String)
         case playing
         case failed(String)
 
         var isActive: Bool { self != .idle }
+    }
+
+    /// True when the page itself should be on screen and touchable: while
+    /// streaming, and while it has been handed back to be used by hand.
+    var isPageVisible: Bool {
+        if case .playing = phase { return true }
+        if case .showingPage = phase { return true }
+        return false
     }
 
     @Published private(set) var game: Game?
@@ -343,29 +354,28 @@ final class StreamCoordinator: ObservableObject {
         guard storeBounce == nil else { return }
         log.warn("stream", "the launch page redirected to the store page")
         storeBounce = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(18))
+            try? await Task.sleep(for: .seconds(14))
             guard let self, !Task.isCancelled else { return }
             self.storeBounce = nil
             guard case .connecting = self.phase else { return }
-            let name = self.game?.title ?? "this game"
-            // If the page explained itself, quote it. A message in Xbox's
-            // own words is worth more than any sentence I could guess at.
-            if let said = self.storeReason, !said.isEmpty {
-                self.log.error("stream", "gave up on \(name): \(said)")
-                self.phase = .failed("Xbox would not start \(name). The store "
-                                     + "page says: \(said)")
-                return
-            }
-            self.log.error("stream", "gave up: the store page for \(name) "
-                           + "never started the game")
-            self.phase = .failed(
-                "Xbox sent the app to the store page for \(name) and its "
-                + "Play button did not start a stream. Without Game Pass the "
-                + "only way in is the ad-supported session, and Xbox will "
-                + "not always grant one: it may be busy, out of free time, "
-                + "or the game may need a subscription in your region."
+            // Covering the page with a failure card takes away the one
+            // thing that can still start the game: the page's own Play
+            // button. Hand it back instead, and say so.
+            self.log.info("stream", "handing the store page over to be "
+                          + "pressed by hand")
+            let said = self.storeReason
+            self.phase = .showingPage(
+                said?.isEmpty == false
+                    ? "Xbox opened this page instead of starting the game. "
+                      + "It says: \(said!)"
+                    : "Xbox opened this page instead of starting the game. "
+                      + "Press Play here to start it."
             )
+            self.watchdog?.cancel()
+            self.watchdog = nil
+            return
         }
+    }
     }
 
     /// Ending a live session on one navigation report is too eager: a
