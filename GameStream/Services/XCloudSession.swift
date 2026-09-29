@@ -31,7 +31,27 @@ actor XCloudSession {
     struct Handle: Sendable {
         var baseURI: String
         var path: String
-        var url: URL? { URL(string: baseURI + path) }
+
+        /// The session's own address. The two halves come from different
+        /// places -- the base from the region list, the path from the play
+        /// response -- and neither promises a slash, so joining them by
+        /// hand glued the host to the path and every later call went to a
+        /// hostname that does not exist.
+        func url(_ suffix: String = "") -> URL? {
+            func withoutTrailingSlash(_ value: String) -> String {
+                var copy = value
+                while copy.hasSuffix("/") { copy.removeLast() }
+                return copy
+            }
+            let tail = withoutTrailingSlash(path)
+            if tail.lowercased().hasPrefix("http") {
+                return URL(string: tail + suffix)
+            }
+            let root = withoutTrailingSlash(baseURI)
+            let joined = tail.hasPrefix("/") ? tail : "/" + tail
+            return URL(string: root + joined + suffix)
+        }
+
     }
 
     /// Where a session is in the queue. The service uses a wide vocabulary of
@@ -221,7 +241,7 @@ actor XCloudSession {
 
     /// Reads one session's current state.
     func state(of handle: Handle, token: String) async throws -> State {
-        guard let url = URL(string: handle.baseURI + handle.path + "/state") else {
+        guard let url = handle.url("/state") else {
             throw Failure(step: "state", detail: "unusable session address")
         }
         let (data, _) = try await send(request(url: url, method: "GET", token: token), step: "state")
@@ -267,7 +287,7 @@ actor XCloudSession {
 
     /// Reads the connection details of a ready session.
     func serverDetails(for handle: Handle, token: String) async throws -> ServerDetails {
-        guard let url = URL(string: handle.baseURI + handle.path + "/configuration") else {
+        guard let url = handle.url("/configuration") else {
             throw Failure(step: "configuration", detail: "unusable session address")
         }
         let (data, _) = try await send(request(url: url, method: "GET", token: token),
@@ -295,7 +315,7 @@ actor XCloudSession {
     /// Keeps an idle session from being reclaimed while it is being set up.
     @discardableResult
     func keepAlive(_ handle: Handle, token: String) async -> Bool {
-        guard let url = URL(string: handle.baseURI + handle.path + "/keepalive") else { return false }
+        guard let url = handle.url("/keepalive") else { return false }
         let result = try? await send(request(url: url, method: "POST", token: token, body: [:]),
                                      step: "keepalive")
         return result != nil
@@ -304,7 +324,7 @@ actor XCloudSession {
     /// Gives the session back. Called on every exit path, including errors.
     @discardableResult
     func release(_ handle: Handle, token: String) async -> Bool {
-        guard let url = handle.url else { return false }
+        guard let url = handle.url() else { return false }
         let result = try? await send(request(url: url, method: "DELETE", token: token),
                                      step: "release")
         return result != nil
@@ -314,7 +334,7 @@ actor XCloudSession {
 
     /// Hands the service our SDP offer and reads back its answer.
     func exchangeOffer(_ sdp: String, on handle: Handle, token: String) async throws -> String {
-        guard let url = URL(string: handle.baseURI + handle.path + "/sdp") else {
+        guard let url = handle.url("/sdp") else {
             throw Failure(step: "sdp", detail: "unusable session address")
         }
         let payload: [String: Any] = [
@@ -341,7 +361,7 @@ actor XCloudSession {
     func exchangeCandidates(_ candidates: [[String: Any]],
                             on handle: Handle,
                             token: String) async throws -> String {
-        guard let url = URL(string: handle.baseURI + handle.path + "/ice") else {
+        guard let url = handle.url("/ice") else {
             throw Failure(step: "ice", detail: "unusable session address")
         }
         let encoded = String(
@@ -444,7 +464,9 @@ actor XCloudSession {
     }
 
     private func send(_ request: URLRequest, step: String) async throws -> (Data, HTTPURLResponse) {
-        let where_ = (request.httpMethod ?? "GET") + " " + (request.url?.path ?? "?")
+        let where_ = (request.httpMethod ?? "GET") + " "
+            + (request.url?.host.map { $0 + " " } ?? "")
+            + (request.url?.path ?? "?")
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await URLSession.shared.data(for: request)

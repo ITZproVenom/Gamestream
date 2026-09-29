@@ -831,6 +831,19 @@ enum WebScripts {
         // A click needs a moment to take effect. Without this the same
         // button is hammered five times a second while the page works.
         var lastClick = -99;
+        var reported = false;
+
+        function post(message) {
+            try {
+                window.webkit.messageHandlers.gamestream.postMessage(message);
+            } catch (e) {}
+        }
+
+        function label(node) {
+            var text = node.innerText || node.textContent ||
+                       node.getAttribute("aria-label") || "";
+            return text.replace(/\s+/g, " ").trim().toLowerCase();
+        }
 
         function startsGame(text) {
             for (var n = 0; n < NEVER.length; n++) {
@@ -842,6 +855,33 @@ enum WebScripts {
             return false;
         }
 
+        // Parts of the site are built from web components, and a button
+        // inside an open shadow root is invisible to a plain query.
+        function candidates(root, found, depth) {
+            if (!root || depth > 6 || found.length > 400) return found;
+            var nodes;
+            try {
+                nodes = root.querySelectorAll('button, [role="button"], a');
+            } catch (e) { return found; }
+            for (var i = 0; i < nodes.length; i++) {
+                found.push(nodes[i]);
+                if (nodes[i].shadowRoot) candidates(nodes[i].shadowRoot, found, depth + 1);
+            }
+            var all;
+            try { all = root.querySelectorAll("*"); } catch (e) { return found; }
+            for (var j = 0; j < all.length && j < 2000; j++) {
+                if (all[j].shadowRoot) candidates(all[j].shadowRoot, found, depth + 1);
+            }
+            return found;
+        }
+
+        function visible(node) {
+            if (node.disabled) return false;
+            if (node.getAttribute && node.getAttribute("aria-disabled") === "true") return false;
+            var box = node.getBoundingClientRect ? node.getBoundingClientRect() : null;
+            return !box || (box.width > 0 && box.height > 0);
+        }
+
         var timer = setInterval(function() {
             try {
                 attempts++;
@@ -851,8 +891,8 @@ enum WebScripts {
                 // store page. The store page has its own Play button, so
                 // that is a page to act on rather than one to give up on.
                 var here = (location.href || "").toLowerCase();
-                if (here.indexOf("/play/launch") === -1 &&
-                    here.indexOf("/play/games") === -1) return;
+                var onStore = here.indexOf("/play/games") !== -1;
+                if (here.indexOf("/play/launch") === -1 && !onStore) return;
 
                 var videos = document.querySelectorAll("video");
                 for (var i = 0; i < videos.length; i++) {
@@ -862,24 +902,32 @@ enum WebScripts {
                     }
                 }
 
-                var nodes = document.querySelectorAll('button, [role="button"]');
+                var nodes = candidates(document, [], 0);
+                var seen = [];
                 for (var j = 0; j < nodes.length; j++) {
                     var node = nodes[j];
-                    if (node.disabled) continue;
-                    var text = (node.innerText || node.textContent ||
-                                node.getAttribute("aria-label") || "")
-                                .replace(/\s+/g, " ").trim().toLowerCase();
-                    if (!text || text.length > 40) continue;
-                    if (!startsGame(text)) continue;
+                    if (!visible(node)) continue;
+                    var text = label(node);
+                    var href = (node.getAttribute && node.getAttribute("href")) || "";
+                    var isLaunchLink = href.toLowerCase().indexOf("/play/launch") !== -1;
+                    if (text && text.length < 40 && seen.length < 14) seen.push(text);
+                    if (!isLaunchLink) {
+                        if (!text || text.length > 40) continue;
+                        if (!startsGame(text)) continue;
+                    }
                     if (attempts - lastClick < 8) return;
                     lastClick = attempts;
                     node.click();
-                    try {
-                        window.webkit.messageHandlers.gamestream.postMessage({
-                            type: "autoStart", label: text
-                        });
-                    } catch (e) {}
+                    post({ type: "autoStart", label: isLaunchLink ? "launch link" : text });
                     return;
+                }
+
+                // Nothing matched. Say what the page is actually offering,
+                // once, so a game that cannot be started is a sentence in
+                // the log rather than a guess.
+                if (onStore && !reported && attempts > 6) {
+                    reported = true;
+                    post({ type: "autoStartStuck", labels: seen.join(" | ") });
                 }
             } catch (e) {}
         }, 750);

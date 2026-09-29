@@ -336,6 +336,8 @@ final class StreamCoordinator: ObservableObject {
             self.storeBounce = nil
             guard case .connecting = self.phase else { return }
             let name = self.game?.title ?? "this game"
+            self.log.error("stream", "gave up: the store page for \(name) "
+                           + "never started the game")
             self.phase = .failed(
                 "Xbox sent the app to the store page for \(name) instead of "
                 + "starting it. That usually means the account cannot stream "
