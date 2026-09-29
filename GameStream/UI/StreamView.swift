@@ -288,9 +288,6 @@ struct StreamView: View {
                     hudIcon(recorder.isRecording ? "stop.circle.fill" : "record.circle",
                             label: recorder.isRecording ? "Stop recording" : "Record a clip",
                             id: "record", active: recorder.isRecording) {
-                        // Out of the way immediately, so a clip does not
-                        // open on four seconds of the app's own buttons.
-                        withAnimation(.smooth(duration: 0.2)) { showingControls = false }
                         Task {
                             let outcome = await recorder.toggle()
                             stream.show(notice: outcome)

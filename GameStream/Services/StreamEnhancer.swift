@@ -163,6 +163,22 @@ enum StreamEnhancer {
             var Wrapped = function(configuration, constraints) {
                 var pc = new Native(configuration, constraints);
 
+                // The only place the incoming media is visible. Clips are
+                // recorded from it so they hold the game and nothing that is
+                // drawn on top of it.
+                pc.addEventListener("track", function(event) {
+                    try {
+                        if (event.streams && event.streams.length) {
+                            window.__gsMediaStream = event.streams[0];
+                        } else if (event.track) {
+                            if (!window.__gsMediaStream) {
+                                window.__gsMediaStream = new MediaStream();
+                            }
+                            window.__gsMediaStream.addTrack(event.track);
+                        }
+                    } catch (e) {}
+                });
+
                 var setLocal = pc.setLocalDescription.bind(pc);
                 pc.setLocalDescription = function(description) {
                     try {

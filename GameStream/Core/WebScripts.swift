@@ -1111,6 +1111,115 @@ enum WebScripts {
     /// unrelated buttons on browse pages. This only runs on a launch URL, only
     /// matches the launch prompts exactly, stops as soon as video is playing,
     /// and gives up after a bounded number of attempts.
+    /// Records the stream from the media the page is already receiving.
+    ///
+    /// Screen capture records the glass, so the app's own controls and the
+    /// site's on-screen pad were burnt into every clip, and the only way
+    /// around that was to hide them from the player as well. Recording the
+    /// incoming media instead separates the two completely: the clip is the
+    /// game and its sound, and everything drawn over it stays on screen for
+    /// the person holding the phone.
+    static let clipJS = #"""
+    (function() {
+        if (window.__gsClipReady) return;
+        window.__gsClipReady = true;
+
+        var recorder = null;
+        var sequence = 0;
+
+        function post(payload) {
+            try { window.webkit.messageHandlers.gamestream.postMessage(payload); } catch (e) {}
+        }
+
+        /// What the peer connection handed the page, kept by the enhancement
+        /// layer because it is the only place that sees the track arrive.
+        function source() {
+            try {
+                var media = window.__gsMediaStream;
+                if (media && media.getVideoTracks && media.getVideoTracks().length) {
+                    return media;
+                }
+            } catch (e) {}
+            return null;
+        }
+
+        /// Only MP4. A WebM clip cannot be added to Photos, so producing one
+        /// would mean recording something nobody can keep.
+        function container() {
+            var candidates = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+                              "video/mp4;codecs=avc1",
+                              "video/mp4"];
+            for (var i = 0; i < candidates.length; i++) {
+                try {
+                    if (window.MediaRecorder && MediaRecorder.isTypeSupported(candidates[i])) {
+                        return candidates[i];
+                    }
+                } catch (e) {}
+            }
+            return null;
+        }
+
+        window.__gsClipAvailable = function() {
+            return !!(window.MediaRecorder && container() && source());
+        };
+
+        window.__gsClipStart = function(bitrate) {
+            if (recorder) return false;
+            var media = source();
+            var type = container();
+            if (!media || !type) return false;
+            try {
+                recorder = new MediaRecorder(media, {
+                    mimeType: type,
+                    videoBitsPerSecond: bitrate || 8000000
+                });
+            } catch (e) {
+                recorder = null;
+                return false;
+            }
+            sequence = 0;
+            recorder.ondataavailable = function(event) {
+                if (!event.data || !event.data.size) return;
+                // Numbered here rather than on the way out: turning a blob
+                // into text is asynchronous and finishes out of order.
+                var index = sequence++;
+                var reader = new FileReader();
+                reader.onloadend = function() {
+                    var text = String(reader.result || "");
+                    var comma = text.indexOf(",");
+                    post({ type: "clipChunk", index: index,
+                           data: comma >= 0 ? text.slice(comma + 1) : "" });
+                };
+                reader.readAsDataURL(event.data);
+            };
+            recorder.onstop = function() {
+                recorder = null;
+                post({ type: "clipEnd" });
+            };
+            recorder.onerror = function() {
+                recorder = null;
+                post({ type: "clipFailed", message: "the page stopped recording" });
+            };
+            // A timeslice keeps the clip flowing out of the page rather than
+            // piling up in its memory until the end, which is the difference
+            // between a long clip and the app being reclaimed mid-recording.
+            recorder.start(1000);
+            return true;
+        };
+
+        window.__gsClipStop = function() {
+            if (!recorder) return false;
+            try {
+                recorder.stop();
+            } catch (e) {
+                recorder = null;
+                post({ type: "clipEnd" });
+            }
+            return true;
+        };
+    })();
+    """#
+
     static let autoStartJS = #"""
     (function() {
         if (window.__gsAutoStart) return;
