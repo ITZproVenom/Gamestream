@@ -68,6 +68,10 @@ struct LibraryView: View {
                 }
                 .padding(.top, 6)
                 .padding(.bottom, 36)
+                // The page is exactly as wide as the screen, whatever a
+                // child would prefer. Without this one greedy row drags
+                // every other row off the right edge with it.
+                .containerRelativeFrame(.horizontal)
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .background { AuroraBackground() }
@@ -318,6 +322,7 @@ struct ListDetailView: View {
                     }
                 }
                 .padding(Theme.pageInset)
+                .containerRelativeFrame(.horizontal)
             }
         }
         .background { AuroraBackground() }

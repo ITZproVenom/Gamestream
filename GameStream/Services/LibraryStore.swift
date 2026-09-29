@@ -160,6 +160,13 @@ final class LibraryStore: ObservableObject {
         save(activity, Key.activity)
     }
 
+    /// Removes a single session. Clearing everything was the only way to
+    /// get rid of one mistaken entry.
+    func deleteActivity(_ record: PlayRecord) {
+        activity.removeAll { $0.id == record.id }
+        save(activity, Key.activity)
+    }
+
     func clearActivity() {
         activity.removeAll()
         save(activity, Key.activity)

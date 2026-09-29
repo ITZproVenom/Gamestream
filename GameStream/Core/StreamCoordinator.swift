@@ -158,6 +158,12 @@ final class StreamCoordinator: ObservableObject {
         reconnectTask = nil
         SessionGuard.shared.end()
         ControllerRumble.shared.stop()
+        // A clip in progress belongs to the session that was running. Left
+        // alone it keeps recording the app with no button on screen to stop
+        // it, and the footage is never written.
+        if StreamRecorder.shared.isRecording {
+            Task { _ = await StreamRecorder.shared.stop() }
+        }
         // The player webview is kept alive across presentations, so this is
         // the point where the page has to actually be shut down.
         XboxWebView.Registry.shared.release()
