@@ -244,7 +244,11 @@ final class AppSettings: ObservableObject {
         recordMicrophone = defaults.object(forKey: Key.recordMicrophone) as? Bool ?? false
         recordingLimitMinutes = defaults.object(forKey: Key.recordingLimit) as? Int ?? 10
         enhancerEnabled = defaults.object(forKey: Key.enhancer) as? Bool ?? true
-        preferHEVC = defaults.object(forKey: Key.preferHEVC) as? Bool ?? false
+        // On by default. The service offers H.265 and at the bitrate it
+        // sends 1080p60 at, the same bandwidth spent on H.265 holds up far
+        // better in motion than H.264 does. Both decode in hardware on this
+        // device, so it costs nothing to ask.
+        preferHEVC = defaults.object(forKey: Key.preferHEVC) as? Bool ?? true
         sharpness = defaults.object(forKey: Key.sharpness) as? Int ?? 0
         saturation = defaults.object(forKey: Key.saturation) as? Int ?? 100
         contrast = defaults.object(forKey: Key.contrast) as? Int ?? 100

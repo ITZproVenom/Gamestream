@@ -375,12 +375,21 @@ struct SettingsView: View {
                 Toggle("Hide the site's touch controls", isOn: $settings.hideTouchControls)
 
                 Toggle("Prefer H.265 when offered", isOn: $settings.preferHEVC)
-                Text(stream.offeredCodecs.isEmpty
-                     ? "Start a game to see which codecs the server offers."
-                     : "Server offered: \(stream.offeredCodecs).")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(stream.offeredCodecs.isEmpty
+                         ? "Start a game to see which codecs the server offers."
+                         : "Server offered: \(stream.offeredCodecs).")
+                    // Asking is not the same as getting: the server decides.
+                    if !stream.codecOutcome.isEmpty {
+                        Text(stream.codecOutcome)
+                    }
+                    Text("H.265 fits more picture into the same bandwidth, "
+                         + "which shows most in fast movement. The service streams "
+                         + "1080p at 8-bit, so there is no HDR to ask for.")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 7) {
                     HStack {
