@@ -61,6 +61,7 @@ final class AppSettings: ObservableObject {
         static let preflightCheck = "settings.preflightCheck"
         static let maxBitrate = "settings.maxBitrateMbps"
         static let enhancer = "settings.enhancer"
+        static let plainPlayer = "settings.plainPlayer"
         static let preferHEVC = "settings.preferHEVC"
         static let sharpness = "settings.sharpness"
         static let saturation = "settings.saturation"
@@ -137,6 +138,10 @@ final class AppSettings: ObservableObject {
 
     /// GameStream's own in-page enhancement layer.
     @Published var enhancerEnabled: Bool { didSet { store(enhancerEnabled, Key.enhancer) } }
+    /// Runs the player with nothing injected but the app's own bridges.
+    /// Everything the enhancement layer wraps is something that can stop a
+    /// launch, and this is how to rule it out.
+    @Published var plainPlayer: Bool { didSet { store(plainPlayer, Key.plainPlayer) } }
     /// Ask for H.265 when the server offers it. Whether it does is reported,
     /// never assumed.
     @Published var preferHEVC: Bool { didSet { store(preferHEVC, Key.preferHEVC) } }
@@ -216,6 +221,7 @@ final class AppSettings: ObservableObject {
         preflightCheck = defaults.object(forKey: Key.preflightCheck) as? Bool ?? true
         maxBitrateMbps = defaults.object(forKey: Key.maxBitrate) as? Int ?? 0
         enhancerEnabled = defaults.object(forKey: Key.enhancer) as? Bool ?? true
+        plainPlayer = defaults.object(forKey: Key.plainPlayer) as? Bool ?? false
         preferHEVC = defaults.object(forKey: Key.preferHEVC) as? Bool ?? false
         sharpness = defaults.object(forKey: Key.sharpness) as? Int ?? 0
         saturation = defaults.object(forKey: Key.saturation) as? Int ?? 100

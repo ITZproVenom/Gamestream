@@ -179,6 +179,23 @@ struct XboxWebView: UIViewRepresentable {
         // The rumble bridge must wrap createDataChannel before the page opens
         // its WebRTC session, so it has to run at document start.
         let settings = AppSettings.shared
+
+        // Plain mode: the page is left alone apart from the bridges the app
+        // cannot work without. Everything we wrap -- RTCPeerConnection, the
+        // data channels, fetch -- is a thing that can break a launch, and
+        // when a stream will not start this is the way to find out whether
+        // the site or this app is the one refusing.
+        if settings.plainPlayer {
+            var plain = [WebScripts.streamStateJS, WebScripts.streamChromeJS]
+            if settings.autoStart { plain.append(WebScripts.autoStartJS) }
+            for source in plain {
+                controller.addUserScript(WKUserScript(source: source,
+                                                      injectionTime: .atDocumentEnd,
+                                                      forMainFrameOnly: true))
+            }
+            return
+        }
+
         controller.addUserScript(WKUserScript(
             source: ControllerRumble.shared.pageConfigurationJS,
             injectionTime: .atDocumentStart,
@@ -267,8 +284,10 @@ struct XboxWebView: UIViewRepresentable {
                 log.info("stream", "pressed the site's \"\(body["label"] as? String ?? "")\" button")
             case "autoStartStuck":
                 let labels = body["labels"] as? String ?? ""
-                log.warn("stream", "nothing on the store page starts the game. "
-                         + "Buttons: \(labels.isEmpty ? "none found" : labels)")
+                let count = body["count"] as? Int ?? 0
+                log.warn("stream", "nothing on the store page starts the game "
+                         + "(\(count) controls). Buttons: "
+                         + "\(labels.isEmpty ? "none found" : labels)")
             case "stats":
                 StreamCoordinator.shared.statsUpdated(StreamStats(payload: body))
             case "command":

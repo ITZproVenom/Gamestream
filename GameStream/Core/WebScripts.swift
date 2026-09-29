@@ -824,10 +824,13 @@ enum WebScripts {
         // "Play for free", "Stream for free with ads", and the gesture
         // gate the player shows on phones before it will start playback.
         // Nothing here spends money: no buy, get, install or subscribe.
-        var NEVER = ["buy", "get ", "install", "download", "subscribe",
-                     "join", "upgrade", "trial", "purchase", "no ads",
-                     "learn more", "sign in", "sign up", "month", "/mo",
-                     "pricing", "redeem", "$", "\u00a3", "\u20ac", "\u20b9"];
+        // "get " was too broad: it threw away "get ready to play", which is
+        // the store page's own heading for the button that starts a game.
+        var NEVER = ["buy", "get game pass", "install", "download",
+                     "subscribe", "join", "upgrade", "free trial",
+                     "purchase", "no ads", "learn more", "sign in",
+                     "sign up", "per month", "/mo", "pricing", "redeem",
+                     "view in store", "$", "\u00a3", "\u20ac", "\u20b9"];
 
         // Higher wins. Several of these can be on screen at once and the
         // first one in the document is often the wrong one.
@@ -841,6 +844,7 @@ enum WebScripts {
             if (text.indexOf("play") === 0) return 70;
             if (text.indexOf("stream for free") === 0 ||
                 text.indexOf("stream free") === 0) return 60;
+            if (text.indexOf("get ready to play") === 0) return 50;
             if (text.indexOf("stream") === 0) return 30;
             return 0;
         }
@@ -926,7 +930,7 @@ enum WebScripts {
                     var text = label(node);
                     var href = (node.getAttribute && node.getAttribute("href")) || "";
                     var isLaunchLink = href.toLowerCase().indexOf("/play/launch") !== -1;
-                    if (text && text.length < 44 && seen.length < 14) seen.push(text);
+                    if (text && text.length < 60 && seen.length < 40) seen.push(text);
                     var value = isLaunchLink ? 100
                               : (text && text.length <= 44 ? rank(text) : 0);
                     if (value > bestScore) {
@@ -949,7 +953,7 @@ enum WebScripts {
                 // the log rather than a guess.
                 if (onStore && !reported && attempts > 6) {
                     reported = true;
-                    post({ type: "autoStartStuck", labels: seen.join(" | ") });
+                    post({ type: "autoStartStuck", labels: seen.join(" | "), count: nodes.length });
                 }
             } catch (e) {}
         }, 750);

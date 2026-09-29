@@ -315,6 +315,19 @@ struct SettingsView: View {
 
             SettingsDivider()
 
+            Toggle("Plain player", isOn: $settings.plainPlayer)
+            Text("Runs the Xbox player with nothing added but the app's own "
+                 + "bridges: no enhancements, no rumble bridge, no stats, no "
+                 + "screenshots. Everything this app wraps is something that "
+                 + "could stop a game from starting, so turn this on to find "
+                 + "out whether a failure is ours or Xbox's. Takes effect on "
+                 + "the next launch.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            SettingsDivider()
+
             Toggle("GameStream enhancements", isOn: $settings.enhancerEnabled)
                 .onChange(of: settings.enhancerEnabled) { _, _ in
                     stream.applyEnhancements()
