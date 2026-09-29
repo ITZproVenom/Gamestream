@@ -324,6 +324,39 @@ enum WebScripts {
     })();
     """#
 
+    /// Reports the things the site's own "can this browser stream?" check
+    /// reads, because the site does not say which one it failed on. A
+    /// browser it judges only partly ready is sent to a gate instead of a
+    /// stream, and from the outside that looks like a launch that quietly
+    /// refused.
+    static let readinessProbeJS = #"""
+    (function() {
+        if (window.__gsReady) return;
+        window.__gsReady = true;
+        function report() {
+            try {
+                var pads = [];
+                if (navigator.getGamepads) {
+                    var list = navigator.getGamepads() || [];
+                    for (var i = 0; i < list.length; i++) {
+                        if (list[i]) pads.push(list[i].id || "pad");
+                    }
+                }
+                window.webkit.messageHandlers.gamestream.postMessage({
+                    type: "readiness",
+                    gamepadApi: !!navigator.getGamepads,
+                    pads: pads.join(", "),
+                    audio: !!(window.AudioContext || window.webkitAudioContext),
+                    webrtc: !!window.RTCPeerConnection,
+                    online: navigator.onLine !== false,
+                    agent: navigator.userAgent || ""
+                });
+            } catch (e) {}
+        }
+        report();
+    })();
+    """#
+
     /// Reports the real WebRTC numbers to the app once a second.
     ///
     /// The figures come from the peer connection itself rather than from

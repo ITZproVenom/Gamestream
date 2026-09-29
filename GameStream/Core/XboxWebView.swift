@@ -186,7 +186,8 @@ struct XboxWebView: UIViewRepresentable {
         // when a stream will not start this is the way to find out whether
         // the site or this app is the one refusing.
         if settings.plainPlayer {
-            var plain = [WebScripts.streamStateJS, WebScripts.streamChromeJS]
+            var plain = [WebScripts.streamStateJS, WebScripts.streamChromeJS,
+                         WebScripts.readinessProbeJS]
             if settings.autoStart { plain.append(WebScripts.autoStartJS) }
             for source in plain {
                 controller.addUserScript(WKUserScript(source: source,
@@ -214,7 +215,7 @@ struct XboxWebView: UIViewRepresentable {
         // ignoring the setting is how a switch ends up doing nothing.
         var sources = [WebScripts.streamStateJS, WebScripts.streamChromeJS,
                        WebScripts.streamStatsJS, WebScripts.streamCommandsJS,
-                       WebScripts.captureJS]
+                       WebScripts.captureJS, WebScripts.readinessProbeJS]
         if settings.autoStart { sources.append(WebScripts.autoStartJS) }
         for source in sources {
             controller.addUserScript(WKUserScript(source: source,
@@ -280,6 +281,17 @@ struct XboxWebView: UIViewRepresentable {
                 StreamCoordinator.shared.streamStarted(width: width, height: height)
             case "streamError":
                 StreamCoordinator.shared.streamFailed(message: body["message"] as? String ?? "")
+            case "readiness":
+                let gamepadApi = body["gamepadApi"] as? Bool ?? false
+                let audio = body["audio"] as? Bool ?? false
+                let webrtc = body["webrtc"] as? Bool ?? false
+                let pads = body["pads"] as? String ?? ""
+                log.info("stream", "player readiness: gamepad API "
+                         + "\(gamepadApi ? "yes" : "NO") · audio "
+                         + "\(audio ? "yes" : "NO") · webrtc "
+                         + "\(webrtc ? "yes" : "NO") · pads "
+                         + "\(pads.isEmpty ? "none" : pads)")
+                log.debug("stream", "agent: \(body["agent"] as? String ?? "")")
             case "autoStart":
                 log.info("stream", "pressed the site's \"\(body["label"] as? String ?? "")\" button")
             case "autoStartStuck":
