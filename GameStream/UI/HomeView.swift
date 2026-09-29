@@ -65,6 +65,10 @@ struct HomeView: View {
                 }
                 .padding(.vertical, 8)
                 .padding(.bottom, 36)
+                // The page is exactly as wide as the screen, whatever a
+                // child would prefer. Without this one greedy row drags
+                // every other row off the right edge with it.
+                .containerRelativeFrame(.horizontal)
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .background { AuroraBackground() }
@@ -110,10 +114,18 @@ struct HomeView: View {
                 }
             }
             .scrollTargetLayout()
-            .padding(.horizontal, Theme.pageInset)
         }
         .scrollIndicators(.hidden)
         .scrollTargetBehavior(.viewAligned)
+        // The inset belongs to the scroll view, not to the row inside it.
+        //
+        // containerRelativeFrame measures the scroll container, so padding
+        // the row gave every card the full width of the screen and then
+        // pushed it in by twenty points: the card ran off the right edge by
+        // exactly the padding, and the page looked shifted. As a safe area
+        // inset the container is measured after the inset, so the card is
+        // the width it is supposed to be.
+        .safeAreaPadding(.horizontal, Theme.pageInset)
     }
 
     // MARK: - Quick actions

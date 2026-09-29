@@ -35,6 +35,10 @@ struct SettingsView: View {
                 .padding(.horizontal, Theme.pageInset)
                 .padding(.top, 8)
                 .padding(.bottom, 36)
+                // The page is exactly as wide as the screen, whatever a
+                // child would prefer. Without this one greedy row drags
+                // every other row off the right edge with it.
+                .containerRelativeFrame(.horizontal)
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .background { AuroraBackground() }
@@ -695,6 +699,8 @@ struct DiagnosticsView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background { AuroraBackground() }
             .navigationTitle("Diagnostics")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

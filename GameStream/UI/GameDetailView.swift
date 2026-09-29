@@ -220,6 +220,8 @@ struct ListPickerView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background { AuroraBackground() }
             .navigationTitle("Add to list")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -236,6 +238,18 @@ struct ActivityView: View {
     @EnvironmentObject private var library: LibraryStore
     @Environment(\.dismiss) private var dismiss
 
+    @State private var confirmingClear = false
+
+    /// Sessions grouped under the day they started, newest first. A flat
+    /// list of a hundred rows gives no sense of when anything happened.
+    private var days: [(day: Date, records: [PlayRecord])] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: library.activity) {
+            calendar.startOfDay(for: $0.startedAt)
+        }
+        return grouped.keys.sorted(by: >).map { ($0, grouped[$0] ?? []) }
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -244,26 +258,33 @@ struct ActivityView: View {
                                 title: "No sessions yet",
                                 message: "Sessions longer than fifteen seconds are recorded here.")
                         .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 } else {
-                    ForEach(library.activity) { record in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(record.title)
-                                    .font(.subheadline.weight(.semibold))
-                                    .lineLimit(2)
-                                Text(record.startedAt.formatted(date: .abbreviated, time: .shortened))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                    ForEach(days, id: \.day) { group in
+                        Section {
+                            ForEach(group.records) { record in
+                                row(record)
+                                    .swipeActions(edge: .trailing) {
+                                        Button("Delete", role: .destructive) {
+                                            withAnimation { library.deleteActivity(record) }
+                                        }
+                                    }
                             }
-                            Spacer(minLength: 8)
-                            Text(Format.duration(record.seconds))
-                                .font(.footnote.weight(.semibold).monospacedDigit())
-                                .foregroundStyle(.tint)
+                        } header: {
+                            Text(heading(for: group.day))
+                        } footer: {
+                            Text(total(of: group.records))
                         }
+                        .listRowBackground(Color.white.opacity(0.06))
                     }
                 }
             }
-            .navigationTitle("Activity")
+            // Without this the list drew its own opaque background over the
+            // one the rest of the app uses, and the cleared row background
+            // on the empty state had nothing behind it.
+            .scrollContentBackground(.hidden)
+            .background { AuroraBackground() }
+            .navigationTitle("Sessions")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -271,10 +292,63 @@ struct ActivityView: View {
                 }
                 if !library.activity.isEmpty {
                     ToolbarItem(placement: .primaryAction) {
-                        Button("Clear", role: .destructive) { library.clearActivity() }
+                        Button("Clear", role: .destructive) { confirmingClear = true }
                     }
                 }
             }
+            // Clearing threw away every session on a single press, sitting
+            // right next to Done, with nothing to undo it.
+            .confirmationDialog("Clear all sessions?",
+                                isPresented: $confirmingClear, titleVisibility: .visible) {
+                Button("Clear \(library.activity.count) sessions", role: .destructive) {
+                    withAnimation { library.clearActivity() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This cannot be undone. Your playtime totals go with it.")
+            }
         }
+    }
+
+    private func row(_ record: PlayRecord) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(record.title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
+                HStack(spacing: 6) {
+                    Text(record.startedAt.formatted(date: .omitted, time: .shortened))
+                    // Measured while the session ran and then never shown
+                    // anywhere but the weekly averages.
+                    if record.averageFPS > 0 {
+                        Text("·")
+                        Text("\(record.averageFPS) fps")
+                    }
+                    if record.averageLatencyMs > 0 {
+                        Text("·")
+                        Text("\(record.averageLatencyMs) ms")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            Text(Format.duration(record.seconds))
+                .font(.footnote.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.tint)
+        }
+    }
+
+    private func heading(for day: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(day) { return "Today" }
+        if calendar.isDateInYesterday(day) { return "Yesterday" }
+        return day.formatted(date: .abbreviated, time: .omitted)
+    }
+
+    private func total(of records: [PlayRecord]) -> String {
+        let seconds = records.reduce(0) { $0 + $1.seconds }
+        let count = records.count
+        return "\(count) session\(count == 1 ? "" : "s") · \(Format.duration(seconds))"
     }
 }

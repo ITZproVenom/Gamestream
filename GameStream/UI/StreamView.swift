@@ -12,6 +12,7 @@ struct StreamView: View {
     @State private var elapsed: TimeInterval = 0
     @State private var startedAt = Date()
     @State private var showingStats = false
+    @StateObject private var recorder = StreamRecorder.shared
 
     @Namespace private var glass
 
@@ -76,6 +77,32 @@ struct StreamView: View {
                     .accessibilityLabel("Show the GameStream controls")
                     Spacer()
                 }
+                .transition(.opacity)
+            }
+
+            // A recording has to stay visible once the controls hide, or
+            // there is nothing on screen to say the microphone and the
+            // picture are still being captured.
+            if stream.phase == .playing, recorder.isRecording, !showingControls {
+                VStack {
+                    HStack {
+                        Spacer()
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(.red)
+                                .frame(width: 7, height: 7)
+                            Text(Format.clock(recorder.elapsed))
+                                .font(.caption2.weight(.semibold).monospacedDigit())
+                        }
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 6)
+                        .glassEffect(.regular, in: Capsule())
+                        .padding(.trailing, 18)
+                        .padding(.top, 10)
+                    }
+                    Spacer()
+                }
+                .allowsHitTesting(false)
                 .transition(.opacity)
             }
 
@@ -259,6 +286,15 @@ struct StreamView: View {
                             id: "enhance",
                             active: stream.enhancementMenuOpen) {
                         stream.toggleEnhancementMenu()
+                    }
+
+                    hudIcon(recorder.isRecording ? "stop.circle.fill" : "record.circle",
+                            label: recorder.isRecording ? "Stop recording" : "Record a clip",
+                            id: "record", active: recorder.isRecording) {
+                        Task {
+                            let outcome = await recorder.toggle()
+                            stream.show(notice: outcome)
+                        }
                     }
 
                     hudIcon("camera.fill", label: "Screenshot", id: "shot") {
