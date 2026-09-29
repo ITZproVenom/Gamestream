@@ -373,9 +373,7 @@ final class StreamCoordinator: ObservableObject {
             )
             self.watchdog?.cancel()
             self.watchdog = nil
-            return
         }
-    }
     }
 
     /// Ending a live session on one navigation report is too eager: a
