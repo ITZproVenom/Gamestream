@@ -29,31 +29,7 @@ enum StreamEnhancer {
         var sharpness: Int            // 0-5
         var saturation: Int           // percent
         var contrast: Int             // percent
-        var brightness: Int           // percent
-        var zoom: Int                 // percent, 100 = fit
-        var fillScreen: Bool          // crop to fill instead of letterboxing
-        var volumeBoost: Int          // percent, 100 = untouched
         var hideTouchControls: Bool
-        var hideSiteOverlays: Bool
-        var codecProfile: String      // "", "baseline", "main", "high"
-        var preferIPv6: Bool
-        var blockTracking: Bool
-        var skipSplash: Bool
-        var deadzone: Int             // percent of stick travel ignored
-        var triggerDeadzone: Int      // percent of trigger travel ignored
-        var vibrationScale: Int       // percent applied to rumble magnitudes
-        var aspectRatio: String       // "", "16:9", "16:10", "18:9", "21:9", "4:3"
-        var videoPosition: String     // "center", "top", "bottom"
-        var maxFps: Int               // 0 = uncapped
-        var resolution: String        // "", "720p", "1080p"
-        var preventResolutionDrops: Bool
-        var touchMode: String         // "default", "all", "off"
-        var touchOpacity: Int         // percent
-        var blockSocial: Bool
-        var reduceAnimations: Bool
-        var hideScrollbars: Bool
-        var hideLoadingArt: Bool
-        var pollingRate: Int          // milliseconds between gamepad reads
     }
 
     static func script(_ configuration: Configuration) -> String {
@@ -68,12 +44,7 @@ enum StreamEnhancer {
         window.__gsEnhance = true;
 
         var config = window.__gsEnhanceConfig || {};
-        // Note what is *not* here: an early return when the layer is
-        // switched off. Returning meant __gsEnhanceApply was never defined,
-        // so turning the layer back on mid-session did nothing at all and
-        // said nothing about it. The hooks are always installed; every
-        // effect below asks whether it is enabled.
-        function on() { return !!config.enabled; }
+        if (!config.enabled) return;
 
         var report = { codecs: [], chosen: null, bitrate: null, notes: [] };
         window.__gsEnhanceReport = report;
@@ -153,91 +124,11 @@ enum StreamEnhancer {
                     return;
                 }
             }
-            // A bandwidth line belongs after the connection line, which is
-            // the order the format requires. Put before it, a parser is
-            // entitled to reject the whole description.
-            var at = section.start + 1;
-            for (var c = section.start + 1; c < section.end; c++) {
-                if (lines[c].indexOf("c=") === 0) { at = c + 1; break; }
-            }
-            lines.splice(at, 0, "b=AS:" + kbps);
-            section.end++;
-        }
-
-        /// H.264 profiles are distinguished by the first byte of
-        /// profile-level-id on the codec's fmtp line, not by the codec name:
-        /// 42 is baseline, 4d main, 64 high. Higher profiles compress better
-        /// at the same bitrate, which is the whole reason to ask.
-        function preferProfile(lines, section, profile) {
-            var prefix = profile === "high" ? "64"
-                       : profile === "main" ? "4d"
-                       : profile === "baseline" ? "42" : null;
-            if (!prefix) return false;
-
-            var wanted = [];
-            for (var i = section.start; i < section.end; i++) {
-                var match = /^a=fmtp:(\d+)\s+(.*)$/.exec(lines[i]);
-                if (!match) continue;
-                var id = /profile-level-id=([0-9a-fA-F]{6})/.exec(match[2]);
-                if (id && id[1].toLowerCase().indexOf(prefix) === 0) wanted.push(match[1]);
-            }
-            if (!wanted.length) return false;
-
-            var parts = lines[section.start].split(" ");
-            var reordered = wanted.slice();
-            var payloads = parts.slice(3);
-            for (var p = 0; p < payloads.length; p++) {
-                if (reordered.indexOf(payloads[p]) === -1) reordered.push(payloads[p]);
-            }
-            lines[section.start] = parts.slice(0, 3).concat(reordered).join(" ");
-            return true;
-        }
-
-        /// Puts IPv6 candidates ahead of IPv4 ones. On a network with real
-        /// IPv6 this often avoids a layer of carrier NAT; where there is no
-        /// IPv6 there is nothing to reorder and nothing changes.
-        function preferIPv6Candidates(lines) {
-            var sixes = [];
-            var rest = [];
-            var moved = false;
-            for (var i = 0; i < lines.length; i++) {
-                if (lines[i].indexOf("a=candidate:") !== 0) { rest.push(lines[i]); continue; }
-                if (lines[i].indexOf(":") !== -1 && /\s[0-9a-fA-F]*:[0-9a-fA-F:]+\s/.test(lines[i])) {
-                    sixes.push(lines[i]);
-                    moved = true;
-                } else {
-                    rest.push(lines[i]);
-                }
-            }
-            if (!moved) return false;
-            // Reinsert the IPv6 candidates at the first candidate position.
-            var at = rest.findIndex(function(line) { return line.indexOf("a=candidate:") === 0; });
-            if (at < 0) at = rest.length;
-            Array.prototype.splice.apply(rest, [at, 0].concat(sixes));
-            lines.length = 0;
-            Array.prototype.push.apply(lines, rest);
-            return true;
-        }
-
-        /// Replaces or inserts one `a=` attribute in the video section.
-        function setAttribute(lines, section, name, value) {
-            var prefix = "a=" + name + ":";
-            for (var i = section.start + 1; i < section.end; i++) {
-                if (lines[i].indexOf(prefix) === 0) {
-                    lines[i] = prefix + value;
-                    return;
-                }
-            }
-            lines.splice(section.end, 0, prefix + value);
-            section.end++;
+            lines.splice(section.start + 1, 0, "b=AS:" + kbps);
         }
 
         function edit(sdp) {
-            if (!on()) return sdp;
             if (typeof sdp !== "string" || !sdp.length) return sdp;
-            // Fresh notes per negotiation. Accumulating them across
-            // reconnects turned the report into a transcript.
-            report.notes = [];
             var lines = sdp.split(/\r\n|\n/);
             var section = videoSection(lines);
             if (!section) return sdp;
@@ -250,31 +141,8 @@ enum StreamEnhancer {
                     report.chosen = "H265";
                     report.notes.push("asked for H.265");
                 } else {
-                    report.notes.push("H.265 was not offered");
+                    report.notes.push("H.265 was not offered by the server");
                 }
-            }
-            if (config.codecProfile) {
-                if (preferProfile(lines, section, config.codecProfile)) {
-                    report.notes.push("asked for H.264 " + config.codecProfile);
-                } else {
-                    report.notes.push("H.264 " + config.codecProfile + " was not offered");
-                }
-            }
-            if (config.preferIPv6) {
-                if (preferIPv6Candidates(lines)) report.notes.push("IPv6 first");
-            }
-            if (config.maxFps > 0) {
-                // Stated as a receiver framerate on the video section. The
-                // sender is free to ignore it; when it does not, a lower cap
-                // spends the same bitrate on fewer, better frames.
-                setAttribute(lines, section, "framerate", String(config.maxFps));
-                report.notes.push("asked for " + config.maxFps + " fps");
-            }
-            if (config.resolution) {
-                var size = config.resolution === "720p" ? [1280, 720] : [1920, 1080];
-                setAttribute(lines, section, "imageattr",
-                             "* send * recv [x=" + size[0] + ",y=" + size[1] + "]");
-                report.notes.push("asked for " + config.resolution);
             }
             if (config.bitrateKbps > 0) {
                 setBitrate(lines, section, config.bitrateKbps);
@@ -300,16 +168,6 @@ enum StreamEnhancer {
                                 type: description.type,
                                 sdp: edit(description.sdp)
                             };
-                        } else {
-                            // The page can let the browser build and set its
-                            // own description in one step. There is no text
-                            // to edit in that case, and saying so is better
-                            // than reporting settings that were never
-                            // applied to anything.
-                            report.notes = ["the page set its description "
-                                            + "without one, so nothing could be edited"];
-                            post({ type: "enhance", codecs: "",
-                                   notes: report.notes[0] });
                         }
                     } catch (e) {}
                     return setLocal(description);
@@ -342,143 +200,6 @@ enum StreamEnhancer {
             if (window.webkitRTCPeerConnection) window.webkitRTCPeerConnection = Wrapped;
         }
 
-        // ---- Controller ---------------------------------------------------
-        //
-        // The page reads pads through the Gamepad API, so a deadzone applied
-        // here is applied before the page ever sees the stick. Rescaling the
-        // remainder matters as much as the cut: a raw cut leaves a dead step
-        // at the edge of the zone where the stick suddenly jumps.
-
-        function shapeAxis(value, cut) {
-            if (!cut) return value;
-            var magnitude = Math.abs(value);
-            if (magnitude <= cut) return 0;
-            var scaled = (magnitude - cut) / (1 - cut);
-            return value < 0 ? -scaled : scaled;
-        }
-
-        function installGamepadShaping() {
-            var original = navigator.getGamepads;
-            if (typeof original !== "function") return;
-            var lastRead = 0;
-            var cached = null;
-            navigator.getGamepads = function() {
-                // A polling floor. The page reads pads every animation frame;
-                // on a slow pad that is wasted work, and on a fast one the
-                // extra reads are what make input feel current, so this is a
-                // choice rather than a default.
-                var interval = on() ? (config.pollingRate || 0) : 0;
-                if (interval > 0 && cached) {
-                    var now = Date.now();
-                    if (now - lastRead < interval) return cached;
-                    lastRead = now;
-                }
-                var pads = original.apply(navigator, arguments);
-                var stickCut = on() ? (config.deadzone || 0) / 100 : 0;
-                var triggerCut = on() ? (config.triggerDeadzone || 0) / 100 : 0;
-                if (!stickCut && !triggerCut) { cached = pads; return pads; }
-
-                var shaped = [];
-                for (var i = 0; i < pads.length; i++) {
-                    var pad = pads[i];
-                    if (!pad) { shaped.push(pad); continue; }
-                    var axes = Array.prototype.slice.call(pad.axes);
-                    for (var a = 0; a < axes.length; a++) {
-                        axes[a] = shapeAxis(axes[a], stickCut);
-                    }
-                    var buttons = Array.prototype.slice.call(pad.buttons);
-                    if (triggerCut) {
-                        // 6 and 7 are the triggers in the standard mapping.
-                        for (var b = 6; b <= 7 && b < buttons.length; b++) {
-                            var button = buttons[b];
-                            var value = shapeAxis(button.value, triggerCut);
-                            buttons[b] = {
-                                pressed: value > 0,
-                                touched: button.touched,
-                                value: value
-                            };
-                        }
-                    }
-                    // A plain object: the real Gamepad is read-only, and the
-                    // page only ever reads these fields off it.
-                    shaped.push({
-                        id: pad.id, index: pad.index, connected: pad.connected,
-                        mapping: pad.mapping, timestamp: pad.timestamp,
-                        axes: axes, buttons: buttons,
-                        vibrationActuator: pad.vibrationActuator,
-                        hapticActuators: pad.hapticActuators
-                    });
-                }
-                cached = shaped;
-                return shaped;
-            };
-        }
-
-        installGamepadShaping();
-
-        // ---- Network noise --------------------------------------------------
-
-        /// Drops the page's telemetry without touching anything it needs.
-        ///
-        /// Matched on host, not on a guess about what a URL is for: blocking
-        /// by keyword catches real API calls and breaks the player.
-        var BLOCKED = [
-            "browser.events.data.microsoft.com",
-            "mobile.events.data.microsoft.com",
-            "dc.services.visualstudio.com",
-            "js.monitor.azure.com",
-            "google-analytics.com",
-            "googletagmanager.com"
-        ];
-
-        function blocked(url) {
-            if (!on() || !config.blockTracking) return false;
-            try {
-                var host = new URL(url, location.href).hostname;
-                for (var i = 0; i < BLOCKED.length; i++) {
-                    if (host === BLOCKED[i] || host.indexOf("." + BLOCKED[i]) !== -1) {
-                        return true;
-                    }
-                }
-            } catch (e) {}
-            return false;
-        }
-
-        function installBlocking() {
-            var fetchOriginal = window.fetch;
-            if (typeof fetchOriginal === "function") {
-                window.fetch = function(input) {
-                    var url = typeof input === "string" ? input : (input && input.url);
-                    if (url && blocked(url)) {
-                        // A 204 may not carry a body at all: constructing
-                        // one with even an empty string throws, which would
-                        // turn a blocked tracker into a page error.
-                        return Promise.resolve(new Response(null, { status: 204 }));
-                    }
-                    return fetchOriginal.apply(window, arguments);
-                };
-            }
-            var openOriginal = XMLHttpRequest.prototype.open;
-            XMLHttpRequest.prototype.open = function(method, url) {
-                this.__gsBlocked = url && blocked(url);
-                return openOriginal.apply(this, arguments);
-            };
-            var sendOriginal = XMLHttpRequest.prototype.send;
-            XMLHttpRequest.prototype.send = function() {
-                if (this.__gsBlocked) return;
-                return sendOriginal.apply(this, arguments);
-            };
-            if (navigator.sendBeacon) {
-                var beacon = navigator.sendBeacon.bind(navigator);
-                navigator.sendBeacon = function(url) {
-                    if (blocked(url)) return true;
-                    return beacon.apply(navigator, arguments);
-                };
-            }
-        }
-
-        installBlocking();
-
         // ---- Picture ------------------------------------------------------
 
         var STYLE_ID = "gamestream-enhance";
@@ -510,67 +231,13 @@ enum StreamEnhancer {
             return true;
         }
 
-        /// Raises the stream past the element's own volume ceiling.
-        ///
-        /// A media element cannot go above 1.0. A gain node can, and it is
-        /// built once per element: taking a second source from the same
-        /// element is an error that silences it for good.
-        var amplified = null;
-        var gain = null;
-        var audioContext = null;
-        function applyVolume(video) {
-            var boost = on() ? (config.volumeBoost || 100) / 100 : 1;
-            try {
-                if (boost <= 1.001) {
-                    if (gain) gain.gain.value = 1;
-                    return;
-                }
-                if (amplified !== video) {
-                    var Context = window.AudioContext || window.webkitAudioContext;
-                    if (!Context) return;
-                    // One context for the life of the page. Building a new
-                    // one per element leaks them, and iOS allows very few.
-                    if (!audioContext) audioContext = new Context();
-                    var source = audioContext.createMediaElementSource(video);
-                    gain = audioContext.createGain();
-                    source.connect(gain);
-                    gain.connect(audioContext.destination);
-                    amplified = video;
-                }
-                // Routing a media element through WebAudio moves its audio
-                // into the graph. A suspended graph therefore does not mean
-                // "no boost", it means silence — so the state is resumed,
-                // and resumed again on the next touch if the page had no
-                // gesture to spend yet.
-                if (audioContext && audioContext.state === "suspended") {
-                    audioContext.resume();
-                    document.addEventListener("touchend", function once() {
-                        document.removeEventListener("touchend", once);
-                        if (audioContext) audioContext.resume();
-                    });
-                }
-                if (gain) gain.gain.value = Math.min(boost, 4);
-            } catch (e) {}
-        }
-
         function applyPicture() {
             var parts = [];
-            if (!on()) {
-                installSharpen(0);
-                var off = document.getElementById(STYLE_ID);
-                if (off && off.parentNode) off.parentNode.removeChild(off);
-                var element = document.querySelector("video");
-                if (element) applyVolume(element);
-                return;
-            }
             if (config.saturation && config.saturation !== 100) {
                 parts.push("saturate(" + (config.saturation / 100) + ")");
             }
             if (config.contrast && config.contrast !== 100) {
                 parts.push("contrast(" + (config.contrast / 100) + ")");
-            }
-            if (config.brightness && config.brightness !== 100) {
-                parts.push("brightness(" + (config.brightness / 100) + ")");
             }
             if (installSharpen(config.sharpness || 0)) {
                 parts.push("url(#gamestream-sharpen-filter)");
@@ -580,64 +247,10 @@ enum StreamEnhancer {
             if (parts.length) {
                 rules.push("video { filter: " + parts.join(" ") + " !important; }");
             }
-            rules.push("video { object-fit: "
-                       + (config.fillScreen ? "cover" : "contain") + " !important; }");
-
-            // A forced ratio is applied to the element, not the picture: the
-            // stream arrives at whatever shape the server sends and the box
-            // it is drawn into decides what is cropped or padded.
-            if (config.aspectRatio) {
-                rules.push("video { aspect-ratio: "
-                           + config.aspectRatio.replace(":", " / ") + " !important; "
-                           + "margin: auto !important; }");
-            }
-            if (config.videoPosition && config.videoPosition !== "center") {
-                rules.push("video { object-position: center "
-                           + (config.videoPosition === "top" ? "top" : "bottom")
-                           + " !important; }");
-            }
-            if (config.touchOpacity && config.touchOpacity !== 100) {
-                rules.push("#TouchControls, [class*=\"TouchControl\"] { opacity: "
-                           + (config.touchOpacity / 100) + " !important; }");
-            }
-            if (config.reduceAnimations) {
-                rules.push("*, *::before, *::after { animation-duration: 0.001s !important; "
-                           + "transition-duration: 0.001s !important; }");
-            }
-            if (config.hideScrollbars) {
-                rules.push("::-webkit-scrollbar { display: none !important; }");
-            }
-            if (config.hideLoadingArt) {
-                rules.push("[class*=\"GameArt\"], [class*=\"BackgroundImage\"] "
-                           + "{ display: none !important; }");
-            }
-            if (config.blockSocial) {
-                // Whole sections of the site the app does not use and that
-                // only cost requests and layout work.
-                rules.push("[class*=\"SocialBar\"], [class*=\"FriendsList\"], "
-                           + "[class*=\"ChatPanel\"], [class*=\"NewsFeed\"] "
-                           + "{ display: none !important; }");
-            }
-            var zoom = (config.zoom || 100) / 100;
-            if (Math.abs(zoom - 1) > 0.001) {
-                rules.push("video { transform: scale(" + zoom + ") !important; }");
-            }
             if (config.hideTouchControls) {
                 rules.push("#TouchControls, [class*=\"TouchControl\"], "
                            + "[class*=\"touch-control\"] { display: none !important; }");
             }
-            if (config.hideSiteOverlays) {
-                rules.push("#StreamHud { display: none !important; }");
-            }
-            if (config.skipSplash) {
-                // The launch animation and the big piece of key art behind
-                // it, both of which only delay the picture.
-                rules.push("[class*=\"SplashScreen\"], [class*=\"splash\"], "
-                           + "[class*=\"GameArtBackground\"] { display: none !important; }");
-            }
-
-            var video = document.querySelector("video");
-            if (video) applyVolume(video);
 
             var style = document.getElementById(STYLE_ID);
             if (!rules.length) {
@@ -658,26 +271,10 @@ enum StreamEnhancer {
         function watch() {
             applyPicture();
             var tries = 0;
-            var settled = 0;
             var timer = setInterval(function() {
                 tries++;
-                // Long enough to outlast a queue. Twenty seconds of trying
-                // was shorter than the wait for a busy region, and a player
-                // that appeared after that was never touched at all.
-                if (tries > 600) { clearInterval(timer); return; }
-                var video = document.querySelector("video");
-                // The style being present is not proof the work is done: the
-                // audio boost attaches to the video element, and that element
-                // is created long after the first style is written.
-                if (!document.getElementById(STYLE_ID)
-                    || (video && amplified !== video && on()
-                        && (config.volumeBoost || 100) > 100)) {
-                    applyPicture();
-                }
-                if (video) {
-                    settled++;
-                    if (settled > 20) { clearInterval(timer); }
-                }
+                if (tries > 40) { clearInterval(timer); return; }
+                if (!document.getElementById(STYLE_ID)) applyPicture();
             }, 500);
         }
 

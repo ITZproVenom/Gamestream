@@ -17,38 +17,10 @@ final class Catalog: ObservableObject {
     @Published private(set) var errorMessage: String?
     @Published private(set) var updatedAt: Date?
 
-    /// The Game Pass cloud list. Market and language are the device's, so a
-    /// player outside the United States sees their own catalogue and their
-    /// own language; a market with nothing behind it falls back to US rather
-    /// than showing an empty library.
-    private static let siglID = "29a81209-df6f-41fd-a528-2ae6b91f719c"
-
-    static func siglURL(market: String, language: String) -> URL? {
-        var components = URLComponents(string: "https://catalog.gamepass.com/sigls/v2")
-        components?.queryItems = [
-            URLQueryItem(name: "id", value: siglID),
-            URLQueryItem(name: "language", value: language),
-            URLQueryItem(name: "market", value: market)
-        ]
-        return components?.url
-    }
-
-    /// The device's market, as a two-letter region the catalogue understands.
-    static var market: String {
-        let region = Locale.current.region?.identifier.uppercased() ?? "US"
-        return region.count == 2 ? region : "US"
-    }
-
-    /// The device's language as `en-us`, which is the only shape both
-    /// catalogue endpoints accept.
-    static var language: String {
-        let locale = Locale.current
-        guard let code = locale.language.languageCode?.identifier.lowercased() else {
-            return "en-us"
-        }
-        let region = locale.region?.identifier.lowercased() ?? code
-        return "\(code)-\(region)"
-    }
+    private static let siglURL = URL(
+        string: "https://catalog.gamepass.com/sigls/v2"
+        + "?id=29a81209-df6f-41fd-a528-2ae6b91f719c&language=en-us&market=US"
+    )!
     /// The catalog runs to a few hundred entries with artwork URLs, which is
     /// far too large for UserDefaults; that store is loaded whole on launch.
     private static let cacheURL: URL = {
@@ -58,9 +30,6 @@ final class Catalog: ObservableObject {
     private static let pageSize = 40
 
     private var task: Task<Void, Never>?
-    /// Which refresh owns the loading flag. Two refreshes overlapping meant
-    /// the cancelled one cleared the spinner belonging to the live one.
-    private var loadGeneration = 0
     private let log = AppLog.shared
 
     private init() {
@@ -87,23 +56,17 @@ final class Catalog: ObservableObject {
     }
 
     func search(_ query: String) -> [Game] {
-        let needle = Self.folded(query)
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !needle.isEmpty else { return [] }
         // Title matches first: someone typing "halo" wants the game, not every
         // shooter whose description mentions it.
-        // Accents are folded on both sides, so "pokemon" finds "Pokémon".
-        let byTitle = games.filter { Self.folded($0.title).contains(needle) }
+        let byTitle = games.filter { $0.title.lowercased().contains(needle) }
         let byOther = games.filter {
-            !Self.folded($0.title).contains(needle)
-                && (Self.folded($0.genre).contains(needle)
-                    || Self.folded($0.tagline).contains(needle))
+            !$0.title.lowercased().contains(needle)
+                && ($0.genre.lowercased().contains(needle)
+                    || $0.tagline.lowercased().contains(needle))
         }
         return byTitle + byOther
-    }
-
-    private static func folded(_ text: String) -> String {
-        text.trimmingCharacters(in: .whitespacesAndNewlines)
-            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
     }
 
     /// Awaitable so pull-to-refresh keeps its spinner until the work is done.
@@ -115,11 +78,9 @@ final class Catalog: ObservableObject {
     }
 
     private func load() async {
-        loadGeneration += 1
-        let generation = loadGeneration
         isLoading = true
         errorMessage = nil
-        defer { if generation == loadGeneration { isLoading = false } }
+        defer { isLoading = false }
 
         do {
             let ids = try await fetchIDs()
@@ -144,19 +105,7 @@ final class Catalog: ObservableObject {
     }
 
     private func fetchIDs() async throws -> [String] {
-        var ids = try await Self.fetchIDs(market: Self.market, language: Self.language)
-        if ids.isEmpty, Self.market != "US" {
-            log.warn("catalog", "no cloud list for \(Self.market); using US")
-            ids = try await Self.fetchIDs(market: "US", language: "en-us")
-        }
-        return ids
-    }
-
-    private static func fetchIDs(market: String, language: String) async throws -> [String] {
-        guard let url = siglURL(market: market, language: language) else {
-            throw URLError(.badURL)
-        }
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: Self.siglURL)
         request.timeoutInterval = 20
         request.cachePolicy = .reloadIgnoringLocalCacheData
 
@@ -211,8 +160,8 @@ final class Catalog: ObservableObject {
         var components = URLComponents(string: "https://displaycatalog.mp.microsoft.com/v7.0/products")
         components?.queryItems = [
             URLQueryItem(name: "bigIds", value: ids.joined(separator: ",")),
-            URLQueryItem(name: "market", value: market),
-            URLQueryItem(name: "languages", value: language),
+            URLQueryItem(name: "market", value: "US"),
+            URLQueryItem(name: "languages", value: "en-us"),
             URLQueryItem(name: "fieldsTemplate", value: "Details")
         ]
         guard let url = components?.url else { return [] }

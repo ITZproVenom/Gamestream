@@ -57,21 +57,10 @@ final class StreamCoordinator: ObservableObject {
     enum Phase: Equatable {
         case idle
         case connecting(String)
-        /// The launch did not take and the site's own page is on screen to
-        /// be used by hand. The page stays live; only our overlay changes.
-        case showingPage(String)
         case playing
         case failed(String)
 
         var isActive: Bool { self != .idle }
-    }
-
-    /// True when the page itself should be on screen and touchable: while
-    /// streaming, and while it has been handed back to be used by hand.
-    var isPageVisible: Bool {
-        if case .playing = phase { return true }
-        if case .showingPage = phase { return true }
-        return false
     }
 
     @Published private(set) var game: Game?
@@ -102,9 +91,6 @@ final class StreamCoordinator: ObservableObject {
 
     private var startedAt: Date?
     private var watchdog: Task<Void, Never>?
-    private var storeBounce: Task<Void, Never>?
-    /// What the store page itself said about why it will not start.
-    private var storeReason: String?
     private let log = AppLog.shared
 
     private init() {}
@@ -116,7 +102,6 @@ final class StreamCoordinator: ObservableObject {
     // MARK: - Session control
 
     func play(_ game: Game) {
-        storeReason = nil
         guard XboxAuth.shared.state.isSignedIn else {
             log.warn("stream", "refused to launch \(game.title): not signed in")
             phase = .failed("Sign in to your Microsoft account before starting a game.")
@@ -160,29 +145,19 @@ final class StreamCoordinator: ObservableObject {
         log.info("stream", "retrying \(game.title)")
         phase = .connecting("Reconnecting to \(game.title)")
         reloadToken &+= 1
-        storeReason = nil
         startWatchdog()
     }
 
     /// Leaves the stream and writes the session into Activity.
     func exit() {
-        rendererChanged(to: .none)
         watchdog?.cancel()
         watchdog = nil
-        storeBounce?.cancel()
-        storeBounce = nil
         leaveCheck?.cancel()
         leaveCheck = nil
         reconnectTask?.cancel()
         reconnectTask = nil
         SessionGuard.shared.end()
         ControllerRumble.shared.stop()
-        // A clip in progress belongs to the session that was running. Left
-        // alone it keeps recording the app with no button on screen to stop
-        // it, and the footage is never written.
-        if StreamRecorder.shared.isRecording {
-            Task { _ = await StreamRecorder.shared.stop() }
-        }
         // The player webview is kept alive across presentations, so this is
         // the point where the page has to actually be shut down.
         XboxWebView.Registry.shared.release()
@@ -221,16 +196,12 @@ final class StreamCoordinator: ObservableObject {
     /// own quit is the only way to end it deliberately.
     func quitGame() {
         log.info("stream", "quitting the game")
-        show(notice: "Ending the session on Xbox…")
         XboxWebView.Registry.shared.run(
             "window.__gsCommand && window.__gsCommand('quit');"
         )
-        // The page needs a moment to send the quit before the view goes
-        // away, and it has to open the guide to reach the control at all.
-        // Leaving before it gets there ends the app's session and leaves the
-        // console one running, which is the whole thing this avoids.
+        // The page needs a moment to send the quit before the view goes away.
         Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(2600))
+            try? await Task.sleep(for: .milliseconds(900))
             await MainActor.run { self?.exit() }
         }
     }
@@ -310,10 +281,7 @@ final class StreamCoordinator: ObservableObject {
             return
         }
         guard role == .stream else { return }
-        // The kind alone hid a real bug once: two different pages both
-        // read as "store" and only the address said which.
-        let where_ = URL(string: href)?.path ?? href
-        log.debug("stream", "page is now \(kind) (\(where_))")
+        log.debug("stream", "page is now \(kind)")
 
         // Being bounced back to the store or sign-in page means the launch did
         // not take. Saying so beats leaving a spinner on screen.
@@ -322,57 +290,12 @@ final class StreamCoordinator: ObservableObject {
             Task { await XboxAuth.shared.refresh(reason: "stream bounced to login") }
         }
 
-        // Some titles bounce from the launch URL straight to their store
-        // page. The page's own Play button is tried first; if that does
-        // nothing then the account genuinely cannot start this game, and
-        // waiting out the watchdog only to say "the service is busy" is
-        // both slow and wrong.
-        if kind == "store", case .connecting = phase {
-            watchStoreBounce()
-        } else {
-            storeBounce?.cancel()
-            storeBounce = nil
-        }
-
         // Quitting from the Xbox guide, or Better xCloud's "back to home",
         // navigates the page away from the launch URL. The player was still
         // on screen showing xbox.com, so leaving a game dumped you on the
         // cloud gaming website instead of back in the app.
         if phase == .playing, kind != "launch" {
             confirmLeftTheGame(reportedKind: kind)
-        }
-    }
-
-    /// Records what the store page said about itself.
-    func noteStoreReason(_ text: String) {
-        storeReason = text
-    }
-
-    /// Gives the store page's own Play button a chance to work before
-    /// calling the launch a failure.
-    private func watchStoreBounce() {
-        guard storeBounce == nil else { return }
-        log.warn("stream", "the launch page redirected to the store page")
-        storeBounce = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(14))
-            guard let self, !Task.isCancelled else { return }
-            self.storeBounce = nil
-            guard case .connecting = self.phase else { return }
-            // Covering the page with a failure card takes away the one
-            // thing that can still start the game: the page's own Play
-            // button. Hand it back instead, and say so.
-            self.log.info("stream", "handing the store page over to be "
-                          + "pressed by hand")
-            let said = self.storeReason
-            self.phase = .showingPage(
-                said?.isEmpty == false
-                    ? "Xbox opened this page instead of starting the game. "
-                      + "It says: \(said!)"
-                    : "Xbox opened this page instead of starting the game. "
-                      + "Press Play here to start it."
-            )
-            self.watchdog?.cancel()
-            self.watchdog = nil
         }
     }
 
@@ -427,38 +350,20 @@ final class StreamCoordinator: ObservableObject {
         }
     }
 
-    /// Which engine is actually drawing frames right now.
-    ///
-    /// Recorded rather than assumed. "Is this still a browser?" is a
-    /// question the app should be able to answer from what it is doing, not
-    /// from what it intended.
-    enum Renderer: String {
-        case none = "Nothing is streaming"
-        case webKit = "WebKit — the site's player"
-        case native = "Metal — native WebRTC, no WebKit"
-    }
+    /// Whether the enhancement's menu is believed to be open, so the same
+    /// button can put it away again. Its dialog is hard to dismiss by touch
+    /// in this webview, so leaving the only exit inside it is a trap.
+    @Published private(set) var enhancementMenuOpen = false
 
-    @Published private(set) var renderer: Renderer = .none
-
-    var rendererDescription: String { renderer.rawValue }
-
-    func rendererChanged(to value: Renderer) {
-        renderer = value
-        log.info("stream", "renderer: \(value.rawValue)")
-    }
-
-    /// Pushes the picture settings into a running web player.
-    ///
-    /// The native player reads the same settings directly, so this is a
-    /// no-op there rather than a second code path.
-    func applyEnhancements() {
-        guard renderer == .webKit else { return }
-        let configuration = AppSettings.shared.enhancerConfiguration()
-        guard let data = try? JSONEncoder().encode(configuration),
-              let json = String(data: data, encoding: .utf8) else { return }
-        XboxWebView.Registry.shared.run(
-            "window.__gsEnhanceApply && window.__gsEnhanceApply(\(json));"
-        )
+    /// Opens or closes the enhancement's menu.
+    func toggleEnhancementMenu() {
+        if enhancementMenuOpen {
+            closeEnhancementMenu()
+            enhancementMenuOpen = false
+        } else {
+            openEnhancementMenu()
+            enhancementMenuOpen = true
+        }
     }
 
     /// What the enhancement layer saw in the session description.
@@ -473,23 +378,35 @@ final class StreamCoordinator: ObservableObject {
         log.info("stream", "codecs: \(codecs)" + (notes.isEmpty ? "" : " — \(notes)"))
     }
 
+    /// Opens the streaming enhancement's own menu.
+    func openEnhancementMenu() {
+        log.info("stream", "opening the enhancement menu")
+        XboxWebView.Registry.shared.run(
+            "window.__gsCommand ? '' : 'the command bridge is not installed on this page';"
+        )
+        XboxWebView.Registry.shared.run("window.__gsCommand && window.__gsCommand('bxMenu');")
+    }
+
+    /// Closes the enhancement's menu and clears anything it left over the
+    /// game. Dismissing it by tapping outside leaves its dimming overlay in
+    /// the page, which swallows every touch meant for the stream.
+    func closeEnhancementMenu() {
+        log.info("stream", "closing the enhancement menu")
+        XboxWebView.Registry.shared.run("window.__gsCommand && window.__gsCommand('bxClose');")
+    }
+
     /// Presses the site's Xbox guide button.
     func pressGuide() {
         log.info("stream", "pressing the Xbox guide")
+        XboxWebView.Registry.shared.run(
+            "window.__gsCommand ? '' : 'the command bridge is not installed on this page';"
+        )
         XboxWebView.Registry.shared.run("window.__gsCommand && window.__gsCommand('guide');")
     }
 
     func streamStarted(width: Int, height: Int) {
-        rendererChanged(to: .webKit)
-        storeBounce?.cancel()
-        storeBounce = nil
         watchdog?.cancel()
         watchdog = nil
-        // A reconnect that worked has spent none of the budget. Counting
-        // attempts for the lifetime of the session meant the fourth drop of
-        // a long evening was never rejoined, however well the first three
-        // recoveries went.
-        reconnectAttempts = 0
         if width > 0, height > 0 {
             resolution = "\(width)×\(height)"
         }

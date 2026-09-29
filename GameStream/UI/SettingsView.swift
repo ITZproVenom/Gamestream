@@ -16,7 +16,9 @@ struct SettingsView: View {
     @State private var cacheSize = 0
     @State private var showingDiagnostics = false
     @State private var showingSignOut = false
+    @State private var refreshingScript = false
     @State private var copiedReport = false
+    @State private var reinstalled: Bool?
     @State private var nativeProbe: String?
     @State private var sessionProbe: String?
     @State private var probingSession = false
@@ -147,15 +149,23 @@ struct SettingsView: View {
 
     private var streaming: some View {
         SettingsGroup("Streaming", icon: "cloud.fill") {
-            VStack(alignment: .leading, spacing: 5) {
-                Toggle("Start the game automatically", isOn: $settings.autoStart)
-                Text("Presses the site's own Play button on a launch page so a game "
-                     + "starts without a second tap. Resolution, bitrate and codec "
-                     + "live in the player's own menu, where they can be changed "
-                     + "against a running stream.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Picker("Quality", selection: $settings.quality) {
+                ForEach(AppSettings.Quality.allCases) { quality in
+                    Text(quality.title).tag(quality)
+                }
             }
+
+            SettingsDivider()
+
+            Picker("Region", selection: $settings.region) {
+                ForEach(AppSettings.Region.allCases) { region in
+                    Text(region.title).tag(region)
+                }
+            }
+
+            SettingsDivider()
+
+            Toggle("Start the game automatically", isOn: $settings.autoStart)
             SettingsDivider()
             VStack(alignment: .leading, spacing: 5) {
                 Toggle("Open the statistics panel with the stream",
@@ -167,7 +177,48 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             SettingsDivider()
+            VStack(alignment: .leading, spacing: 5) {
+                Toggle("Match the in-stream menus to GameStream", isOn: $settings.matchStreamStyle)
+                Text("Restyles the streaming enhancement's own menus with the app's "
+                     + "accent colour, translucency and type. Takes effect the next "
+                     + "time a game starts.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            SettingsDivider()
             Toggle("Keep the screen awake", isOn: $settings.keepAwake)
+            SettingsDivider()
+
+            HStack {
+                Text("Better xCloud").font(.subheadline)
+                Spacer()
+                Text(BetterXCloud.shared.version.map { "v\($0)" } ?? "not installed")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsDivider()
+
+            Button {
+                Task {
+                    refreshingScript = true
+                    reinstalled = await BetterXCloud.shared.reinstall()
+                    refreshingScript = false
+                }
+            } label: {
+                HStack {
+                    SettingsRowLabel(title: "Reinstall Better xCloud",
+                                     icon: "arrow.trianglehead.2.clockwise")
+                    if refreshingScript { ProgressView().controlSize(.small) }
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(refreshingScript)
+
+            Text(reinstalledMessage)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -269,10 +320,6 @@ struct SettingsView: View {
                 Button {
                     UIPasteboard.general.string = rumble.report
                     copiedReport = true
-                    Task {
-                        try? await Task.sleep(for: .seconds(2))
-                        copiedReport = false
-                    }
                 } label: {
                     SettingsRowLabel(title: copiedReport ? "Report copied"
                                      : "Copy controller report",
@@ -315,23 +362,7 @@ struct SettingsView: View {
 
             SettingsDivider()
 
-            Toggle("Plain player", isOn: $settings.plainPlayer)
-            Text("Runs the Xbox player with nothing added but the app's own "
-                 + "bridges: no enhancements, no rumble bridge, no stats, no "
-                 + "screenshots. Everything this app wraps is something that "
-                 + "could stop a game from starting, so turn this on to find "
-                 + "out whether a failure is ours or Xbox's. Takes effect on "
-                 + "the next launch.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            SettingsDivider()
-
             Toggle("GameStream enhancements", isOn: $settings.enhancerEnabled)
-                .onChange(of: settings.enhancerEnabled) { _, _ in
-                    stream.applyEnhancements()
-                }
             Text("Our own in-page layer. It edits the session description before the "
                  + "stream is negotiated, which is the only place codec and bitrate "
                  + "are actually decided.")
@@ -340,6 +371,8 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             if settings.enhancerEnabled {
+                Toggle("Hide the site's touch controls", isOn: $settings.hideTouchControls)
+
                 Toggle("Prefer H.265 when offered", isOn: $settings.preferHEVC)
                 Text(stream.offeredCodecs.isEmpty
                      ? "Start a game to see which codecs the server offers."
@@ -360,7 +393,6 @@ struct SettingsView: View {
                         get: { Double(settings.sharpness) },
                         set: { settings.sharpness = Int($0) }
                     ), in: 0...5, step: 1)
-                    .onChange(of: settings.sharpness) { _, _ in stream.applyEnhancements() }
                     Text("A real sharpening kernel over the video. It cannot add detail "
                          + "the stream never sent, and high settings make compression "
                          + "blocks more obvious, not less.")
@@ -380,7 +412,6 @@ struct SettingsView: View {
                         get: { Double(settings.saturation) },
                         set: { settings.saturation = Int($0) }
                     ), in: 50...150, step: 5)
-                    .onChange(of: settings.saturation) { _, _ in stream.applyEnhancements() }
                 }
 
                 VStack(alignment: .leading, spacing: 7) {
@@ -395,7 +426,6 @@ struct SettingsView: View {
                         get: { Double(settings.contrast) },
                         set: { settings.contrast = Int($0) }
                     ), in: 50...150, step: 5)
-                    .onChange(of: settings.contrast) { _, _ in stream.applyEnhancements() }
                 }
             }
 
@@ -403,7 +433,9 @@ struct SettingsView: View {
 
             Toggle("Check the connection before starting", isOn: $settings.preflightCheck)
             if let reading = network.latest {
-                Text("Last check: " + reading.detail)
+                Text(reading.reachable
+                     ? "Last check: \(reading.latencyMs) ms, ±\(reading.spreadMs) ms. \(reading.verdict)"
+                     : reading.verdict)
                     .font(.caption)
                     .foregroundStyle(reading.isPoor ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -575,11 +607,11 @@ struct SettingsView: View {
                         return
                     }
                     do {
-                        sessionProbe = "Signing in to the cloud service…"
                         let login = try await XCloudAPI.shared.login(xstsToken: token)
+                        sessionProbe = "Signing in to the cloud service…"
                         sessionProbe = await XCloudSession.shared.probe(
                             login: login,
-                            productId: game.id
+                            titleId: game.id
                         ) { progress in
                             Task { @MainActor in sessionProbe = progress }
                         }
@@ -612,6 +644,24 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    /// Says what the reinstall did, rather than only when it last ran.
+    private var reinstalledMessage: String {
+        if refreshingScript {
+            return "Clearing the old copy and its stored settings, then downloading again…"
+        }
+        if reinstalled == true {
+            return "Reinstalled. The stored settings and patch cache were cleared; "
+                + "the next game you start uses the fresh copy."
+        }
+        if reinstalled == false {
+            return "The download failed. The previous copy is still in place."
+        }
+        return BetterXCloud.shared.lastFetched.map {
+            "Installed \($0.formatted(date: .abbreviated, time: .shortened)). "
+                + "Reinstalling clears its stored settings and patch cache too."
+        } ?? "Not downloaded yet. It installs itself the first time you start a game."
     }
 
     private func measureCache() async {
@@ -675,10 +725,6 @@ struct SettingsRowLabel: View {
 struct DiagnosticsView: View {
     @EnvironmentObject private var auth: XboxAuth
     @StateObject private var log = AppLog.shared
-    @StateObject private var stream = StreamCoordinator.shared
-    @StateObject private var rumble = ControllerRumble.shared
-    @StateObject private var network = NetworkCheck.shared
-    @StateObject private var guardian = SessionGuard.shared
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -728,7 +774,7 @@ struct DiagnosticsView: View {
                     Button("Done") { dismiss() }
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    ShareLink(item: log.exportText(context: context)) {
+                    ShareLink(item: log.exportText()) {
                         Image(systemName: "square.and.arrow.up")
                     }
                     .accessibilityLabel("Share the log")
@@ -744,22 +790,5 @@ struct DiagnosticsView: View {
         case .warn: return .orange
         case .error: return .red
         }
-    }
-
-    /// What the app was when the log was taken. A shared log that does not
-    /// say which renderer was running, or whether a controller was even
-    /// connected, leaves the first two questions unanswered.
-    private var context: [String] {
-        var lines: [String] = []
-        lines.append("Session: " + (auth.state.isSignedIn ? "signed in" : "signed out"))
-        if !auth.tokenSource.isEmpty { lines.append("Token source: \(auth.tokenSource)") }
-        if !auth.tokenExpires.isEmpty { lines.append("Token expires: \(auth.tokenExpires)") }
-        lines.append("Renderer: \(stream.rendererDescription)")
-        if !stream.offeredCodecs.isEmpty { lines.append("Codecs offered: \(stream.offeredCodecs)") }
-        lines.append("Controller: " + (rumble.controllerName ?? "none")
-                     + (rumble.supportsHaptics ? " with haptics" : " without haptics"))
-        if let reading = network.latest { lines.append("Connection: \(reading.detail)") }
-        lines.append("Thermal state: \(guardian.thermalDescription)")
-        return lines
     }
 }

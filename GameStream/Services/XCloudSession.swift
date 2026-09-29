@@ -9,9 +9,9 @@ import Foundation
 /// go of it, read where the server lives, then either negotiate media or give
 /// the session back.
 ///
-/// Nothing here decodes video: this is the HTTP half of a session, kept apart
-/// from the peer connection that supplies the payloads its negotiation calls
-/// carry. Every call is
+/// Nothing here decodes video. The negotiation calls exist because they are
+/// pure HTTP and can be written and reasoned about now; the WebRTC peer that
+/// would supply their payloads is separate, much larger work. Every call is
 /// made with the signed-in account's own token.
 ///
 /// A provisioned session occupies one of the account's cloud slots, so
@@ -31,27 +31,7 @@ actor XCloudSession {
     struct Handle: Sendable {
         var baseURI: String
         var path: String
-
-        /// The session's own address. The two halves come from different
-        /// places -- the base from the region list, the path from the play
-        /// response -- and neither promises a slash, so joining them by
-        /// hand glued the host to the path and every later call went to a
-        /// hostname that does not exist.
-        func url(_ suffix: String = "") -> URL? {
-            func withoutTrailingSlash(_ value: String) -> String {
-                var copy = value
-                while copy.hasSuffix("/") { copy.removeLast() }
-                return copy
-            }
-            let tail = withoutTrailingSlash(path)
-            if tail.lowercased().hasPrefix("http") {
-                return URL(string: tail + suffix)
-            }
-            let root = withoutTrailingSlash(baseURI)
-            let joined = tail.hasPrefix("/") ? tail : "/" + tail
-            return URL(string: root + joined + suffix)
-        }
-
+        var url: URL? { URL(string: baseURI + path) }
     }
 
     /// Where a session is in the queue. The service uses a wide vocabulary of
@@ -91,53 +71,6 @@ actor XCloudSession {
 
     // MARK: - Provisioning
 
-    /// What the cloud service knows about one title.
-    ///
-    /// The store and the cloud service do not use the same identifier. A
-    /// game page carries a display-catalogue ProductId, while a session is
-    /// asked for by the cloud service's own titleId, and only this lookup
-    /// relates the two.
-    struct TitleInfo: Sendable {
-        var titleId: String
-        var name: String?
-        var supportsTouch: Bool
-        var supportsMouseKeyboard: Bool
-    }
-
-    /// Translates a store ProductId into the titleId a session needs.
-    func titleInfo(productId: String, login: XCloudAPI.Login) async throws -> TitleInfo {
-        guard let base = preferredRegion(of: login)?.baseURI, !base.isEmpty,
-              let url = URL(string: base + "/v2/titles") else {
-            throw Failure(step: "title", detail: "the account has no usable region")
-        }
-        let (data, _) = try await send(
-            request(url: url, method: "POST", token: login.gsToken,
-                    body: ["alternateIds": [productId], "alternateIdType": "productId"]),
-            step: "title"
-        )
-        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let results = object["results"] as? [[String: Any]],
-              let first = results.first else {
-            throw Failure(step: "title", detail: "the service returned no title for \(productId)")
-        }
-        guard let titleId = first["titleId"] as? String, !titleId.isEmpty else {
-            throw Failure(step: "title",
-                          detail: "the service knows \(productId) but gave it no title id, "
-                                + "which usually means it cannot be streamed to this account")
-        }
-        let details = first["details"] as? [String: Any]
-        let inputs = details?["supportedInputTypes"] as? [String] ?? []
-        let info = TitleInfo(
-            titleId: titleId,
-            name: details?["productTitle"] as? String,
-            supportsTouch: details?["hasTouchSupport"] as? Bool ?? false,
-            supportsMouseKeyboard: inputs.contains("MKB") || inputs.contains("Keyboard")
-        )
-        note("title: \(productId) is title \(titleId)"
-             + (info.name.map { " (\($0))" } ?? ""))
-        return info
-    }
-
     /// Asks the region for a session for one title.
     ///
     /// The settings block describes the client to the service. The values are
@@ -145,14 +78,11 @@ actor XCloudSession {
     /// them to pick a transport and a keyboard layout, not to gate access.
     func provision(login: XCloudAPI.Login,
                    titleId: String,
-                   region: XCloudAPI.Region? = nil,
-                   osName: String = "windows") async throws -> Handle {
+                   region: XCloudAPI.Region? = nil) async throws -> Handle {
         let endpoint = region ?? preferredRegion(of: login)
         guard let base = endpoint?.baseURI, !base.isEmpty else {
-            note("provision: the account has no usable region", level: .error)
             throw Failure(step: "provision", detail: "the account has no usable region")
         }
-        note("provision: asking \(endpoint?.name ?? "?") (\(base)) for title \(titleId) as \(osName)")
         guard let url = URL(string: base + "/v5/sessions/cloud/play") else {
             throw Failure(step: "provision", detail: "the region returned an unusable address")
         }
@@ -161,87 +91,36 @@ actor XCloudSession {
             "titleId": titleId,
             "systemUpdateGroup": "",
             "serverId": "",
-            "fallbackRegionNames": login.fallbackRegionNames,
-            "clientSessionId": UUID().uuidString.lowercased(),
+            "fallbackRegionNames": [],
             "settings": [
-                // The service checks this string against a list. Anything it
-                // does not recognise is refused outright, which is why this
-                // is the site's exact value rather than a tidier one.
-                "nanoVersion": "V3;WebrtcTransport.dll",
+                "nanoVersion": "V3;RtcTransport",
                 "enableTextToSpeech": false,
-                "magnifier": false,
                 "highContrast": 0,
                 "locale": Locale.current.identifier.replacingOccurrences(of: "_", with: "-"),
-                // We do exchange ICE over /ice, but so does the site with
-                // this set to false: the flag selects a different transport
-                // negotiation, not whether candidates are traded.
                 "useIceConnection": false,
                 "timezoneOffsetMinutes": TimeZone.current.secondsFromGMT() / 60,
-                "sdkType": "web",
-                "osName": osName,
-                "enableOptionalDataCollection": false
+                "osName": "ios"
             ]
         ]
 
-        // The service reads the ceiling of what it will send from the device
-        // description, not from the SDP: an unrecognised platform is offered
-        // a phone-sized stream. `osName` is the knob that actually moves it.
-        var post = request(url: url, method: "POST", token: login.gsToken, body: body)
-        post.setValue(Self.deviceInfo(osName: osName), forHTTPHeaderField: "x-ms-device-info")
-        let (data, http) = try await send(post, step: "provision")
+        let (data, http) = try await send(
+            request(url: url, method: "POST", token: login.gsToken, body: body),
+            step: "provision"
+        )
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw Failure(step: "provision", detail: "HTTP \(http.statusCode) with no readable body")
         }
         guard let path = object["sessionPath"] as? String, !path.isEmpty else {
             let reason = (object["errorDetails"] as? [String: Any])?["message"] as? String
-            note("provision: no session path. Response keys: "
-                 + object.keys.sorted().joined(separator: ", "), level: .error)
             throw Failure(step: "provision",
                           detail: reason ?? "no session path in the response (HTTP \(http.statusCode))")
         }
-        note("provision: granted \(path)")
         return Handle(baseURI: base, path: path)
-    }
-
-    /// The platform name the service recognises for a wanted resolution.
-    /// These are the service's own buckets, not ours: it has no iOS bucket,
-    /// and an unknown one lands in the smallest.
-    static func osName(forResolution preference: String) -> String {
-        switch preference {
-        case "720p": return "android"
-        default: return "windows"
-        }
-    }
-
-    /// The device description that accompanies a session request. It has to
-    /// agree with `osName`, or the service trusts neither.
-    private static func deviceInfo(osName: String) -> String {
-        let info: [String: Any] = [
-            "appInfo": ["env": [
-                "clientAppId": Bundle.main.bundleIdentifier ?? "gamestream",
-                "clientAppType": "native",
-                "clientAppVersion": AppInfo.shortVersion,
-                "clientSdkVersion": "10.3.7",
-                "httpEnvironment": "prod",
-                "sdkInstallId": ""
-            ]],
-            "dev": [
-                "os": ["name": osName, "ver": "22631.2715", "platform": "desktop"],
-                "hw": ["make": "Microsoft", "model": "unknown", "sdktype": "web"],
-                "browser": ["browserName": "chrome", "browserVersion": "140.0.3485.54"],
-                "displayInfo": [
-                    "dimensions": ["widthInPixels": 1920, "heightInPixels": 1080],
-                    "pixelDensity": ["dpiX": 1, "dpiY": 1]
-                ]
-            ]
-        ]
-        let data = (try? JSONSerialization.data(withJSONObject: info)) ?? Data()
-        return String(data: data, encoding: .utf8) ?? "{}"
     }
 
     /// Reads one session's current state.
     func state(of handle: Handle, token: String) async throws -> State {
-        guard let url = handle.url("/state") else {
+        guard let url = URL(string: handle.baseURI + handle.path + "/state") else {
             throw Failure(step: "state", detail: "unusable session address")
         }
         let (data, _) = try await send(request(url: url, method: "GET", token: token), step: "state")
@@ -270,9 +149,6 @@ actor XCloudSession {
         var last = State(raw: "Unknown", detail: nil, queuePosition: nil, estimatedWaitSeconds: nil)
         while Date() < deadline {
             last = try await state(of: handle, token: token)
-            note("state: \(last.raw)"
-                 + (last.detail.map { " (\($0))" } ?? "")
-                 + (last.queuePosition.map { " queue \($0)" } ?? ""))
             onState?(last)
             if last.isReady { return last }
             if last.isTerminal {
@@ -287,7 +163,7 @@ actor XCloudSession {
 
     /// Reads the connection details of a ready session.
     func serverDetails(for handle: Handle, token: String) async throws -> ServerDetails {
-        guard let url = handle.url("/configuration") else {
+        guard let url = URL(string: handle.baseURI + handle.path + "/configuration") else {
             throw Failure(step: "configuration", detail: "unusable session address")
         }
         let (data, _) = try await send(request(url: url, method: "GET", token: token),
@@ -315,7 +191,7 @@ actor XCloudSession {
     /// Keeps an idle session from being reclaimed while it is being set up.
     @discardableResult
     func keepAlive(_ handle: Handle, token: String) async -> Bool {
-        guard let url = handle.url("/keepalive") else { return false }
+        guard let url = URL(string: handle.baseURI + handle.path + "/keepalive") else { return false }
         let result = try? await send(request(url: url, method: "POST", token: token, body: [:]),
                                      step: "keepalive")
         return result != nil
@@ -324,17 +200,20 @@ actor XCloudSession {
     /// Gives the session back. Called on every exit path, including errors.
     @discardableResult
     func release(_ handle: Handle, token: String) async -> Bool {
-        guard let url = handle.url() else { return false }
+        guard let url = handle.url else { return false }
         let result = try? await send(request(url: url, method: "DELETE", token: token),
                                      step: "release")
         return result != nil
     }
 
     // MARK: - Media negotiation
+    //
+    // Written now because it is only HTTP and is easier to get right in
+    // isolation than alongside a peer connection. Unused until there is one.
 
     /// Hands the service our SDP offer and reads back its answer.
     func exchangeOffer(_ sdp: String, on handle: Handle, token: String) async throws -> String {
-        guard let url = handle.url("/sdp") else {
+        guard let url = URL(string: handle.baseURI + handle.path + "/sdp") else {
             throw Failure(step: "sdp", detail: "unusable session address")
         }
         let payload: [String: Any] = [
@@ -361,7 +240,7 @@ actor XCloudSession {
     func exchangeCandidates(_ candidates: [[String: Any]],
                             on handle: Handle,
                             token: String) async throws -> String {
-        guard let url = handle.url("/ice") else {
+        guard let url = URL(string: handle.baseURI + handle.path + "/ice") else {
             throw Failure(step: "ice", detail: "unusable session address")
         }
         let encoded = String(
@@ -399,7 +278,7 @@ actor XCloudSession {
     /// back. This is how we find out whether the native path is real without
     /// having a player to point at it.
     func probe(login: XCloudAPI.Login,
-               productId: String,
+               titleId: String,
                onProgress: @Sendable @escaping (String) -> Void) async -> String {
         var handle: Handle?
         defer {
@@ -409,13 +288,11 @@ actor XCloudSession {
             }
         }
         do {
-            onProgress("Looking up the cloud title…")
-            let title = try await titleInfo(productId: productId, login: login)
             onProgress("Asking for a session…")
-            let created = try await provision(login: login, titleId: title.titleId)
+            let created = try await provision(login: login, titleId: titleId)
             handle = created
 
-            var lines = ["\(productId) is cloud title \(title.titleId).", "Session granted."]
+            var lines = ["Session granted."]
             let ready = try await waitUntilReady(created, token: login.gsToken) { state in
                 if let position = state.queuePosition {
                     onProgress("Queued at position \(position)…")
@@ -428,8 +305,7 @@ actor XCloudSession {
             onProgress("Reading the server address…")
             let server = try await serverDetails(for: created, token: login.gsToken)
             lines.append("Server: \(server.summary).")
-            lines.append("Released the session. The native player negotiates media "
-                         + "against a session like this one.")
+            lines.append("Released the session. Media negotiation needs a WebRTC peer, which is not built yet.")
             return lines.joined(separator: " ")
         } catch let failure as Failure {
             return "Native session failed at \(failure.step) — \(failure.detail)."
@@ -464,62 +340,19 @@ actor XCloudSession {
     }
 
     private func send(_ request: URLRequest, step: String) async throws -> (Data, HTTPURLResponse) {
-        let where_ = (request.httpMethod ?? "GET") + " "
-            + (request.url?.host.map { $0 + " " } ?? "")
-            + (request.url?.path ?? "?")
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await URLSession.shared.data(for: request)
         } catch {
-            note("\(step): \(where_) could not be reached: \(error.localizedDescription)", level: .error)
             throw Failure(step: step, detail: error.localizedDescription)
         }
         guard let http = response as? HTTPURLResponse else {
-            note("\(step): \(where_) answered with no HTTP response", level: .error)
             throw Failure(step: step, detail: "no HTTP response")
         }
         guard (200...299).contains(http.statusCode) else {
-            // The body of a rejection is the only place the service says why,
-            // so it belongs in the error rather than being thrown away.
-            let reason = Self.readableBody(data)
-            note("\(step): \(where_) -> HTTP \(http.statusCode)"
-                 + (reason.isEmpty ? "" : " \(reason)"), level: .error)
-            throw Failure(step: step,
-                          detail: "HTTP \(http.statusCode)" + (reason.isEmpty ? "" : " — \(reason)"))
+            throw Failure(step: step, detail: "HTTP \(http.statusCode)")
         }
-        note("\(step): \(where_) -> HTTP \(http.statusCode), \(data.count) bytes")
         return (data, http)
-    }
-
-    /// A short, readable version of a response body for an error message.
-    /// Long bodies are trimmed: the useful part of a service rejection is at
-    /// the front, and a failure card has to stay readable.
-    private static func readableBody(_ data: Data) -> String {
-        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            let details = object["errorDetails"] as? [String: Any]
-            if let message = details?["message"] as? String ?? object["message"] as? String
-                ?? object["error"] as? String {
-                return message
-            }
-        }
-        let text = String(data: data, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if text.isEmpty { return "" }
-        return text.count > 300 ? String(text.prefix(300)) + "…" : text
-    }
-
-    /// The session layer used to log nothing at all, so a failed native
-    /// stream left no trace in Diagnostics and the export was useless for
-    /// working out what went wrong. Every step now records itself under the
-    /// `native` category.
-    private nonisolated func note(_ message: String, level: AppLog.Level = .debug) {
-        Task { @MainActor in
-            if level == .error {
-                AppLog.shared.error("native", message)
-            } else {
-                AppLog.shared.debug("native", message)
-            }
-        }
     }
 
     /// Microsoft's services want a correlation vector on every request and

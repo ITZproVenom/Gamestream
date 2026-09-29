@@ -33,6 +33,19 @@ final class AppSettings: ObservableObject {
         case purple, blue, green, orange, pink
         var id: String { rawValue }
         var title: String { rawValue.capitalized }
+        /// The same colour as CSS needs it, for styling the in-stream menus.
+        /// Better xCloud reads its button colours from comma-separated RGB
+        /// custom properties, not from hex.
+        var rgbTriple: String {
+            switch self {
+            case .purple: return "175,82,222"
+            case .blue: return "0,122,255"
+            case .green: return "52,199,89"
+            case .orange: return "255,149,0"
+            case .pink: return "255,45,85"
+            }
+        }
+
         var color: Color {
             switch self {
             case .purple: return .purple
@@ -44,14 +57,69 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    enum Quality: String, CaseIterable, Identifiable, Sendable {
+        case auto, p720, p1080, p1080hq
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .auto: return "Auto"
+            case .p720: return "720p"
+            case .p1080: return "1080p"
+            case .p1080hq: return "1080p High quality"
+            }
+        }
+
+        /// The value Better xCloud expects for `stream.video.resolution`.
+        var betterXCloudValue: String {
+            switch self {
+            case .auto: return "auto"
+            case .p720: return "720p"
+            case .p1080: return "1080p"
+            case .p1080hq: return "1080p-hq"
+            }
+        }
+    }
+
+    enum Region: String, CaseIterable, Identifiable, Sendable {
+        case auto, northAmerica, europe, asia, australia
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .auto: return "Auto"
+            case .northAmerica: return "North America"
+            case .europe: return "Europe"
+            case .asia: return "Asia"
+            case .australia: return "Australia"
+            }
+        }
+
+        var betterXCloudValue: String {
+            switch self {
+            case .auto: return ""
+            case .northAmerica: return "us"
+            case .europe: return "eu"
+            case .asia: return "jp"
+            case .australia: return "au"
+            }
+        }
+    }
+
     private enum Key {
         static let theme = "settings.theme"
         static let accent = "settings.accent"
         static let keepAwake = "settings.keepAwake"
+        static let showActivity = "settings.showActivity"
+        static let quality = "settings.quality"
+        static let region = "settings.region"
         static let rumbleEnabled = "settings.rumbleEnabled"
         static let rumbleIntensity = "settings.rumbleIntensity"
         static let autoStart = "settings.autoStart"
         static let showStats = "settings.showStats"
+        static let matchStreamStyle = "settings.matchStreamStyle"
         static let phoneRumbleFallback = "settings.phoneRumbleFallback"
         static let autoReconnect = "settings.autoReconnect"
         static let sessionLimit = "settings.sessionLimitMinutes"
@@ -61,57 +129,21 @@ final class AppSettings: ObservableObject {
         static let preflightCheck = "settings.preflightCheck"
         static let maxBitrate = "settings.maxBitrateMbps"
         static let enhancer = "settings.enhancer"
-        static let plainPlayer = "settings.plainPlayer"
         static let preferHEVC = "settings.preferHEVC"
         static let sharpness = "settings.sharpness"
         static let saturation = "settings.saturation"
         static let contrast = "settings.contrast"
-        static let brightness = "settings.brightness"
-        static let zoom = "settings.zoom"
-        static let fillScreen = "settings.fillScreen"
-        static let volumeBoost = "settings.volumeBoost"
-        static let hideSiteOverlays = "settings.hideSiteOverlays"
-        static let codecProfile = "settings.codecProfile"
-        static let preferIPv6 = "settings.preferIPv6"
-        static let blockTracking = "settings.blockTracking"
-        static let skipSplash = "settings.skipSplash"
-        static let deadzone = "settings.deadzone"
-        static let triggerDeadzone = "settings.triggerDeadzone"
-        static let aspectRatio = "settings.aspectRatio"
-        static let videoPosition = "settings.videoPosition"
-        static let maxFps = "settings.maxFps"
-        static let resolutionPref = "settings.resolutionPref"
-        static let preventResolutionDrops = "settings.preventResolutionDrops"
-        static let touchMode = "settings.touchMode"
-        static let touchOpacity = "settings.touchOpacity"
-        static let blockSocial = "settings.blockSocial"
-        static let reduceAnimations = "settings.reduceAnimations"
-        static let hideScrollbars = "settings.hideScrollbars"
-        static let hideLoadingArt = "settings.hideLoadingArt"
-        static let pollingRate = "settings.pollingRate"
-        static let statsPosition = "settings.statsPosition"
-        static let statsOpacity = "settings.statsOpacity"
-        static let statsTextSize = "settings.statsTextSize"
-        static let recordingBitrate = "settings.recordingBitrate"
-        static let recordMicrophone = "settings.recordMicrophone"
-        static let recordingLimit = "settings.recordingLimit"
+        static let hideTouchControls = "settings.hideTouchControls"
     }
 
     @Published var theme: Theme { didSet { store(theme.rawValue, Key.theme) } }
     @Published var accent: Accent { didSet { store(accent.rawValue, Key.accent) } }
     @Published var keepAwake: Bool { didSet { store(keepAwake, Key.keepAwake) } }
-    @Published var rumbleEnabled: Bool {
-        didSet {
-            store(rumbleEnabled, Key.rumbleEnabled)
-            ControllerRumble.shared.settingsChanged()
-        }
-    }
-    @Published var rumbleIntensity: Float {
-        didSet {
-            store(Double(rumbleIntensity), Key.rumbleIntensity)
-            ControllerRumble.shared.syncPage()
-        }
-    }
+    @Published var showActivity: Bool { didSet { store(showActivity, Key.showActivity) } }
+    @Published var quality: Quality { didSet { store(quality.rawValue, Key.quality) } }
+    @Published var region: Region { didSet { store(region.rawValue, Key.region) } }
+    @Published var rumbleEnabled: Bool { didSet { store(rumbleEnabled, Key.rumbleEnabled) } }
+    @Published var rumbleIntensity: Float { didSet { store(Double(rumbleIntensity), Key.rumbleIntensity) } }
     @Published var autoStart: Bool { didSet { store(autoStart, Key.autoStart) } }
     @Published var showStreamStats: Bool { didSet { store(showStreamStats, Key.showStats) } }
     /// Vibrate the phone when no controller route can rumble.
@@ -121,6 +153,8 @@ final class AppSettings: ObservableObject {
             ControllerRumble.shared.settingsChanged()
         }
     }
+    /// Restyle the streaming enhancement's own web menus to match the app.
+    @Published var matchStreamStyle: Bool { didSet { store(matchStreamStyle, Key.matchStreamStyle) } }
     /// Rejoin automatically when the stream drops rather than stranding the
     /// player on an error screen.
     @Published var autoReconnect: Bool { didSet { store(autoReconnect, Key.autoReconnect) } }
@@ -138,64 +172,14 @@ final class AppSettings: ObservableObject {
 
     /// GameStream's own in-page enhancement layer.
     @Published var enhancerEnabled: Bool { didSet { store(enhancerEnabled, Key.enhancer) } }
-    /// Runs the player with nothing injected but the app's own bridges.
-    /// Everything the enhancement layer wraps is something that can stop a
-    /// launch, and this is how to rule it out.
-    @Published var plainPlayer: Bool { didSet { store(plainPlayer, Key.plainPlayer) } }
     /// Ask for H.265 when the server offers it. Whether it does is reported,
     /// never assumed.
     @Published var preferHEVC: Bool { didSet { store(preferHEVC, Key.preferHEVC) } }
     @Published var sharpness: Int { didSet { store(sharpness, Key.sharpness) } }
     @Published var saturation: Int { didSet { store(saturation, Key.saturation) } }
     @Published var contrast: Int { didSet { store(contrast, Key.contrast) } }
-    @Published var brightness: Int { didSet { store(brightness, Key.brightness) } }
-    @Published var zoom: Int { didSet { store(zoom, Key.zoom) } }
-    @Published var fillScreen: Bool { didSet { store(fillScreen, Key.fillScreen) } }
-    @Published var volumeBoost: Int { didSet { store(volumeBoost, Key.volumeBoost) } }
-    @Published var hideSiteOverlays: Bool {
-        didSet { store(hideSiteOverlays, Key.hideSiteOverlays) }
-    }
-    /// "", "baseline", "main" or "high". Higher profiles compress better at
-    /// the same bitrate; the server decides whether it offers one.
-    @Published var codecProfile: String { didSet { store(codecProfile, Key.codecProfile) } }
-    @Published var preferIPv6: Bool { didSet { store(preferIPv6, Key.preferIPv6) } }
-    @Published var blockTracking: Bool { didSet { store(blockTracking, Key.blockTracking) } }
-    @Published var skipSplash: Bool { didSet { store(skipSplash, Key.skipSplash) } }
-    @Published var deadzone: Int { didSet { store(deadzone, Key.deadzone) } }
-    @Published var triggerDeadzone: Int {
-        didSet { store(triggerDeadzone, Key.triggerDeadzone) }
-    }
-    @Published var aspectRatio: String { didSet { store(aspectRatio, Key.aspectRatio) } }
-    @Published var videoPosition: String { didSet { store(videoPosition, Key.videoPosition) } }
-    @Published var maxFps: Int { didSet { store(maxFps, Key.maxFps) } }
-    @Published var resolutionPref: String {
-        didSet { store(resolutionPref, Key.resolutionPref) }
-    }
-    @Published var preventResolutionDrops: Bool {
-        didSet { store(preventResolutionDrops, Key.preventResolutionDrops) }
-    }
-    @Published var touchMode: String { didSet { store(touchMode, Key.touchMode) } }
-    @Published var touchOpacity: Int { didSet { store(touchOpacity, Key.touchOpacity) } }
-    @Published var blockSocial: Bool { didSet { store(blockSocial, Key.blockSocial) } }
-    @Published var reduceAnimations: Bool {
-        didSet { store(reduceAnimations, Key.reduceAnimations) }
-    }
-    @Published var hideScrollbars: Bool { didSet { store(hideScrollbars, Key.hideScrollbars) } }
-    @Published var hideLoadingArt: Bool { didSet { store(hideLoadingArt, Key.hideLoadingArt) } }
-    @Published var pollingRate: Int { didSet { store(pollingRate, Key.pollingRate) } }
-    /// Where the app's own statistics sit and how loud they are.
-    @Published var statsPosition: String { didSet { store(statsPosition, Key.statsPosition) } }
-    @Published var statsOpacity: Int { didSet { store(statsOpacity, Key.statsOpacity) } }
-    @Published var statsTextSize: Int { didSet { store(statsTextSize, Key.statsTextSize) } }
-    /// Clip recording.
-    @Published var recordingBitrateMbps: Int {
-        didSet { store(recordingBitrateMbps, Key.recordingBitrate) }
-    }
-    @Published var recordMicrophone: Bool {
-        didSet { store(recordMicrophone, Key.recordMicrophone) }
-    }
-    @Published var recordingLimitMinutes: Int {
-        didSet { store(recordingLimitMinutes, Key.recordingLimit) }
+    @Published var hideTouchControls: Bool {
+        didSet { store(hideTouchControls, Key.hideTouchControls) }
     }
 
     private let defaults = UserDefaults.standard
@@ -205,13 +189,16 @@ final class AppSettings: ObservableObject {
         theme = Theme(rawValue: defaults.string(forKey: Key.theme) ?? "") ?? .system
         accent = Accent(rawValue: defaults.string(forKey: Key.accent) ?? "") ?? .purple
         keepAwake = defaults.object(forKey: Key.keepAwake) as? Bool ?? true
+        showActivity = defaults.object(forKey: Key.showActivity) as? Bool ?? true
+        quality = Quality(rawValue: defaults.string(forKey: Key.quality) ?? "") ?? .auto
+        region = Region(rawValue: defaults.string(forKey: Key.region) ?? "") ?? .auto
         rumbleEnabled = defaults.object(forKey: Key.rumbleEnabled) as? Bool ?? true
         rumbleIntensity = Float(defaults.object(forKey: Key.rumbleIntensity) as? Double ?? 1.6)
         autoStart = defaults.object(forKey: Key.autoStart) as? Bool ?? true
         showStreamStats = defaults.object(forKey: Key.showStats) as? Bool ?? false
-        // On by default. A pad that reports haptics iOS cannot actually
-        // drive is common enough that silence is the wrong default; the
-        // phone buzzing at least tells the truth about what happened.
+        matchStreamStyle = defaults.object(forKey: Key.matchStreamStyle) as? Bool ?? true
+        // Off by default. It is a consolation prize for hardware iOS cannot
+        // drive, not something to hand to someone who plays on a pad.
         phoneRumbleFallback = defaults.object(forKey: Key.phoneRumbleFallback) as? Bool ?? true
         autoReconnect = defaults.object(forKey: Key.autoReconnect) as? Bool ?? true
         sessionLimitMinutes = defaults.object(forKey: Key.sessionLimit) as? Int ?? 0
@@ -221,40 +208,56 @@ final class AppSettings: ObservableObject {
         preflightCheck = defaults.object(forKey: Key.preflightCheck) as? Bool ?? true
         maxBitrateMbps = defaults.object(forKey: Key.maxBitrate) as? Int ?? 0
         enhancerEnabled = defaults.object(forKey: Key.enhancer) as? Bool ?? true
-        plainPlayer = defaults.object(forKey: Key.plainPlayer) as? Bool ?? false
         preferHEVC = defaults.object(forKey: Key.preferHEVC) as? Bool ?? false
         sharpness = defaults.object(forKey: Key.sharpness) as? Int ?? 0
         saturation = defaults.object(forKey: Key.saturation) as? Int ?? 100
         contrast = defaults.object(forKey: Key.contrast) as? Int ?? 100
-        brightness = defaults.object(forKey: Key.brightness) as? Int ?? 100
-        zoom = defaults.object(forKey: Key.zoom) as? Int ?? 100
-        fillScreen = defaults.object(forKey: Key.fillScreen) as? Bool ?? false
-        volumeBoost = defaults.object(forKey: Key.volumeBoost) as? Int ?? 100
-        hideSiteOverlays = defaults.object(forKey: Key.hideSiteOverlays) as? Bool ?? true
-        codecProfile = defaults.string(forKey: Key.codecProfile) ?? ""
-        preferIPv6 = defaults.object(forKey: Key.preferIPv6) as? Bool ?? false
-        blockTracking = defaults.object(forKey: Key.blockTracking) as? Bool ?? true
-        skipSplash = defaults.object(forKey: Key.skipSplash) as? Bool ?? true
-        deadzone = defaults.object(forKey: Key.deadzone) as? Int ?? 0
-        triggerDeadzone = defaults.object(forKey: Key.triggerDeadzone) as? Int ?? 0
-        aspectRatio = defaults.string(forKey: Key.aspectRatio) ?? ""
-        videoPosition = defaults.string(forKey: Key.videoPosition) ?? "center"
-        maxFps = defaults.object(forKey: Key.maxFps) as? Int ?? 0
-        resolutionPref = defaults.string(forKey: Key.resolutionPref) ?? ""
-        preventResolutionDrops = defaults.object(forKey: Key.preventResolutionDrops) as? Bool ?? false
-        touchMode = defaults.string(forKey: Key.touchMode) ?? "off"
-        touchOpacity = defaults.object(forKey: Key.touchOpacity) as? Int ?? 100
-        blockSocial = defaults.object(forKey: Key.blockSocial) as? Bool ?? false
-        reduceAnimations = defaults.object(forKey: Key.reduceAnimations) as? Bool ?? false
-        hideScrollbars = defaults.object(forKey: Key.hideScrollbars) as? Bool ?? true
-        hideLoadingArt = defaults.object(forKey: Key.hideLoadingArt) as? Bool ?? false
-        pollingRate = defaults.object(forKey: Key.pollingRate) as? Int ?? 0
-        statsPosition = defaults.string(forKey: Key.statsPosition) ?? "top"
-        statsOpacity = defaults.object(forKey: Key.statsOpacity) as? Int ?? 90
-        statsTextSize = defaults.object(forKey: Key.statsTextSize) as? Int ?? 100
-        recordingBitrateMbps = defaults.object(forKey: Key.recordingBitrate) as? Int ?? 12
-        recordMicrophone = defaults.object(forKey: Key.recordMicrophone) as? Bool ?? false
-        recordingLimitMinutes = defaults.object(forKey: Key.recordingLimit) as? Int ?? 10
+        hideTouchControls = defaults.object(forKey: Key.hideTouchControls) as? Bool ?? true
+    }
+
+    /// The preferences handed to Better xCloud before it boots.
+    ///
+    /// The script keeps two stores, not one: global settings in
+    /// `BetterXcloud` and per-stream settings in `BetterXcloud.Stream`. Every
+    /// value below went into the global blob, so the stream-scoped ones were
+    /// silently ignored and the script ran on its defaults — which is why its
+    /// own statistics bar kept appearing over ours.
+    func betterXCloudGlobalPreferences() -> [String: String] {
+        var values: [String: String] = [
+            "stream.video.resolution": quality.betterXCloudValue
+        ]
+        // Bits per second. Zero is the script's "unlimited", which is its
+        // maximum of 15 Mbps rather than genuinely uncapped: the server
+        // decides the bitrate and Xbox does not send more than that.
+        //
+        // This is negotiated into the session description when the connection
+        // is set up, so it can only ever apply to the next session.
+        if maxBitrateMbps > 0 {
+            values["stream.video.maxBitrate"] = String(maxBitrateMbps * 1_000_000)
+        }
+        if matchStreamStyle {
+            // The dark base is the only one of its themes that a translucent
+            // skin can sit on without fighting a light panel underneath.
+            values["ui.theme"] = "dark-oled"
+            values["ui.streamMenu.simplify"] = "true"
+        }
+        if !region.betterXCloudValue.isEmpty {
+            values["server.region"] = region.betterXCloudValue
+        }
+        return values
+    }
+
+    /// Settings the script scopes to a stream.
+    func betterXCloudStreamPreferences() -> [String: String] {
+        [
+            // Always off: GameStream draws its own statistics panel from the
+            // peer connection, and two overlays reporting the same numbers in
+            // different styles is worse than one.
+            "stats.showWhenPlaying": "false",
+            // Its phone-vibration path uses navigator.vibrate, which WebKit
+            // does not implement; the native fallback covers that instead.
+            "deviceVibration.mode": "off"
+        ]
     }
 
     private func store(_ value: Any, _ key: String) {
@@ -270,31 +273,7 @@ final class AppSettings: ObservableObject {
             sharpness: sharpness,
             saturation: saturation,
             contrast: contrast,
-            brightness: brightness,
-            zoom: zoom,
-            fillScreen: fillScreen,
-            volumeBoost: volumeBoost,
-            hideTouchControls: touchMode == "off",
-            hideSiteOverlays: hideSiteOverlays,
-            codecProfile: codecProfile,
-            preferIPv6: preferIPv6,
-            blockTracking: blockTracking,
-            skipSplash: skipSplash,
-            deadzone: deadzone,
-            triggerDeadzone: triggerDeadzone,
-            vibrationScale: Int(rumbleIntensity * 100),
-            aspectRatio: aspectRatio,
-            videoPosition: videoPosition,
-            maxFps: maxFps,
-            resolution: resolutionPref,
-            preventResolutionDrops: preventResolutionDrops,
-            touchMode: touchMode,
-            touchOpacity: touchOpacity,
-            blockSocial: blockSocial,
-            reduceAnimations: reduceAnimations,
-            hideScrollbars: hideScrollbars,
-            hideLoadingArt: hideLoadingArt,
-            pollingRate: pollingRate
+            hideTouchControls: hideTouchControls
         )
     }
 }

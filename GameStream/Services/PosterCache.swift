@@ -50,18 +50,9 @@ actor PosterCache {
         let image = await task.value
         inFlight[url] = nil
         if let image {
-            // Without a cost the total cost limit never applies and the cache
-            // is bounded only by its count, which for artwork is the
-            // difference between 64 MB and several hundred.
-            memory.setObject(image, forKey: url as NSURL, cost: Self.cost(of: image))
+            memory.setObject(image, forKey: url as NSURL)
         }
         return image
-    }
-
-    /// Roughly the decoded size in bytes.
-    private static func cost(of image: UIImage) -> Int {
-        let pixels = Int(image.size.width * image.scale) * Int(image.size.height * image.scale)
-        return max(1, pixels * 4)
     }
 
     func clear() {

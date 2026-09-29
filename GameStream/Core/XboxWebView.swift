@@ -52,27 +52,43 @@ struct XboxWebView: UIViewRepresentable {
             }
         }
 
-        /// Evaluates a snippet and hands back whatever it returned.
-        func evaluate(_ javaScript: String, then handler: @escaping (String) -> Void) {
+        /// Wipes what Better xCloud stored inside the page.
+        ///
+        /// A live page is cleaned immediately; the flag makes the next page
+        /// clean itself before the script runs, which is the case that
+        /// matters when nothing is streaming at the time.
+        func purgeBetterXCloudStorage() {
+            UserDefaults.standard.set(true, forKey: "betterXCloud.purgePending")
             guard let view = streamView else { return }
-            view.evaluateJavaScript(javaScript) { result, _ in
-                handler((result as? String) ?? "")
+            view.evaluateJavaScript(BetterXCloud.purgeJS) { result, _ in
+                let removed = (result as? String) ?? ""
+                AppLog.shared.info("betterxcloud", removed.isEmpty
+                                   ? "nothing stored in the page to clear"
+                                   : "cleared from the page: \(removed)")
             }
         }
 
-        /// Runs an async snippet and waits for the promise it returns.
-        ///
-        /// `callAsyncJavaScript` is the only way to await a promise from
-        /// native code; `evaluateJavaScript` hands back the promise object
-        /// itself, which is useless here.
-        func evaluateAsync(_ body: String) async -> Any? {
+        /// Runs a snippet and hands back what it evaluated to.
+        func evaluate(_ javaScript: String, completion: @escaping (String) -> Void) {
+            guard let view = streamView else { return completion("") }
+            view.evaluateJavaScript(javaScript) { result, _ in
+                completion((result as? String) ?? "")
+            }
+        }
+
+        /// Awaits an async snippet and hands back its resolved value.
+        func evaluateAsync(_ javaScript: String) async -> Any? {
             guard let view = streamView else { return nil }
-            return try? await view.callAsyncJavaScript(body,
-                                                       arguments: [:],
-                                                       in: nil,
+            return try? await view.callAsyncJavaScript(javaScript,
                                                        contentWorld: .page)
         }
 
+        /// Ends the session for real.
+        ///
+        /// Because the player webview is deliberately kept alive between
+        /// presentations, leaving the stream is the only point at which it can
+        /// be stopped. Without this the page keeps running after exit, still
+        /// holding the Xbox session open and still pulling video.
         func release() {
             guard let view = streamView else { return }
             streamView = nil
@@ -179,26 +195,9 @@ struct XboxWebView: UIViewRepresentable {
         // The rumble bridge must wrap createDataChannel before the page opens
         // its WebRTC session, so it has to run at document start.
         let settings = AppSettings.shared
-
-        // Plain mode: the page is left alone apart from the bridges the app
-        // cannot work without. Everything we wrap -- RTCPeerConnection, the
-        // data channels, fetch -- is a thing that can break a launch, and
-        // when a stream will not start this is the way to find out whether
-        // the site or this app is the one refusing.
-        if settings.plainPlayer {
-            var plain = [WebScripts.streamStateJS, WebScripts.streamChromeJS,
-                         WebScripts.readinessProbeJS]
-            if settings.autoStart { plain.append(WebScripts.autoStartJS) }
-            for source in plain {
-                controller.addUserScript(WKUserScript(source: source,
-                                                      injectionTime: .atDocumentEnd,
-                                                      forMainFrameOnly: true))
-            }
-            return
-        }
-
         controller.addUserScript(WKUserScript(
-            source: ControllerRumble.shared.pageConfigurationJS,
+            source: "window.__gsRumbleMode = \"\(settings.rumbleEnabled ? "page" : "off")\";"
+                + "window.__gsRumbleScale = \(settings.rumbleIntensity);",
             injectionTime: .atDocumentStart,
             forMainFrameOnly: false))
         controller.addUserScript(WKUserScript(source: RumbleBridge.javaScript,
@@ -210,14 +209,39 @@ struct XboxWebView: UIViewRepresentable {
             source: StreamEnhancer.script(settings.enhancerConfiguration()),
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true))
-        // Auto-start is a preference, so the script that presses the site's
-        // Play button is only installed when it is on. Injecting it and
-        // ignoring the setting is how a switch ends up doing nothing.
-        var sources = [WebScripts.streamStateJS, WebScripts.streamChromeJS,
+        controller.addUserScript(WKUserScript(source: WebScripts.betterXCloudPrefsJS(
+            global: AppSettings.shared.betterXCloudGlobalPreferences(),
+            stream: AppSettings.shared.betterXCloudStreamPreferences()),
+                                              injectionTime: .atDocumentStart,
+                                              forMainFrameOnly: true))
+        // A pending reinstall cleans the page before the script sees it, so
+        // the new copy cannot pick the old patch cache back up.
+        if UserDefaults.standard.bool(forKey: "betterXCloud.purgePending") {
+            UserDefaults.standard.set(false, forKey: "betterXCloud.purgePending")
+            controller.addUserScript(WKUserScript(source: BetterXCloud.purgeJS,
+                                                  injectionTime: .atDocumentStart,
+                                                  forMainFrameOnly: true))
+            AppLog.shared.info("betterxcloud", "the next page load starts from clean storage")
+        }
+        if let script = BetterXCloud.shared.cachedScript {
+            controller.addUserScript(WKUserScript(source: script,
+                                                  injectionTime: .atDocumentStart,
+                                                  forMainFrameOnly: true))
+        }
+        // The skin has to land after Better xCloud's own stylesheet, so it
+        // goes in at document end like the rest of the page dressing.
+        if AppSettings.shared.matchStreamStyle {
+            controller.addUserScript(WKUserScript(
+                source: WebScripts.betterXCloudSkinJS(
+                    accentRGB: AppSettings.shared.accent.rgbTriple
+                ),
+                injectionTime: .atDocumentEnd,
+                forMainFrameOnly: true))
+        }
+
+        for source in [WebScripts.streamStateJS, WebScripts.streamChromeJS,
                        WebScripts.streamStatsJS, WebScripts.streamCommandsJS,
-                       WebScripts.captureJS, WebScripts.readinessProbeJS]
-        if settings.autoStart { sources.append(WebScripts.autoStartJS) }
-        for source in sources {
+                       WebScripts.captureJS, WebScripts.autoStartJS] {
             controller.addUserScript(WKUserScript(source: source,
                                                   injectionTime: .atDocumentEnd,
                                                   forMainFrameOnly: true))
@@ -281,30 +305,8 @@ struct XboxWebView: UIViewRepresentable {
                 StreamCoordinator.shared.streamStarted(width: width, height: height)
             case "streamError":
                 StreamCoordinator.shared.streamFailed(message: body["message"] as? String ?? "")
-            case "readiness":
-                let gamepadApi = body["gamepadApi"] as? Bool ?? false
-                let audio = body["audio"] as? Bool ?? false
-                let webrtc = body["webrtc"] as? Bool ?? false
-                let pads = body["pads"] as? String ?? ""
-                log.info("stream", "player readiness: gamepad API "
-                         + "\(gamepadApi ? "yes" : "NO") · audio "
-                         + "\(audio ? "yes" : "NO") · webrtc "
-                         + "\(webrtc ? "yes" : "NO") · pads "
-                         + "\(pads.isEmpty ? "none" : pads)")
-                log.debug("stream", "agent: \(body["agent"] as? String ?? "")")
             case "autoStart":
                 log.info("stream", "pressed the site's \"\(body["label"] as? String ?? "")\" button")
-            case "autoStartStuck":
-                let labels = body["labels"] as? String ?? ""
-                let count = body["count"] as? Int ?? 0
-                let reason = body["reason"] as? String ?? ""
-                log.warn("stream", "nothing on the store page starts the game "
-                         + "(\(count) controls). Buttons: "
-                         + "\(labels.isEmpty ? "none found" : labels)")
-                if !reason.isEmpty {
-                    log.warn("stream", "the page says: \(reason)")
-                    StreamCoordinator.shared.noteStoreReason(reason)
-                }
             case "stats":
                 StreamCoordinator.shared.statsUpdated(StreamStats(payload: body))
             case "command":
@@ -350,22 +352,6 @@ struct XboxWebView: UIViewRepresentable {
                                  didFailProvisionalNavigation navigation: WKNavigation!,
                                  withError error: Error) {
             report(error)
-        }
-
-        /// WebKit runs pages in a separate process, and that process can be
-        /// killed under memory pressure. When it is, the view goes blank and
-        /// nothing else reports anything: the stream simply stops with no
-        /// error and no end. This is the only notice the app gets.
-        @MainActor
-        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-            AppLog.shared.warn("web", "\(role) page process was terminated")
-            guard role == .stream else {
-                webView.reload()
-                return
-            }
-            StreamCoordinator.shared.streamFailed(
-                message: "The player ran out of memory and was shut down by iOS."
-            )
         }
 
         // MARK: Popups

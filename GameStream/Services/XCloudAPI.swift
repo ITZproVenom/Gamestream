@@ -3,10 +3,11 @@ import Foundation
 /// The first step towards a native player: talking to Xbox Cloud Gaming
 /// directly instead of driving the website.
 ///
-/// This is the first step: it exchanges the account's XSTS token for a
-/// cloud-gaming token and reads back the regional endpoints the account may
-/// use. `XCloudSession` spends that token, and `NativeStreamPeer` negotiates
-/// media against the session it provisions.
+/// This is deliberately scoped to session provisioning — the part that has to
+/// work before anything else is worth building. It exchanges the account's
+/// XSTS token for a cloud-gaming token, asks for a session, and waits for the
+/// service to provision one. It does not stream anything yet: that needs a
+/// WebRTC stack, which is a separate and much larger piece of work.
 ///
 /// Everything here uses the signed-in account's own token, the same one the
 /// website uses in the browser.
@@ -23,30 +24,19 @@ actor XCloudAPI {
         var gsToken: String
         var regions: [Region]
         var durationSeconds: Double
-
-        /// The regions the service may move the session to if the chosen one
-        /// cannot take it, in its own priority order. The default region and
-        /// anything marked -1 are left out, which is what the site does.
-        var fallbackRegionNames: [String] {
-            regions
-                .filter { !$0.isDefault && $0.fallbackPriority >= 0 }
-                .sorted { $0.fallbackPriority < $1.fallbackPriority }
-                .map(\.name)
-        }
     }
 
     struct Region: Sendable {
         var name: String
         var baseURI: String
         var isDefault: Bool
-        /// Where this region sits in the service's own fallback order.
-        /// -1 means "never fall back to me".
-        var fallbackPriority: Int
     }
 
     private static let loginURL = URL(
         string: "https://xgpuweb.gssv-play-prod.xboxlive.com/v2/login/user"
     )!
+
+    private var cached: Login?
 
     /// Exchanges the XSTS token for a cloud-gaming token and the list of
     /// regional endpoints the account may use.
@@ -66,20 +56,7 @@ actor XCloudAPI {
             throw Failure(step: "login", detail: "no HTTP response")
         }
         guard (200...299).contains(http.statusCode) else {
-            // The status code alone does not distinguish "your token expired"
-            // from "this account has no cloud gaming", and those need
-            // different answers from the person reading the message.
-            let body = String(data: data, encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let reason = body.isEmpty ? "" : " — " + String(body.prefix(200))
-            await MainActor.run {
-                AppLog.shared.error("native", "login: HTTP \(http.statusCode)\(reason)")
-            }
-            throw Failure(step: "login",
-                          detail: http.statusCode == 401 || http.statusCode == 403
-                              ? "the account was refused cloud gaming (HTTP "
-                                + "\(http.statusCode))\(reason)"
-                              : "HTTP \(http.statusCode)\(reason)")
+            throw Failure(step: "login", detail: "HTTP \(http.statusCode)")
         }
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw Failure(step: "login", detail: "the response was not an object")
@@ -95,8 +72,7 @@ actor XCloudAPI {
                   let base = entry["baseUri"] as? String else { return nil }
             return Region(name: name,
                           baseURI: base,
-                          isDefault: entry["isDefault"] as? Bool ?? false,
-                          fallbackPriority: entry["fallbackPriority"] as? Int ?? -1)
+                          isDefault: entry["isDefault"] as? Bool ?? false)
         }
 
         let login = Login(
@@ -104,16 +80,7 @@ actor XCloudAPI {
             regions: parsed,
             durationSeconds: (object["durationInSeconds"] as? Double) ?? 0
         )
-        // The connection check has no business timing the website's CDN once
-        // the account's own streaming region is known.
-        if let region = parsed.first(where: \.isDefault) ?? parsed.first {
-            let base = region.baseURI
-            let name = region.name
-            await MainActor.run {
-                NetworkCheck.shared.rememberRegion(baseURI: base)
-                AppLog.shared.info("native", "cloud token for region \(name)")
-            }
-        }
+        cached = login
         return login
     }
 
@@ -135,8 +102,7 @@ actor XCloudAPI {
                 }
                 lines.append("Regions: \(names.joined(separator: ", ")).")
             }
-            lines.append("Session provisioning and the native WebRTC player are "
-                         + "built; the bolt button on a game's page uses them.")
+            lines.append("Session provisioning and WebRTC are not implemented yet.")
             return lines.joined(separator: " ")
         } catch let failure as Failure {
             return "Native access failed at \(failure.step) — \(failure.detail)."

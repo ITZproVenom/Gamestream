@@ -12,12 +12,6 @@ struct StreamView: View {
     @State private var elapsed: TimeInterval = 0
     @State private var startedAt = Date()
     @State private var showingStats = false
-    @State private var showingMenu = false
-    @StateObject private var recorder = StreamRecorder.shared
-    /// Observed, not read once: the stats panel's position, size and opacity
-    /// are changed from the menu while the stream is running, and a value
-    /// read through the singleton does not redraw anything.
-    @ObservedObject private var settings = AppSettings.shared
 
     @Namespace private var glass
 
@@ -28,15 +22,13 @@ struct StreamView: View {
             XboxWebView(role: .stream, url: stream.launchURL,
                         reloadToken: stream.reloadToken)
                 .ignoresSafeArea()
-                .opacity(stream.isPageVisible ? 1 : 0.001)
+                .opacity(stream.phase == .playing ? 1 : 0.001)
 
             switch stream.phase {
             case .connecting(let detail):
                 connecting(detail)
             case .failed(let message):
                 failure(message)
-            case .showingPage(let message):
-                handedOver(message)
             case .playing, .idle:
                 EmptyView()
             }
@@ -68,30 +60,6 @@ struct StreamView: View {
                 .transition(.opacity)
             }
 
-            if stream.phase == .playing, recorder.isRecording, !showingControls {
-                VStack {
-                    HStack {
-                        Spacer()
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(.red)
-                                .frame(width: 7, height: 7)
-                                .symbolEffect(.pulse)
-                            Text(Format.clock(recorder.elapsed))
-                                .font(.caption2.weight(.semibold).monospacedDigit())
-                        }
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 6)
-                        .glassEffect(.regular, in: Capsule())
-                        .padding(.trailing, 18)
-                        .padding(.top, 10)
-                    }
-                    Spacer()
-                }
-                .allowsHitTesting(false)
-                .transition(.opacity)
-            }
-
             if let notice = stream.notice {
                 VStack {
                     Spacer()
@@ -117,11 +85,6 @@ struct StreamView: View {
             guard stream.phase == .playing else { return }
             withAnimation(.smooth(duration: 0.25)) { showingControls.toggle() }
             if showingControls { scheduleHide() }
-        }
-        .sheet(isPresented: $showingMenu) {
-            StreamMenuView()
-                .presentationDetents([.medium, .large])
-                .presentationBackground(.clear)
         }
         .onChange(of: stream.overlayRequest) { _, _ in
             withAnimation(.smooth(duration: 0.25)) { showingControls = true }
@@ -244,19 +207,12 @@ struct StreamView: View {
                         stream.pressGuide()
                     }
 
-                    // Our own menu, native. The site's dialog is gone.
-                    hudIcon("slider.horizontal.3", label: "Stream settings",
+                    hudIcon(stream.enhancementMenuOpen
+                            ? "slider.horizontal.3" : "slider.horizontal.3",
+                            label: stream.enhancementMenuOpen
+                            ? "Close enhancements" : "Streaming enhancements",
                             id: "enhance") {
-                        showingMenu = true
-                    }
-
-                    hudIcon(recorder.isRecording ? "stop.circle.fill" : "record.circle",
-                            label: recorder.isRecording ? "Stop recording" : "Record a clip",
-                            id: "record", active: recorder.isRecording) {
-                        Task {
-                            let outcome = await recorder.toggle()
-                            stream.show(notice: outcome)
-                        }
+                        stream.toggleEnhancementMenu()
                     }
 
                     hudIcon("camera.fill", label: "Screenshot", id: "shot") {
@@ -289,20 +245,13 @@ struct StreamView: View {
             .padding(.horizontal, 16)
             .padding(.top, 12)
 
-            if showingStats, settings.statsPosition == "top" {
+            if showingStats {
                 statsPanel
                     .padding(.horizontal, 16)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
 
             Spacer()
-
-            if showingStats, settings.statsPosition != "top" {
-                statsPanel
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
         }
     }
 
@@ -385,10 +334,6 @@ struct StreamView: View {
         .padding(16)
         .frame(maxWidth: 460, alignment: .leading)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        // The panel sits over the game, so how loud it is and how big it
-        // reads are the player's call, not ours.
-        .scaleEffect(CGFloat(settings.statsTextSize) / 100, anchor: .topLeading)
-        .opacity(Double(settings.statsOpacity) / 100)
     }
 
     private func statCell(_ value: String, _ caption: String) -> some View {
@@ -416,28 +361,6 @@ struct StreamView: View {
         case .good: return "Connection looks good"
         case .fair: return "Connection is workable"
         case .poor: return "Connection is struggling"
-        }
-    }
-
-    /// Shown when the launch did not take and the site's own page is on
-    /// screen to be used by hand. Deliberately small: the page underneath
-    /// is the point, so this sits at the top and leaves it alone.
-    private func handedOver(_ message: String) -> some View {
-        VStack {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "hand.tap")
-                Text(message)
-                    .font(.footnote)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-                Button("Exit") { stream.exit() }
-                    .font(.footnote.weight(.semibold))
-            }
-            .padding(14)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-            .padding(.horizontal, 14)
-            .padding(.top, 8)
-            Spacer()
         }
     }
 

@@ -46,34 +46,17 @@ final class NativeStreamPeer: NSObject, ObservableObject {
     /// rumble out, which is the channel the whole rumble path depends on.
     private var inputChannel: RTCDataChannel?
     private var controlChannel: RTCDataChannel?
-    private var messageChannel: RTCDataChannel?
-    private var chatChannel: RTCDataChannel?
     private var pendingCandidates: [RTCIceCandidate] = []
     private var handle: XCloudSession.Handle?
     private var token: String?
-    /// Candidates found after the first exchange still have to be handed
-    /// over. Gathering is continual, and the candidate that actually works
-    /// is often not one of the first: dropping everything after the opening
-    /// round is a connection that fails for no visible reason.
-    private var trickle: Task<Void, Never>?
-    private var exchangedCandidates = 0
 
     /// Called with each rumble payload that arrives on the input channel, so
     /// the existing native rumble code can stay exactly as it is.
     var onRumble: (@MainActor (Data) -> Void)?
 
-    /// True once the input channel is open in both directions. The driver
-    /// waits for this rather than for video, because a picture arriving is
-    /// no promise that the channel carrying the controller came up.
-    @Published private(set) var inputReady = false
-
     // MARK: - Connecting
 
     func connect(handle: XCloudSession.Handle, token: String) async {
-        // A retry asks the same object to connect again. Without this, the
-        // previous peer connection stays alive and keeps gathering into the
-        // same candidate list.
-        if connection != nil { close() }
         self.handle = handle
         self.token = token
         state = .negotiating("Building the connection")
@@ -83,10 +66,7 @@ final class NativeStreamPeer: NSObject, ObservableObject {
         configuration.bundlePolicy = .maxBundle
         configuration.rtcpMuxPolicy = .require
         configuration.continualGatheringPolicy = .gatherContinually
-        // No STUN. The service signals its own candidates over HTTP, and
-        // pointing at Google's public server told a third party which
-        // addresses this device streams from for no benefit at all.
-        configuration.iceServers = []
+        configuration.iceServers = [RTCIceServer(urlStrings: ["stun:stun.l.google.com:19302"])]
 
         let constraints = RTCMediaConstraints(mandatoryConstraints: nil,
                                               optionalConstraints: nil)
@@ -106,15 +86,9 @@ final class NativeStreamPeer: NSObject, ObservableObject {
         peer.addTransceiver(of: .audio, init: receive)
 
         // The channels have to exist in the offer, because the service reads
-        // them from the description rather than opening them itself, and it
-        // expects all four with these sub-protocols. Their stream ids are
-        // SCTP's business: naming one while saying the channel is not
-        // pre-negotiated is a contradiction, and the id we picked could
-        // collide with whatever the stack assigned.
-        messageChannel = channel(on: peer, label: "message", protocolName: "messageV1")
-        controlChannel = channel(on: peer, label: "control", protocolName: "controlV1")
-        inputChannel = channel(on: peer, label: "input", protocolName: "1.0")
-        chatChannel = channel(on: peer, label: "chat", protocolName: "chatV1")
+        // them from the description rather than opening them itself.
+        inputChannel = channel(on: peer, label: "input", id: 3, ordered: true)
+        controlChannel = channel(on: peer, label: "control", id: 4, ordered: true)
 
         do {
             state = .negotiating("Offering")
@@ -139,22 +113,20 @@ final class NativeStreamPeer: NSObject, ObservableObject {
             state = .negotiating("Trading candidates")
             try await exchangeCandidates(on: peer)
         } catch let failure as XCloudSession.Failure {
-            AppLog.shared.error("native", "negotiation failed: \(failure.errorDescription ?? "?")")
             state = .failed(failure.errorDescription ?? "negotiation failed")
         } catch {
-            AppLog.shared.error("native", "negotiation failed: \(error.localizedDescription)")
             state = .failed(error.localizedDescription)
         }
     }
 
     private func channel(on peer: RTCPeerConnection,
                          label: String,
-                         protocolName: String,
-                         ordered: Bool = true) -> RTCDataChannel? {
+                         id: Int32,
+                         ordered: Bool) -> RTCDataChannel? {
         let configuration = RTCDataChannelConfiguration()
         configuration.isOrdered = ordered
-        // The service matches on the sub-protocol as well as the label.
-        configuration.protocol = protocolName
+        configuration.isNegotiated = false
+        configuration.channelId = id
         let created = peer.dataChannel(forLabel: label, configuration: configuration)
         created?.delegate = self
         return created
@@ -167,78 +139,27 @@ final class NativeStreamPeer: NSObject, ObservableObject {
         // first only costs another round trip.
         try? await Task.sleep(nanoseconds: 700_000_000)
 
-        let mine = Self.payload(for: pendingCandidates)
-        exchangedCandidates = pendingCandidates.count
-        AppLog.shared.debug("native", "handing over \(mine.count) candidate(s)")
-        let response = try await XCloudSession.shared.exchangeCandidates(
-            mine, on: handle, token: token
-        )
-        await add(Self.candidates(fromExchange: response), to: peer)
-        startTrickling(on: peer)
-    }
-
-    private func add(_ candidates: [RTCIceCandidate], to peer: RTCPeerConnection) async {
-        guard !candidates.isEmpty else { return }
-        AppLog.shared.debug("native", "adding \(candidates.count) server candidate(s)")
-        for candidate in candidates {
-            try? await peer.add(candidate)
-        }
-    }
-
-    private static func payload(for candidates: some Sequence<RTCIceCandidate>) -> [[String: Any]] {
-        candidates.map { candidate in
+        let mine = pendingCandidates.map { candidate -> [String: Any] in
             [
                 "candidate": candidate.sdp,
                 "sdpMLineIndex": candidate.sdpMLineIndex,
                 "sdpMid": candidate.sdpMid ?? "0"
             ]
         }
-    }
-
-    /// Keeps handing over candidates as they are found, for as long as the
-    /// connection has not settled.
-    private func startTrickling(on peer: RTCPeerConnection) {
-        trickle?.cancel()
-        trickle = Task { [weak self] in
-            for _ in 0..<20 {
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
-                guard let self, !Task.isCancelled else { return }
-                if self.state == .connected { return }
-                guard let handle = self.handle, let token = self.token else { return }
-                let fresh = self.pendingCandidates.dropFirst(self.exchangedCandidates)
-                self.exchangedCandidates = self.pendingCandidates.count
-                // An empty hand-over is still worth making: the exchange is
-                // how the server's own later candidates are collected, and
-                // it has no other way to reach us. Only sending when we have
-                // something new means never learning about the relay address
-                // the server found second.
-                let payload = Self.payload(for: fresh)
-                guard let response = try? await XCloudSession.shared.exchangeCandidates(
-                    payload, on: handle, token: token
-                ) else { continue }
-                await self.add(Self.candidates(fromExchange: response), to: peer)
-            }
+        let response = try await XCloudSession.shared.exchangeCandidates(
+            mine, on: handle, token: token
+        )
+        for candidate in Self.candidates(fromExchange: response) {
+            try? await peer.add(candidate)
         }
     }
 
     func close() {
-        trickle?.cancel()
-        trickle = nil
-        for open in [inputChannel, controlChannel, messageChannel, chatChannel] {
-            open?.close()
-        }
-        inputChannel = nil
-        controlChannel = nil
-        messageChannel = nil
-        chatChannel = nil
-        inputReady = false
+        inputChannel?.close()
+        controlChannel?.close()
         connection?.close()
         connection = nil
         videoTrack = nil
-        handle = nil
-        token = nil
-        pendingCandidates.removeAll()
-        exchangedCandidates = 0
         state = .closed
     }
 
@@ -266,19 +187,10 @@ final class NativeStreamPeer: NSObject, ObservableObject {
             return sdp
         }
         let kbps = limit * 1000
-        // SDP fixes the order inside a media section: a bandwidth line has
-        // to follow the connection line, not precede it. Put in the wrong
-        // place the whole description can be rejected, which reads as a
-        // negotiation that failed for no reason.
-        let end = lines[(videoIndex + 1)...].firstIndex(where: { $0.hasPrefix("m=") })
-            ?? lines.endIndex
-        let section = (videoIndex + 1)..<end
-        if let existing = lines[section].firstIndex(where: { $0.hasPrefix("b=AS:") }) {
+        if let existing = lines[(videoIndex + 1)...].firstIndex(where: { $0.hasPrefix("b=AS:") }) {
             lines[existing] = "b=AS:\(kbps)"
         } else {
-            let afterConnection = lines[section].lastIndex(where: { $0.hasPrefix("c=") })
-                .map { $0 + 1 }
-            lines.insert("b=AS:\(kbps)", at: afterConnection ?? (videoIndex + 1))
+            lines.insert("b=AS:\(kbps)", at: videoIndex + 1)
         }
         return lines.joined(separator: "\r\n")
     }
@@ -334,39 +246,26 @@ final class NativeStreamPeer: NSObject, ObservableObject {
 extension NativeStreamPeer: RTCPeerConnectionDelegate {
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection,
                                     didGenerate candidate: RTCIceCandidate) {
-        Task { @MainActor in
-            guard connection != nil else { return }
-            pendingCandidates.append(candidate)
-        }
+        Task { @MainActor in pendingCandidates.append(candidate) }
     }
 
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection,
                                     didAdd receiver: RTCRtpReceiver,
                                     streams: [RTCMediaStream]) {
         guard let track = receiver.track as? RTCVideoTrack else { return }
-        Task { @MainActor in
-            AppLog.shared.info("native", "video track arrived")
-            videoTrack = track
-        }
+        Task { @MainActor in videoTrack = track }
     }
 
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection,
                                     didChange newState: RTCIceConnectionState) {
         Task { @MainActor in
-            // A closed connection still delivers a last state or two. Acting
-            // on them puts a torn-down peer back into "Reconnecting".
-            guard connection != nil else { return }
-            AppLog.shared.debug("native", "ice state \(newState.rawValue)")
             switch newState {
             case .connected, .completed:
                 state = .connected
             case .failed:
                 state = .failed("the connection failed")
             case .disconnected:
-                // Not fatal. ICE reports this while it re-checks a path, and
-                // treating it as an ending tears down a stream that is about
-                // to come back.
-                state = .negotiating("Reconnecting")
+                state = .failed("the connection dropped")
             case .closed:
                 state = .closed
             default:
@@ -378,15 +277,8 @@ extension NativeStreamPeer: RTCPeerConnectionDelegate {
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection,
                                     didOpen dataChannel: RTCDataChannel) {
         Task { @MainActor in
-            AppLog.shared.debug("native", "channel '\(dataChannel.label)' opened by the server")
             dataChannel.delegate = self
-            if dataChannel.label == "input" {
-                inputChannel = dataChannel
-                inputReady = dataChannel.readyState == .open
-            }
-            if dataChannel.label == "control" { controlChannel = dataChannel }
-            if dataChannel.label == "message" { messageChannel = dataChannel }
-            if dataChannel.label == "chat" { chatChannel = dataChannel }
+            if dataChannel.label == "input" { inputChannel = dataChannel }
         }
     }
 
@@ -398,11 +290,7 @@ extension NativeStreamPeer: RTCPeerConnectionDelegate {
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection,
                                     didRemove stream: RTCMediaStream) {}
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection,
-                                    didChange newState: RTCIceGatheringState) {
-        Task { @MainActor in
-            AppLog.shared.debug("native", "ice gathering \(newState.rawValue)")
-        }
-    }
+                                    didChange newState: RTCIceGatheringState) {}
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection,
                                     didRemove candidates: [RTCIceCandidate]) {}
 }
@@ -410,35 +298,15 @@ extension NativeStreamPeer: RTCPeerConnectionDelegate {
 // MARK: - Data channel events
 
 extension NativeStreamPeer: RTCDataChannelDelegate {
-    nonisolated func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
-        let label = dataChannel.label
-        let open = dataChannel.readyState == .open
-        let state = dataChannel.readyState.rawValue
-        Task { @MainActor in
-            AppLog.shared.debug("native", "channel '\(label)' state \(state)")
-            guard label == "input" else { return }
-            inputReady = open
-        }
-    }
+    nonisolated func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {}
 
     nonisolated func dataChannel(_ dataChannel: RTCDataChannel,
                                  didReceiveMessageWith buffer: RTCDataBuffer) {
         let label = dataChannel.label
         let data = buffer.data
         Task { @MainActor in
-            guard label != "input" else {
-                onRumble?(data)
-                return
-            }
-            // The other channels carry the service's own words about the
-            // session: why it disconnected, what it thinks the title is
-            // doing. Throwing them away was why a session that ended on
-            // its own never said why.
-            if let text = String(data: data, encoding: .utf8), !text.isEmpty {
-                AppLog.shared.info("native", "\(label): \(text.prefix(300))")
-            } else {
-                AppLog.shared.debug("native", "\(label): \(data.count) bytes")
-            }
+            guard label == "input" else { return }
+            onRumble?(data)
         }
     }
 }

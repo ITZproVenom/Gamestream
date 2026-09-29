@@ -8,6 +8,7 @@ import Charts
 struct StatsView: View {
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var catalog: Catalog
+    @EnvironmentObject private var stream: StreamCoordinator
 
     @State private var showingActivity = false
 
@@ -129,23 +130,11 @@ struct StatsView: View {
             SectionHeader(title: "This week", subtitle: "Minutes played per day")
             Chart(library.dailyTotals(days: 7)) { day in
                 BarMark(
-                    x: .value("Day", day.day, unit: .day),
+                    x: .value("Day", day.weekdayInitial),
                     y: .value("Minutes", day.seconds / 60)
                 )
                 .foregroundStyle(.tint)
                 .cornerRadius(7)
-            }
-            .chartXAxis {
-                // Plotted against the date, labelled with the initial.
-                // Plotting *by* the initial merged Tuesday into Thursday and
-                // Saturday into Sunday, so a week showed five bars.
-                AxisMarks(values: .stride(by: .day)) { value in
-                    AxisValueLabel {
-                        if let date = value.as(Date.self) {
-                            Text(DayTotal(day: date, seconds: 0).weekdayInitial)
-                        }
-                    }
-                }
             }
             .chartYAxis {
                 AxisMarks(position: .leading)

@@ -8,13 +8,6 @@ struct RootView: View {
 
     @StateObject private var navigator = Navigator.shared
     @State private var showingBrowser = false
-    /// Whether the player is on screen.
-    ///
-    /// Not read straight from the coordinator, because a game can be started
-    /// from a sheet. A full-screen cover cannot be presented over a sheet
-    /// that is already up: the request is dropped and the tap does nothing
-    /// at all. The sheet is closed first and the player follows it.
-    @State private var showingPlayer = false
 
     /// Named MainTab, not Tab: SwiftUI's own `Tab` view is used below, and a
     /// nested type with the same name shadows it.
@@ -100,27 +93,10 @@ struct RootView: View {
         // The player covers everything, and dismissing it always ends the
         // session cleanly so Insights and the idle timer stay correct.
         .fullScreenCover(isPresented: Binding(
-            get: { showingPlayer },
+            get: { stream.phase.isActive },
             set: { presented in if !presented { stream.exit() } }
         )) {
             StreamView()
-        }
-        .onChange(of: stream.phase.isActive) { _, active in
-            guard active else {
-                showingPlayer = false
-                return
-            }
-            let dismissingSheet = navigator.presented != nil || showingBrowser
-            navigator.presented = nil
-            showingBrowser = false
-            guard dismissingSheet else {
-                showingPlayer = true
-                return
-            }
-            Task {
-                try? await Task.sleep(for: .milliseconds(320))
-                showingPlayer = stream.phase.isActive
-            }
         }
         .sheet(isPresented: $showingBrowser) {
             BrowserView()

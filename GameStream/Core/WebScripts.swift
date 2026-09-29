@@ -66,12 +66,7 @@ enum WebScripts {
                     var info = JSON.parse(raw);
                     out.gamertag = readGamertag(info);
                     var direct = info && info.tokens && info.tokens["http://gssv.xboxlive.com/"];
-                    // An expired token is not a session. This path did not
-                    // check, so a stale one was reported as signed in and
-                    // everything built on it failed later with a 401.
-                    var stale = direct && direct.expiration
-                        && Date.parse(direct.expiration) <= Date.now();
-                    if (direct && usable(direct.token) && !stale) {
+                    if (direct && usable(direct.token)) {
                         out.signedIn = true;
                         out.source = "xboxcom_xbl_user_info";
                         out.expires = direct.expiration || "";
@@ -158,23 +153,12 @@ enum WebScripts {
             return "other";
         }
 
-        // Only changes are worth sending. The interval below exists to catch
-        // a route change that fires no event, not to repeat the same page
-        // twice a second: posting unconditionally filled the app's log with
-        // one identical line every two seconds for the whole session.
-        var lastReported = null;
-
         function report() {
             try {
-                var href = location.href || "";
-                var kind = classify(href);
-                var signature = kind + " " + href;
-                if (signature === lastReported) return;
-                lastReported = signature;
                 window.webkit.messageHandlers.gamestream.postMessage({
                     type: "nav",
-                    href: href,
-                    kind: kind,
+                    href: location.href || "",
+                    kind: classify(location.href),
                     title: document.title || "",
                     hasVideo: !!document.querySelector("video")
                 });
@@ -255,17 +239,12 @@ enum WebScripts {
         setInterval(scan, 700);
 
         // Surface the site's own error dialogs instead of leaving a black screen.
-        // Said once per distinct message: the dialog stays on screen, and
-        // reporting it every poll drove the app's reconnect budget to zero
-        // in a few seconds.
-        var lastError = "";
         setInterval(function() {
             try {
                 var node = document.querySelector('[class*="ErrorScreen"], [class*="error-screen"], [data-testid*="error"]');
-                if (!node) { lastError = ""; return; }
+                if (!node) return;
                 var text = (node.innerText || "").trim();
-                if (text.length > 4 && text.length < 400 && text !== lastError) {
-                    lastError = text;
+                if (text.length > 4 && text.length < 400) {
                     post("streamError", { message: text });
                 }
             } catch (e) {}
@@ -288,16 +267,41 @@ enum WebScripts {
         window.__gsChrome = true;
 
         var STYLE_ID = "gamestream-stream-chrome";
-        // Deliberately narrow, and deliberately silent about the video's own
-        // shape. This used to force width, height and object-fit with
-        // !important, which quietly beat every picture setting in the
-        // player's menu: "fill the screen" and the aspect-ratio picker had
-        // nothing to win against. The enhancement layer owns the video box;
-        // this only owns the document around it.
+        // Deliberately narrow. The previous version hid every
+        // nav[aria-label] and clipped the body, which also hid the stream
+        // menu that Better xCloud adds its button to and clipped its
+        // dialogs — that is why its menu "would not open".
         var css = [
             "html, body { background: #000 !important; margin: 0 !important; padding: 0 !important; }",
             "header[role=\"banner\"], footer[role=\"contentinfo\"] { display: none !important; }",
-            "video { background: #000 !important; }"
+            "video { width: 100% !important; height: 100% !important; object-fit: contain !important; background: #000 !important; }",
+            // Nothing belonging to the enhancement may be clipped or buried.
+            "[class^=\"bx-\"], [class*=\" bx-\"], [id^=\"bx-\"] { overflow: visible !important; }",
+            ".bx-settings-dialog, .bx-centered-dialog, .bx-navigation-dialog, .bx-key-binding-dialog { z-index: 2147483000 !important; }",
+            "#bx-game-bar { z-index: 2147482000 !important; }",
+            // The script disables pointer events on its in-stream button
+            // while the HUD fades, and only restores them when the HUD
+            // reports left: 0px. In this webview that condition often never
+            // holds, so the button stays present and untappable. Forcing it
+            // back is scoped to that one button's subtree, which sits inside
+            // a HUD that is itself unclickable while hidden.
+            "[title=\"Better xCloud\"], [title=\"Better xCloud\"] * { pointer-events: auto !important; }",
+            // The site's own HUD is redundant now that the app has its own,
+            // and it overlaps it. Hidden with opacity rather than display so
+            // the elements keep their layout and still answer a programmatic
+            // click: quit and the guide are driven by pressing the real
+            // controls, and display:none would be a behaviour change on a
+            // path that already works.
+            "#StreamHud { opacity: 0 !important; pointer-events: none !important; }",
+            "#bx-game-bar { display: none !important; }",
+            // Better xCloud's own stats bar duplicates the app's, in a
+            // different place and a different font, over the game.
+            ".bx-stats-bar { display: none !important; }",
+            // Its dialog dims the stream behind a blurred overlay. When the
+            // overlay outlives the dialog the game is left permanently
+            // frosted, which only a reconnect used to clear. The blur is
+            // removed outright so a stale overlay is at worst invisible.
+            ".bx-dialog-overlay { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgba(0,0,0,0.4) !important; }"
         ].join("\n");
 
         function onLaunchPage() {
@@ -324,38 +328,143 @@ enum WebScripts {
     })();
     """#
 
-    /// Reports the things the site's own "can this browser stream?" check
-    /// reads, because the site does not say which one it failed on. A
-    /// browser it judges only partly ready is sent to a gate instead of a
-    /// stream, and from the outside that looks like a launch that quietly
-    /// refused.
-    static let readinessProbeJS = #"""
-    (function() {
-        if (window.__gsReady) return;
-        window.__gsReady = true;
-        function report() {
-            try {
-                var pads = [];
-                if (navigator.getGamepads) {
-                    var list = navigator.getGamepads() || [];
-                    for (var i = 0; i < list.length; i++) {
-                        if (list[i]) pads.push(list[i].id || "pad");
-                    }
-                }
-                window.webkit.messageHandlers.gamestream.postMessage({
-                    type: "readiness",
-                    gamepadApi: !!navigator.getGamepads,
-                    pads: pads.join(", "),
-                    audio: !!(window.AudioContext || window.webkitAudioContext),
-                    webrtc: !!window.RTCPeerConnection,
-                    online: navigator.onLine !== false,
-                    agent: navigator.userAgent || ""
-                });
-            } catch (e) {}
+    /// Restyles Better xCloud's own web interface to match the app.
+    ///
+    /// Better xCloud is a userscript: its menus are HTML rendered inside the
+    /// player, so none of the native Liquid Glass work reaches them. It does
+    /// however read every button colour, font and control height from CSS
+    /// custom properties, so its whole interface can be re-skinned from the
+    /// outside without touching or forking the script. Panels get the same
+    /// translucent blur, radii and hairline border as the native cards, and
+    /// buttons pick up the accent colour chosen in Settings.
+    static func betterXCloudSkinJS(accentRGB: String) -> String {
+        let css = """
+        :root, body {
+            --bx-primary-button-rgb: \(accentRGB);
+            --bx-primary-button-hover-rgb: \(accentRGB);
+            --bx-primary-button-active-rgb: \(accentRGB);
+            --bx-primary-button-disabled-rgb: 120,120,128;
+            --bx-default-button-rgb: 118,118,128;
+            --bx-normal-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+            --bx-title-font: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+            --bx-title-font-semibold: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+            --bx-monospaced-font: ui-monospace, "SF Mono", Menlo, monospace;
+            --bx-button-height: 40px;
         }
-        report();
-    })();
-    """#
+
+        /* Panels: the glass equivalent of the app's cards. */
+        .bx-settings-dialog,
+        .bx-centered-dialog,
+        .bx-navigation-dialog,
+        .bx-key-binding-dialog,
+        .bx-game-bar-container,
+        .bx-stream-settings-selection {
+            background-color: rgba(18, 18, 20, 0.62) !important;
+            -webkit-backdrop-filter: saturate(170%) blur(30px) !important;
+            backdrop-filter: saturate(170%) blur(30px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.14) !important;
+            border-radius: 22px !important;
+            box-shadow: 0 20px 52px rgba(0, 0, 0, 0.5) !important;
+            color: #fff !important;
+        }
+
+        .bx-settings-tabs {
+            background-color: rgba(255, 255, 255, 0.07) !important;
+            border-radius: 18px !important;
+        }
+
+        .bx-settings-row {
+            border-radius: 14px !important;
+            border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+        }
+
+        /* Controls: capsules and soft rectangles, as in the native interface. */
+        .bx-button {
+            border-radius: 999px !important;
+            font-weight: 600 !important;
+            transition: transform 0.15s ease, filter 0.15s ease !important;
+        }
+        .bx-button:active { transform: scale(0.97) !important; }
+
+        .bx-select,
+        .bx-number-stepper,
+        .bx-dual-number-stepper,
+        .bx-binding-button {
+            border-radius: 12px !important;
+            background-color: rgba(255, 255, 255, 0.1) !important;
+            border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        }
+
+        .bx-focusable:focus,
+        .bx-focusable:focus-visible {
+            outline: 2px solid rgb(\(accentRGB)) !important;
+            outline-offset: 2px !important;
+            border-radius: 12px !important;
+        }
+
+        /* Read-outs that sit over the video. */
+        .bx-stats-bar {
+            background-color: rgba(0, 0, 0, 0.42) !important;
+            -webkit-backdrop-filter: blur(22px) !important;
+            backdrop-filter: blur(22px) !important;
+            border-radius: 16px !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            font-variant-numeric: tabular-nums !important;
+            padding: 6px 12px !important;
+        }
+        .bx-stats-bar label { color: rgba(255, 255, 255, 0.6) !important; }
+
+        .bx-toast {
+            background-color: rgba(18, 18, 20, 0.7) !important;
+            -webkit-backdrop-filter: blur(26px) !important;
+            backdrop-filter: blur(26px) !important;
+            border-radius: 18px !important;
+            border: 1px solid rgba(255, 255, 255, 0.14) !important;
+        }
+
+        .bx-game-bar-container { padding: 4px !important; }
+        """
+
+        return #"""
+        (function() {
+            if (window.__gsSkin) return;
+            window.__gsSkin = true;
+
+            var ID = "gamestream-bx-skin";
+            var CSS = "__CSS__";
+
+            function apply() {
+                var node = document.getElementById(ID);
+                if (!node) {
+                    node = document.createElement("style");
+                    node.id = ID;
+                    node.textContent = CSS;
+                    (document.head || document.documentElement).appendChild(node);
+                    return;
+                }
+                // Better xCloud rebuilds <head> on some navigations, and the
+                // element has to be last to win against its own stylesheet.
+                if (node.parentNode && node.parentNode.lastChild !== node) {
+                    node.parentNode.appendChild(node);
+                }
+            }
+
+            apply();
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", apply);
+            }
+            setInterval(apply, 1500);
+        })();
+        """#.replacingOccurrences(of: "__CSS__", with: Self.escapedForJS(css))
+    }
+
+    /// A CSS payload safe to embed in a JavaScript string literal.
+    private static func escapedForJS(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+    }
 
     /// Reports the real WebRTC numbers to the app once a second.
     ///
@@ -377,7 +486,6 @@ enum WebScripts {
             return pc;
         };
         window.RTCPeerConnection.prototype = Native.prototype;
-        window.RTCPeerConnection.generateCertificate = Native.generateCertificate;
 
         var previous = {};
 
@@ -388,13 +496,9 @@ enum WebScripts {
         }
 
         async function sample() {
-            // A page that reconnects builds a new connection each time and
-            // the old ones are never useful again.
-            connections = connections.filter(function(pc) {
-                return pc && pc.connectionState !== "closed";
-            });
             for (var i = 0; i < connections.length; i++) {
                 var pc = connections[i];
+                if (!pc || pc.connectionState === "closed") continue;
 
                 var report_ = null;
                 try { report_ = await pc.getStats(); } catch (e) { continue; }
@@ -402,14 +506,7 @@ enum WebScripts {
                 var video = null, pair = null, codecName = "";
                 report_.forEach(function(entry) {
                     if (entry.type === "inbound-rtp" && entry.kind === "video") video = entry;
-                    // `nominated` is not always set. A succeeded pair is the
-                    // one carrying the media either way, and without this
-                    // fallback the round trip reads as zero for the whole
-                    // session.
-                    if (entry.type === "candidate-pair") {
-                        if (entry.nominated) pair = entry;
-                        else if (!pair && entry.state === "succeeded") pair = entry;
-                    }
+                    if (entry.type === "candidate-pair" && entry.nominated) pair = entry;
                 });
                 if (!video) continue;
 
@@ -421,22 +518,15 @@ enum WebScripts {
 
                 var last = previous[video.id] || null;
                 var bitrate = 0;
-                // Packet loss is reported by WebRTC as a total for the
-                // session. Sent on as-is it only ever grows, so anything
-                // judging the connection by it decides the stream is
-                // struggling a few minutes in and never changes its mind.
-                var lost = 0;
                 if (last && video.timestamp > last.timestamp) {
                     var seconds = (video.timestamp - last.timestamp) / 1000;
                     bitrate = Math.max(0, Math.round(
                         ((video.bytesReceived - last.bytesReceived) * 8) / seconds / 1000
                     ));
-                    lost = Math.max(0, (video.packetsLost || 0) - (last.packetsLost || 0));
                 }
                 previous[video.id] = {
                     timestamp: video.timestamp,
-                    bytesReceived: video.bytesReceived || 0,
-                    packetsLost: video.packetsLost || 0
+                    bytesReceived: video.bytesReceived || 0
                 };
 
                 report({
@@ -446,7 +536,7 @@ enum WebScripts {
                     rttMs: pair && pair.currentRoundTripTime
                         ? Math.round(pair.currentRoundTripTime * 1000) : 0,
                     jitterMs: video.jitter ? Math.round(video.jitter * 1000) : 0,
-                    packetsLost: lost,
+                    packetsLost: video.packetsLost || 0,
                     framesDropped: video.framesDropped || 0,
                     decodeMs: video.totalDecodeTime && video.framesDecoded
                         ? Math.round((video.totalDecodeTime / video.framesDecoded) * 1000)
@@ -522,8 +612,85 @@ enum WebScripts {
             return null;
         }
 
+        /// Better xCloud is not wrapped in a closure: its top-level classes
+        /// live in the page's global lexical scope, so the settings dialog can
+        /// be opened by the same call its own button makes —
+        /// `SettingsDialog.getInstance().show()`. Pressing the cloned HUD
+        /// button was never reliable: the script sets pointer-events: none on
+        /// it during the HUD fade and only restores it when the HUD finishes
+        /// at exactly left: 0px, so the element is frequently inert.
+        function openBxSettings() {
+            try {
+                var grip = document.querySelector("#StreamHud button[class^=GripHandle]");
+                if (grip && grip.ariaExpanded === "true") {
+                    grip.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+                    grip.click();
+                }
+            } catch (e) {}
+
+            try {
+                if (typeof SettingsDialog !== "undefined"
+                    && SettingsDialog.getInstance) {
+                    SettingsDialog.getInstance().show();
+                    return "SettingsDialog.show(), " + reveal();
+                }
+            } catch (e) {
+                return "SettingsDialog threw: " + e;
+            }
+            return null;
+        }
+
+        /// If the dialog exists but cannot be seen, make it seen.
+        ///
+        /// Better xCloud hides it with a `bx-gone` class and shows it by
+        /// removing that class. Anything that leaves it hidden — its own
+        /// stylesheet failing to load, or a restyle of ours interfering —
+        /// produces a button that appears to do nothing at all.
+        function reveal() {
+            var node = document.querySelector(".bx-navigation-dialog");
+            if (!node) return dialogState();
+
+            var before = dialogState();
+            var style = window.getComputedStyle(node);
+            var box = node.getBoundingClientRect();
+            var hidden = style.display === "none"
+                || style.visibility === "hidden"
+                || parseFloat(style.opacity) < 0.05
+                || box.width < 8 || box.height < 8;
+            if (!hidden) return before;
+
+            node.classList.remove("bx-gone");
+            node.style.setProperty("display", "flex", "important");
+            node.style.setProperty("visibility", "visible", "important");
+            node.style.setProperty("opacity", "1", "important");
+            node.style.setProperty("pointer-events", "auto", "important");
+            if (box.width < 8 || box.height < 8) {
+                node.style.setProperty("position", "fixed", "important");
+                node.style.setProperty("inset", "0", "important");
+                node.style.setProperty("z-index", "9999", "important");
+            }
+            return "was hidden (" + before + "), forced visible: " + dialogState();
+        }
+
+        /// "Nothing happened" covers two very different faults: the dialog was
+        /// never created, or it was created and cannot be seen. Only the page
+        /// can tell them apart, so it reports which.
+        function dialogState() {
+            var node = document.querySelector(".bx-navigation-dialog");
+            if (!node) return "no .bx-navigation-dialog in the document";
+            var style = window.getComputedStyle(node);
+            var box = node.getBoundingClientRect();
+            return "dialog class=\"" + node.className + "\""
+                + " display=" + style.display
+                + " visibility=" + style.visibility
+                + " opacity=" + style.opacity
+                + " z=" + style.zIndex
+                + " rect=" + Math.round(box.left) + "," + Math.round(box.top)
+                + " " + Math.round(box.width) + "x" + Math.round(box.height);
+        }
+
         /// The site's own HUD button, which is what opens the Xbox guide.
-        /// Pressing the real control is the only honest way to open it.
+        /// Better xCloud finds it the same way, and clones it for itself.
         function guideButton() {
             var hud = document.querySelector("#StreamHud");
             if (!hud) return null;
@@ -539,8 +706,7 @@ enum WebScripts {
             grip.click();
         }
 
-        /// The site can leave pointer-events off on the HUD subtree while it
-        /// animates, which makes a real control inert.
+        /// Better xCloud can leave pointer-events off on the HUD subtree.
         function enable(node) {
             while (node && node !== document.body) {
                 if (node.style && node.style.pointerEvents === "none") {
@@ -550,48 +716,95 @@ enum WebScripts {
             }
         }
 
+        /// Closes the enhancement's dialog and clears what it leaves behind.
+        ///
+        /// Tapping outside the dialog dismisses it visually but can leave the
+        /// dimming overlay in the document. That overlay swallows every touch
+        /// meant for the game, which reads as a frozen, frosted picture that
+        /// only a reconnect clears.
+        function closeBxSettings() {
+            try {
+                if (typeof SettingsDialog !== "undefined" && SettingsDialog.getInstance) {
+                    var dialog = SettingsDialog.getInstance();
+                    if (dialog && dialog.hide) dialog.hide();
+                }
+            } catch (e) {}
+            return sweepOverlays();
+        }
+
+        /// Removes any dimming overlay that no longer has a dialog to dim.
+        function sweepOverlays() {
+            var removed = 0;
+            var dialogs = document.querySelectorAll(
+                ".bx-settings-dialog, .bx-navigation-dialog, .bx-centered-dialog, .bx-key-binding-dialog"
+            );
+            var open = false;
+            for (var d = 0; d < dialogs.length; d++) {
+                var node = dialogs[d];
+                if (node.classList.contains("bx-gone")) continue;
+                var box = node.getBoundingClientRect();
+                if (box.width > 8 && box.height > 8) { open = true; break; }
+            }
+            if (open) return "a dialog is still open";
+
+            var overlays = document.querySelectorAll(".bx-dialog-overlay");
+            for (var i = 0; i < overlays.length; i++) {
+                if (overlays[i].parentNode) {
+                    overlays[i].parentNode.removeChild(overlays[i]);
+                    removed++;
+                }
+            }
+            // Anything the script blurred directly, unblurred.
+            var blurred = document.querySelectorAll("[style*=\"blur\"]");
+            for (var b = 0; b < blurred.length; b++) {
+                blurred[b].style.removeProperty("filter");
+                blurred[b].style.removeProperty("-webkit-filter");
+                blurred[b].style.removeProperty("backdrop-filter");
+            }
+            return removed ? ("cleared " + removed + " stale overlay(s)") : "nothing to clear";
+        }
+
+        // A dialog dismissed by tapping outside never routes through our
+        // close command, so the sweep also runs on a slow timer. It is a
+        // cheap query and only acts when there is nothing open.
+        setInterval(function() {
+            try {
+                if (document.querySelector(".bx-dialog-overlay")) sweepOverlays();
+            } catch (e) {}
+        }, 1000);
+
         window.__gsCommand = function(command) {
             var target = null;
 
-            if (command === "quit") {
+            if (command === "bxMenu") {
+                var how = openBxSettings();
+                if (how) {
+                    note(command, "opened via " + how);
+                    return true;
+                }
+                // Only if the script is not loaded at all.
+                target = match([
+                    "[title=\"Better xCloud\"]",
+                    "button[title*=\"Better xCloud\" i]",
+                    ".bx-header-settings-button"
+                ], /better\s*xcloud/);
+                enable(target);
+            } else if (command === "bxClose") {
+                note(command, closeBxSettings());
+                return true;
+            } else if (command === "quit") {
                 // Ending the session properly is the site's own quit, inside
                 // the guide. Closing the player only stops the picture; the
                 // session stays open and the next launch resumes into it.
                 expandHud();
-                var QUIT = "a[class*=QuitGameButton], button[class*=QuitGameButton]";
-                var quit = document.querySelector(QUIT);
-                if (quit) {
-                    enable(quit);
-                    if (click(quit)) {
-                        note(command, "pressed " + describe(quit));
-                        return true;
-                    }
+                var quit = document.querySelector("a[class*=QuitGameButton], button[class*=QuitGameButton]");
+                if (!quit) {
+                    var guide = guideButton();
+                    if (guide) { click(guide); }
+                    quit = document.querySelector("a[class*=QuitGameButton], button[class*=QuitGameButton]");
                 }
-                // The guide has to open before its quit button exists, and
-                // it opens with an animation. Looking for the button in the
-                // same breath as opening the guide always found nothing, so
-                // quitting fell through to the "no control found" report
-                // while the guide sat open on screen.
-                var guide = guideButton();
-                if (guide) { enable(guide); click(guide); }
-                var tries = 0;
-                var timer = setInterval(function() {
-                    tries++;
-                    var found = document.querySelector(QUIT);
-                    if (found && visible(found)) {
-                        clearInterval(timer);
-                        enable(found);
-                        note(command, click(found)
-                            ? "pressed " + describe(found)
-                            : "found the quit control but could not press it");
-                        return;
-                    }
-                    if (tries > 12) {
-                        clearInterval(timer);
-                        note(command, "the guide did not offer a quit control");
-                    }
-                }, 150);
-                return true;
+                target = quit;
+                enable(target);
             } else if (command === "guide") {
                 expandHud();
                 target = guideButton();
@@ -618,7 +831,9 @@ enum WebScripts {
                 var cls = (all[i].className || "").toString().slice(0, 30);
                 candidates.push(describe(all[i]) + " ." + cls);
             }
-            note(command, "no match; visible controls: " + candidates.join(" | "));
+            note(command, "no match; bx="
+                 + (typeof SettingsDialog !== "undefined" ? "loaded" : "absent")
+                 + "; visible controls: " + candidates.join(" | "));
             return false;
         };
     })();
@@ -853,129 +1068,16 @@ enum WebScripts {
         if (window.__gsAutoStart) return;
         window.__gsAutoStart = true;
 
-        // The site's own wording, taken from its strings: "Play now",
-        // "Play for free", "Stream for free with ads", and the gesture
-        // gate the player shows on phones before it will start playback.
-        // Nothing here spends money: no buy, get, install or subscribe.
-        // "get " was too broad: it threw away "get ready to play", which is
-        // the store page's own heading for the button that starts a game.
-        var NEVER = ["buy", "get game pass", "install", "download",
-                     "subscribe", "join", "upgrade", "free trial",
-                     "purchase", "no ads", "learn more", "sign in",
-                     "sign up", "per month", "/mo", "pricing", "redeem",
-                     "view in store", "$", "\u00a3", "\u20ac", "\u20b9"];
-
-        // Higher wins. Several of these can be on screen at once and the
-        // first one in the document is often the wrong one.
-        function score(text) {
-            if (text === "play now" || text === "play for free" ||
-                text === "play") return 95;
-            if (text.indexOf("tap to start") === 0 ||
-                text.indexOf("click to start") === 0) return 90;
-            if (text.indexOf("resume") === 0 ||
-                text.indexOf("continue playing") === 0) return 80;
-            if (text.indexOf("play") === 0) return 70;
-            if (text.indexOf("stream for free") === 0 ||
-                text.indexOf("stream free") === 0) return 60;
-            if (text.indexOf("stream") === 0) return 30;
-            return 0;
-        }
+        var LABELS = ["play", "play now", "play with ads", "resume", "continue playing"];
         var attempts = 0;
-        var maxAttempts = 120;     // ~90 seconds at 750 ms
-        // A click needs a moment to take effect. Without this the same
-        // button is hammered five times a second while the page works.
-        var lastClick = -99;
-        var lastText = "";
-        var clicks = 0;
-        var reported = false;
-
-        function post(message) {
-            try {
-                window.webkit.messageHandlers.gamestream.postMessage(message);
-            } catch (e) {}
-        }
-
-        function label(node) {
-            var text = node.innerText || node.textContent ||
-                       node.getAttribute("aria-label") || "";
-            return text.replace(/\s+/g, " ").trim().toLowerCase();
-        }
-
-        // The store page usually says why it will not start the game:
-        // a subscription is required, the free allowance is spent, the
-        // title is not in this region. Quoting the page beats guessing.
-        var TELLS = ["controller", "mouse & keyboard", "touch",
-                     "subscription is required", "game pass", "come back",
-                     "limit", "not available", "region", "purchase required",
-                     "ad-supported", "free with ads", "sign in"];
-
-        function pageReason() {
-            var found = [];
-            try {
-                var nodes = document.querySelectorAll(
-                    '[role="alert"], [role="status"], h1, h2, h3, p, span, div');
-                for (var i = 0; i < nodes.length && found.length < 3; i++) {
-                    if (nodes[i].children.length > 0) continue;
-                    var text = (nodes[i].innerText || "")
-                                 .replace(/\s+/g, " ").trim();
-                    if (text.length < 12 || text.length > 200) continue;
-                    var lower = text.toLowerCase();
-                    for (var t = 0; t < TELLS.length; t++) {
-                        if (lower.indexOf(TELLS[t]) !== -1) {
-                            if (found.indexOf(text) === -1) found.push(text);
-                            break;
-                        }
-                    }
-                }
-            } catch (e) {}
-            return found.join(" / ");
-        }
-
-        function rank(text) {
-            for (var n = 0; n < NEVER.length; n++) {
-                if (text.indexOf(NEVER[n]) !== -1) return 0;
-            }
-            return score(text);
-        }
-
-        // Parts of the site are built from web components, and a button
-        // inside an open shadow root is invisible to a plain query.
-        function candidates(root, found, depth) {
-            if (!root || depth > 6 || found.length > 400) return found;
-            var nodes;
-            try {
-                nodes = root.querySelectorAll('button, [role="button"], a');
-            } catch (e) { return found; }
-            for (var i = 0; i < nodes.length; i++) {
-                found.push(nodes[i]);
-                if (nodes[i].shadowRoot) candidates(nodes[i].shadowRoot, found, depth + 1);
-            }
-            var all;
-            try { all = root.querySelectorAll("*"); } catch (e) { return found; }
-            for (var j = 0; j < all.length && j < 2000; j++) {
-                if (all[j].shadowRoot) candidates(all[j].shadowRoot, found, depth + 1);
-            }
-            return found;
-        }
-
-        function visible(node) {
-            if (node.disabled) return false;
-            if (node.getAttribute && node.getAttribute("aria-disabled") === "true") return false;
-            var box = node.getBoundingClientRect ? node.getBoundingClientRect() : null;
-            return !box || (box.width > 0 && box.height > 0);
-        }
+        var maxAttempts = 40;      // ~30 seconds at 750 ms
 
         var timer = setInterval(function() {
             try {
                 attempts++;
                 if (attempts > maxAttempts) { clearInterval(timer); return; }
 
-                // The site bounces some titles from the launch URL to their
-                // store page. The store page has its own Play button, so
-                // that is a page to act on rather than one to give up on.
-                var here = (location.href || "").toLowerCase();
-                var onStore = here.indexOf("/play/games") !== -1;
-                if (here.indexOf("/play/launch") === -1 && !onStore) return;
+                if ((location.href || "").toLowerCase().indexOf("/play/launch") === -1) return;
 
                 var videos = document.querySelectorAll("video");
                 for (var i = 0; i < videos.length; i++) {
@@ -985,54 +1087,70 @@ enum WebScripts {
                     }
                 }
 
-                var nodes = candidates(document, [], 0);
-                var seen = [];
-                var best = null, bestScore = 0, bestText = "";
+                var nodes = document.querySelectorAll('button, [role="button"]');
                 for (var j = 0; j < nodes.length; j++) {
                     var node = nodes[j];
-                    if (!visible(node)) continue;
-                    var text = label(node);
-                    var href = (node.getAttribute && node.getAttribute("href")) || "";
-                    var isLaunchLink = href.toLowerCase().indexOf("/play/launch") !== -1;
-                    if (text && text.length < 60 && seen.length < 40) seen.push(text);
-                    var value = isLaunchLink ? 100
-                              : (text && text.length <= 44 ? rank(text) : 0);
-                    if (value > bestScore) {
-                        best = node;
-                        bestScore = value;
-                        bestText = isLaunchLink ? "launch link" : text;
-                    }
-                }
-
-                if (best) {
-                    if (attempts - lastClick < 8) return;
-                    // Three goes at the same control is enough to know it
-                    // is not the one that starts the game.
-                    if (bestText === lastText && clicks >= 3) {
-                        best = null;
-                    } else {
-                        lastClick = attempts;
-                        clicks = bestText === lastText ? clicks + 1 : 1;
-                        lastText = bestText;
-                        best.click();
-                        post({ type: "autoStart", label: bestText });
-                        return;
-                    }
-                }
-
-                // Nothing matched. Say what the page is actually offering,
-                // once, so a game that cannot be started is a sentence in
-                // the log rather than a guess.
-                // Report the page's own explanation even when something was
-                // clicked: pressing a heading is not progress, and the
-                // reason mattered more than the click did.
-                if (onStore && !reported && attempts > 6) {
-                    reported = true;
-                    post({ type: "autoStartStuck", labels: seen.join(" | "),
-                           count: nodes.length, reason: pageReason() });
+                    if (node.disabled) continue;
+                    var text = (node.innerText || node.textContent ||
+                                node.getAttribute("aria-label") || "").trim().toLowerCase();
+                    if (!text) continue;
+                    if (LABELS.indexOf(text) === -1) continue;
+                    node.click();
+                    try {
+                        window.webkit.messageHandlers.gamestream.postMessage({
+                            type: "autoStart", label: text
+                        });
+                    } catch (e) {}
+                    return;
                 }
             } catch (e) {}
         }, 750);
     })();
     """#
+
+    // MARK: - Better xCloud preferences
+
+    /// Writes Better xCloud preferences before the script boots.
+    static func betterXCloudPrefsJS(global: [String: String],
+                                    stream: [String: String]) -> String {
+        func assignments(_ values: [String: String]) -> String {
+            values.map { key, value in
+                "data[\(jsString(key))] = \(jsString(value));"
+            }.joined(separator: "\n                    ")
+        }
+
+        return """
+        (function() {
+            try {
+                if ((location.host || "").indexOf("xbox.com") === -1) return;
+
+                function write(storageKey, apply) {
+                    var data = {};
+                    try {
+                        data = JSON.parse(localStorage.getItem(storageKey) || "{}") || {};
+                    } catch (e) { data = {}; }
+                    apply(data);
+                    localStorage.setItem(storageKey, JSON.stringify(data));
+                }
+
+                write("BetterXcloud", function(data) {
+                    \(assignments(global))
+                });
+                write("BetterXcloud.Stream", function(data) {
+                    \(assignments(stream))
+                });
+            } catch (e) {}
+        })();
+        """
+    }
+
+    /// JSON is a subset of JavaScript literals, so this is a safe way to embed
+    /// arbitrary user-visible values without hand-rolling escape rules.
+    private static func jsString(_ value: String) -> String {
+        let data = try? JSONSerialization.data(withJSONObject: [value], options: [])
+        guard let data, var text = String(data: data, encoding: .utf8) else { return "\"\"" }
+        text.removeFirst()
+        text.removeLast()
+        return text
+    }
 }

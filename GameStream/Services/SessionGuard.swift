@@ -21,10 +21,6 @@ final class SessionGuard: ObservableObject {
     private var warnedAt: Set<String> = []
     private var limit: TimeInterval?
     private var startedAt: Date?
-    /// Set once this guard has ended a session. Every ending condition is
-    /// still true on the next tick, and without this the guard asked the
-    /// coordinator to exit again every five seconds.
-    private var ended = false
 
     private init() {
         UIDevice.current.isBatteryMonitoringEnabled = true
@@ -44,20 +40,8 @@ final class SessionGuard: ObservableObject {
     func begin() {
         startedAt = Date()
         warnedAt.removeAll()
-        ended = false
-        // A phone that is already hot when the stream starts needs to be
-        // treated as hot. Waiting for a change notification means the one
-        // state that never announces itself is the one that matters.
-        thermalState = ProcessInfo.processInfo.thermalState
         let minutes = AppSettings.shared.sessionLimitMinutes
-        let updated: TimeInterval? = minutes > 0 ? TimeInterval(minutes * 60) : nil
-        if updated != limit {
-            // Extending the limit gives the warnings back, or they would
-            // have been spent on a deadline that no longer exists.
-            warnedAt.remove("limit-1")
-            warnedAt.remove("limit-5")
-            limit = updated
-        }
+        limit = minutes > 0 ? TimeInterval(minutes * 60) : nil
         remaining = limit
         ticker?.cancel()
         ticker = Task { [weak self] in
@@ -76,28 +60,19 @@ final class SessionGuard: ObservableObject {
         limit = nil
         remaining = nil
         warnedAt.removeAll()
-        ended = false
     }
 
     private func tick() {
         readBattery()
         checkBattery()
-        checkThermal()
 
-        // The limit is re-read rather than remembered: it can be changed from
-        // the in-stream menu, and a slider that only takes effect on the next
-        // session is a slider that appears to do nothing.
-        let minutes = AppSettings.shared.sessionLimitMinutes
-        limit = minutes > 0 ? TimeInterval(minutes * 60) : nil
-        guard let startedAt, let limit else {
-            remaining = nil
-            return
-        }
+        guard let startedAt, let limit else { return }
         let left = limit - Date().timeIntervalSince(startedAt)
         remaining = max(0, left)
 
         if left <= 0 {
-            endSession("Session limit reached. Ending the game.", key: "limit-end")
+            warn("Session limit reached. Ending the game.", key: "limit-end")
+            StreamCoordinator.shared.exit()
             return
         }
         if left <= 60 { warn("One minute left on your session limit.", key: "limit-1") }
@@ -108,19 +83,16 @@ final class SessionGuard: ObservableObject {
 
     private func thermalChanged() {
         thermalState = ProcessInfo.processInfo.thermalState
-        checkThermal()
-    }
-
-    private func checkThermal() {
-        guard AppSettings.shared.thermalGuard, startedAt != nil else { return }
+        guard AppSettings.shared.thermalGuard else { return }
         switch thermalState {
         case .serious:
             warn("The phone is getting hot. Dropping to 720p to cool down.",
                  key: "thermal-serious")
             StreamCoordinator.shared.reduceQuality(reason: "the phone is hot")
         case .critical:
-            endSession("The phone is too hot to keep streaming. Ending the game.",
-                       key: "thermal-critical")
+            warn("The phone is too hot to keep streaming. Ending the game.",
+                 key: "thermal-critical")
+            StreamCoordinator.shared.exit()
         default:
             break
         }
@@ -136,22 +108,12 @@ final class SessionGuard: ObservableObject {
     private func checkBattery() {
         guard AppSettings.shared.batteryGuard, !isCharging else { return }
         if batteryLevel <= 0.05 {
-            endSession("Battery is nearly flat. Ending the game so it saves your place.",
-                       key: "battery-5")
+            warn("Battery is nearly flat. Ending the game so it saves your place.",
+                 key: "battery-5")
+            StreamCoordinator.shared.exit()
         } else if batteryLevel <= 0.15 {
             warn("Battery is at \(Int(batteryLevel * 100))%. Plug in soon.", key: "battery-15")
         }
-    }
-
-    /// Says why, then ends the session exactly once.
-    private func endSession(_ text: String, key: String) {
-        guard !ended else { return }
-        ended = true
-        warn(text, key: key)
-        ticker?.cancel()
-        ticker = nil
-        startedAt = nil
-        StreamCoordinator.shared.exit()
     }
 
     /// Each warning is said once per session. Repeating it every five seconds

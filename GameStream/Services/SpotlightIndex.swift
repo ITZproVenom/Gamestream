@@ -15,6 +15,7 @@ enum SpotlightIndex {
                 ? "\(game.genre) on Xbox Cloud Gaming"
                 : game.tagline
             attributes.keywords = [game.genre, "Xbox", "cloud", "GameStream"]
+            attributes.thumbnailURL = nil
             let item = CSSearchableItem(uniqueIdentifier: game.id,
                                         domainIdentifier: domain,
                                         attributeSet: attributes)
