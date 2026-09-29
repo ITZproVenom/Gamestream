@@ -23,6 +23,31 @@ private final class SampleSink: @unchecked Sendable {
     private var sessionStarted = false
     private var finished = false
 
+    /// Whether the app is currently drawing over the game.
+    ///
+    /// ReplayKit captures the screen, so anything on top of the picture
+    /// lands in the clip. A clip of a game with the app's own controls
+    /// burnt into it is a screen recording, not a clip. Frames are dropped
+    /// while the overlay is up and the gap is taken back out of the
+    /// timeline, so the clip holds only the game and still runs smoothly
+    /// across the moment the controls were used.
+    private var suppressed = false
+    private var suppressedFrom: CMTime = .invalid
+    private var timeOffset: CMTime = .zero
+
+    func setSuppressed(_ value: Bool, at time: CMTime) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard value != suppressed else { return }
+        suppressed = value
+        if value {
+            suppressedFrom = time
+        } else if suppressedFrom.isValid, time.isValid, time > suppressedFrom {
+            timeOffset = CMTimeAdd(timeOffset, CMTimeSubtract(time, suppressedFrom))
+            suppressedFrom = .invalid
+        }
+    }
+
     init(writer: AVAssetWriter,
          video: AVAssetWriterInput,
          app: AVAssetWriterInput?,
@@ -40,12 +65,21 @@ private final class SampleSink: @unchecked Sendable {
             return
         }
 
+        let stamp = CMSampleBufferGetPresentationTimeStamp(sample)
+
+        // While the overlay is up, nothing is written. The elapsed time is
+        // measured on the way out and taken off everything after it.
+        if suppressed {
+            if suppressedFrom.isValid == false { suppressedFrom = stamp }
+            return
+        }
+
         if !sessionStarted {
             // Only a video sample may open the session: starting on an audio
             // sample leaves the first frames before the timeline origin and
             // they are dropped silently.
             guard type == .video else { return }
-            writer.startSession(atSourceTime: CMSampleBufferGetPresentationTimeStamp(sample))
+            writer.startSession(atSourceTime: stamp)
             sessionStarted = true
         }
 
@@ -57,7 +91,51 @@ private final class SampleSink: @unchecked Sendable {
         @unknown default: input = nil
         }
         guard let input, input.isReadyForMoreMediaData else { return }
-        input.append(sample)
+
+        guard timeOffset != .zero else {
+            input.append(sample)
+            return
+        }
+        // Shifted rather than dropped outright, so the clip has no hole
+        // where the controls were and audio stays with the picture.
+        guard let shifted = Self.retimed(sample, by: timeOffset) else { return }
+        input.append(shifted)
+    }
+
+    /// The same sample, moved earlier on the timeline by `offset`.
+    private static func retimed(_ sample: CMSampleBuffer, by offset: CMTime) -> CMSampleBuffer? {
+        var count: CMItemCount = 0
+        guard CMSampleBufferGetSampleTimingInfoArray(
+            sample, entryCount: 0, arrayToFill: nil, entriesNeededOut: &count
+        ) == noErr, count > 0 else { return nil }
+
+        var timings = [CMSampleTimingInfo](
+            repeating: CMSampleTimingInfo(), count: Int(count)
+        )
+        guard CMSampleBufferGetSampleTimingInfoArray(
+            sample, entryCount: count, arrayToFill: &timings, entriesNeededOut: &count
+        ) == noErr else { return nil }
+
+        for index in timings.indices {
+            if timings[index].presentationTimeStamp.isValid {
+                timings[index].presentationTimeStamp =
+                    CMTimeSubtract(timings[index].presentationTimeStamp, offset)
+            }
+            if timings[index].decodeTimeStamp.isValid {
+                timings[index].decodeTimeStamp =
+                    CMTimeSubtract(timings[index].decodeTimeStamp, offset)
+            }
+        }
+
+        var copy: CMSampleBuffer?
+        guard CMSampleBufferCreateCopyWithNewTiming(
+            allocator: kCFAllocatorDefault,
+            sampleBuffer: sample,
+            sampleTimingEntryCount: count,
+            sampleTimingArray: &timings,
+            sampleBufferOut: &copy
+        ) == noErr else { return nil }
+        return copy
     }
 
     /// Closes the inputs and the file. Anything appended after this is
@@ -130,6 +208,22 @@ final class StreamRecorder: NSObject, ObservableObject {
     /// recording is lost. Two tracks is the only correct shape, and players
     /// play them together.
     private var sink: SampleSink?
+    private var overlayVisible = false
+
+    /// Told by the player whenever the app draws over the game.
+    ///
+    /// ReplayKit captures the screen, so the controls would otherwise be
+    /// burnt into the clip. Those frames are left out and the time they
+    /// took is removed from the timeline, so a clip holds the game and
+    /// nothing else. System interface such as Control Centre and
+    /// notifications is never captured by an in-app recording in the first
+    /// place, so only the app's own overlay had to be dealt with.
+    func setOverlayVisible(_ visible: Bool) {
+        guard overlayVisible != visible else { return }
+        overlayVisible = visible
+        guard let sink else { return }
+        sink.setSuppressed(visible, at: CMClockGetTime(CMClockGetHostTimeClock()))
+    }
     private var outputURL: URL?
     private var ticker: Task<Void, Never>?
 

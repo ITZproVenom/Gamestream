@@ -80,32 +80,6 @@ struct StreamView: View {
                 .transition(.opacity)
             }
 
-            // A recording has to stay visible once the controls hide, or
-            // there is nothing on screen to say the microphone and the
-            // picture are still being captured.
-            if stream.phase == .playing, recorder.isRecording, !showingControls {
-                VStack {
-                    HStack {
-                        Spacer()
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(.red)
-                                .frame(width: 7, height: 7)
-                            Text(Format.clock(recorder.elapsed))
-                                .font(.caption2.weight(.semibold).monospacedDigit())
-                        }
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 6)
-                        .glassEffect(.regular, in: Capsule())
-                        .padding(.trailing, 18)
-                        .padding(.top, 10)
-                    }
-                    Spacer()
-                }
-                .allowsHitTesting(false)
-                .transition(.opacity)
-            }
-
             if let notice = stream.notice {
                 VStack {
                     Spacer()
@@ -138,6 +112,11 @@ struct StreamView: View {
         .onChange(of: stream.overlayRequest) { _, _ in
             withAnimation(.smooth(duration: 0.25)) { showingControls = true }
             scheduleHide()
+        }
+        // Anything of the app's that is on screen would be recorded, so
+        // the recorder is told about all of it and leaves those frames out.
+        .onChange(of: overlayShowing, initial: true) { _, showing in
+            recorder.setOverlayVisible(showing)
         }
         .onChange(of: stream.phase) { _, phase in
             if phase == .playing {
@@ -213,6 +192,12 @@ struct StreamView: View {
     /// read-outs and the things that press the site's own buttons at the top
     /// right. The statistics panel is native, driven by WebRTC rather than by
     /// the enhancement script's own overlay.
+    /// True whenever the app is drawing anything over the game.
+    private var overlayShowing: Bool {
+        stream.phase != .playing || showingControls
+            || showingStats || stream.notice != nil
+    }
+
     private var hud: some View {
         GlassEffectContainer(spacing: 10) {
             HStack(spacing: 10) {
@@ -288,9 +273,24 @@ struct StreamView: View {
                         stream.toggleEnhancementMenu()
                     }
 
+                    if recorder.isRecording {
+                        HStack(spacing: 5) {
+                            Circle().fill(.red).frame(width: 6, height: 6)
+                            Text(Format.clock(recorder.elapsed))
+                                .font(.caption2.weight(.semibold).monospacedDigit())
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 9)
+                        .glassEffect(.regular, in: Capsule())
+                        .glassEffectID("reclock", in: glass)
+                    }
+
                     hudIcon(recorder.isRecording ? "stop.circle.fill" : "record.circle",
                             label: recorder.isRecording ? "Stop recording" : "Record a clip",
                             id: "record", active: recorder.isRecording) {
+                        // Out of the way immediately, so a clip does not
+                        // open on four seconds of the app's own buttons.
+                        withAnimation(.smooth(duration: 0.2)) { showingControls = false }
                         Task {
                             let outcome = await recorder.toggle()
                             stream.show(notice: outcome)
