@@ -268,7 +268,10 @@ struct Pill: View {
 enum Format {
     /// "1h 24m", "12m", "<1m" — short enough for a caption.
     static func duration(_ seconds: TimeInterval) -> String {
-        let minutes = Int(seconds / 60)
+        // A non-finite value would trap on conversion to Int, so a bad
+        // reading is reported as a short session rather than a crash.
+        guard seconds.isFinite else { return "<1m" }
+        let minutes = Int(min(seconds, 1e9) / 60)
         if minutes < 1 { return "<1m" }
         if minutes < 60 { return "\(minutes)m" }
         return "\(minutes / 60)h \(minutes % 60)m"
@@ -276,7 +279,8 @@ enum Format {
 
     /// "1:04:12" — for a timer that is ticking in front of the user.
     static func clock(_ seconds: TimeInterval) -> String {
-        let total = max(Int(seconds), 0)
+        guard seconds.isFinite else { return "0:00" }
+        let total = max(Int(min(seconds, 1e9).rounded(.down)), 0)
         let hours = total / 3600
         let minutes = (total % 3600) / 60
         let secs = total % 60

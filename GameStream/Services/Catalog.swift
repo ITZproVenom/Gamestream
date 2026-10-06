@@ -12,7 +12,9 @@ import Combine
 final class Catalog: ObservableObject {
     static let shared = Catalog()
 
-    @Published private(set) var games: [Game] = []
+    @Published private(set) var games: [Game] = [] {
+        didSet { rebuildSearchIndex() }
+    }
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var updatedAt: Date?
@@ -96,13 +98,36 @@ final class Catalog: ObservableObject {
         // Title matches first: someone typing "halo" wants the game, not every
         // shooter whose description mentions it.
         // Accents are folded on both sides, so "pokemon" finds "Pokémon".
-        let byTitle = games.filter { Self.folded($0.title).contains(needle) }
-        let byOther = games.filter {
-            !Self.folded($0.title).contains(needle)
-                && (Self.folded($0.genre).contains(needle)
-                    || Self.folded($0.tagline).contains(needle))
+        //
+        // The folded text is prepared once when the catalog changes rather
+        // than on every keystroke. Folding several hundred titles, genres and
+        // descriptions for each letter typed was work repeated for no reason.
+        var byTitle: [Game] = []
+        var byOther: [Game] = []
+        for entry in searchIndex {
+            if entry.title.contains(needle) {
+                byTitle.append(entry.game)
+            } else if entry.other.contains(needle) {
+                byOther.append(entry.game)
+            }
         }
         return byTitle + byOther
+    }
+
+    private struct SearchEntry {
+        let game: Game
+        let title: String
+        let other: String
+    }
+
+    private var searchIndex: [SearchEntry] = []
+
+    private func rebuildSearchIndex() {
+        searchIndex = games.map { game in
+            SearchEntry(game: game,
+                        title: Self.folded(game.title),
+                        other: Self.folded(game.genre + " " + game.tagline))
+        }
     }
 
     private static func folded(_ text: String) -> String {
