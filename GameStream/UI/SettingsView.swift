@@ -153,6 +153,16 @@ struct SettingsView: View {
         }
     }
 
+    private var cellularExplanation: String {
+        let base = "On a cellular or metered connection the stream is capped at this "
+            + "bitrate and 720p. It can only lower what you asked for, never raise it, "
+            + "and like every bitrate choice it is negotiated when a session starts, "
+            + "so it applies to the next game."
+        guard settings.isLimitedByConnection else { return base }
+        let link = connectivity.link.title
+        return base + " You are on " + link + " now, so the next launch will use it."
+    }
+
     private var touchControlsExplanation: String {
         switch settings.touchControls {
         case .hidden:
@@ -220,14 +230,7 @@ struct SettingsView: View {
                         set: { settings.cellularBitrateMbps = Int($0) }
                     ), in: 2...10, step: 1)
                 }
-                Text("On a cellular or metered connection the stream is capped at this "
-                     + "bitrate and 720p. It can only lower what you asked for, never "
-                     + "raise it, and like every bitrate choice it is negotiated when a "
-                     + "session starts, so it applies to the next game."
-                     + (settings.isLimitedByConnection
-                        ? " You are on \(connectivity.link.title) now, so the next "
-                          + "launch will use it."
-                        : ""))
+                Text(cellularExplanation)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
