@@ -16,7 +16,9 @@ enum SpotlightIndex {
         // face value emptied iOS search of the whole library because of one
         // bad request.
         guard !games.isEmpty else {
-            AppLog.shared.debug("spotlight", "nothing to index; leaving the index alone")
+            Task { @MainActor in
+                AppLog.shared.debug("spotlight", "nothing to index; leaving the index alone")
+            }
             return
         }
         let kept = Array(games.prefix(400))
