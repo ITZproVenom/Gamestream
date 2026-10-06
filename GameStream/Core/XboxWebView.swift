@@ -163,13 +163,17 @@ struct XboxWebView: UIViewRepresentable {
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
-        if context.coordinator.loadedURL != url {
+        let addressChanged = context.coordinator.loadedURL != url
+        if addressChanged {
             context.coordinator.loadedURL = url
             webView.load(URLRequest(url: url))
         }
         if context.coordinator.reloadToken != reloadToken {
             context.coordinator.reloadToken = reloadToken
-            webView.reload()
+            // Reloading a request that was started a line ago re-fetches the
+            // page that was on screen before it, which is exactly what moving
+            // to the next game in the queue does: new launch URL, new token.
+            if !addressChanged { webView.reload() }
         }
     }
 
@@ -209,6 +213,13 @@ struct XboxWebView: UIViewRepresentable {
             source: StreamEnhancer.script(settings.enhancerConfiguration()),
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true))
+        // The input configuration leaves the page over the network, so the
+        // wrapper has to be in place before the site builds its session.
+        if settings.touchControls == .everyGame {
+            controller.addUserScript(WKUserScript(source: WebScripts.touchInputJS,
+                                                  injectionTime: .atDocumentStart,
+                                                  forMainFrameOnly: true))
+        }
         controller.addUserScript(WKUserScript(source: WebScripts.betterXCloudPrefsJS(
             global: AppSettings.shared.betterXCloudGlobalPreferences(),
             stream: AppSettings.shared.betterXCloudStreamPreferences()),
@@ -325,6 +336,11 @@ struct XboxWebView: UIViewRepresentable {
                 StreamRecorder.shared.pageStopped()
             case "clipFailed":
                 StreamRecorder.shared.pageFailed(body["message"] as? String ?? "")
+            case "touchInput":
+                StreamCoordinator.shared.touchInputReported(
+                    state: body["state"] as? String ?? "",
+                    detail: body["detail"] as? String ?? ""
+                )
             case "rumble":
                 RumbleBridge.handle(payload: body)
             case "rumbleCaps":

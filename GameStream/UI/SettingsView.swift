@@ -10,6 +10,7 @@ struct SettingsView: View {
     @StateObject private var network = NetworkCheck.shared
     @StateObject private var stream = StreamCoordinator.shared
     @StateObject private var guardian = SessionGuard.shared
+    @StateObject private var connectivity = Connectivity.shared
 
     @Binding var showingBrowser: Bool
 
@@ -152,6 +153,21 @@ struct SettingsView: View {
         }
     }
 
+    private var touchControlsExplanation: String {
+        switch settings.touchControls {
+        case .hidden:
+            return "The site's on-screen pad is hidden. Use a controller."
+        case .whenOffered:
+            return "Xbox decides. The on-screen pad appears for the games "
+                + "Microsoft built a layout for."
+        case .everyGame:
+            return "GameStream asks for touch input on every game by rewriting the "
+                + "session configuration on its way to Xbox. Games without a layout "
+                + "of their own get the generic overlay, and if the server refuses "
+                + "it is reported here rather than ignored. Applies to the next launch."
+        }
+    }
+
     private var streaming: some View {
         SettingsGroup("Streaming", icon: "cloud.fill") {
             Picker("Quality", selection: $settings.quality) {
@@ -166,6 +182,54 @@ struct SettingsView: View {
                 ForEach(AppSettings.Region.allCases) { region in
                     Text(region.title).tag(region)
                 }
+            }
+
+            SettingsDivider()
+
+            VStack(alignment: .leading, spacing: 5) {
+                Picker("Touch controls", selection: $settings.touchControls) {
+                    ForEach(AppSettings.TouchControls.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                Text(touchControlsExplanation)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if settings.touchControls == .everyGame,
+                   !stream.touchInputOutcome.isEmpty {
+                    Text(stream.touchInputOutcome)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            SettingsDivider()
+
+            VStack(alignment: .leading, spacing: 5) {
+                Toggle("Use less data on cellular", isOn: $settings.limitOnCellular)
+                if settings.limitOnCellular {
+                    HStack {
+                        Text("Cellular limit").font(.subheadline)
+                        Spacer()
+                        Text("\(settings.cellularBitrateMbps) Mbps")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    Slider(value: Binding(
+                        get: { Double(settings.cellularBitrateMbps) },
+                        set: { settings.cellularBitrateMbps = Int($0) }
+                    ), in: 2...10, step: 1)
+                }
+                Text("On a cellular or metered connection the stream is capped at this "
+                     + "bitrate and 720p. It can only lower what you asked for, never "
+                     + "raise it, and like every bitrate choice it is negotiated when a "
+                     + "session starts, so it applies to the next game."
+                     + (settings.isLimitedByConnection
+                        ? " You are on \(connectivity.link.title) now, so the next "
+                          + "launch will use it."
+                        : ""))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             SettingsDivider()
@@ -250,6 +314,17 @@ struct SettingsView: View {
                                  ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+            SettingsDivider()
+
+            VStack(alignment: .leading, spacing: 5) {
+                Toggle("Open the overlay with the View button",
+                       isOn: $settings.overlayButtonEnabled)
+                Text("Press View twice during a game. The page still receives the "
+                     + "button, so whatever the game does with it keeps working; "
+                     + "this only listens alongside it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             SettingsDivider()
 
             Toggle("Rumble", isOn: $settings.rumbleEnabled)
@@ -376,8 +451,6 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             if settings.enhancerEnabled {
-                Toggle("Hide the site's touch controls", isOn: $settings.hideTouchControls)
-
                 Toggle("Prefer H.265 when offered", isOn: $settings.preferHEVC)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(stream.offeredCodecs.isEmpty

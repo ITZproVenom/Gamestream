@@ -119,13 +119,7 @@ final class StreamCoordinator: ObservableObject {
         // A new session deserves a clean attempt at every rumble route, even
         // one that refused to start earlier.
         ControllerRumble.shared.retryAllRoutes(reason: "stream start")
-        sampleCount = 0
-        fpsTotal = 0
-        rttTotal = 0
-        bitrateTotal = 0
-        poorSince = nil
-        reducedQuality = false
-        reconnectAttempts = 0
+        resetSessionMetrics()
         SessionGuard.shared.begin()
         startWatchdog()
 
@@ -140,9 +134,24 @@ final class StreamCoordinator: ObservableObject {
         }
     }
 
-    func retry() {
+    /// Reloads the launch page for the game that is already selected.
+    ///
+    /// `resettingBudget` is what separates the player pressing "Try again"
+    /// from the app rejoining on its own. Without it, the three automatic
+    /// attempts were spent for the rest of the session: a manual retry
+    /// afterwards worked, but the next drop was reported as an error instead
+    /// of being rejoined. The quality latch has the same problem in reverse,
+    /// so a fresh attempt starts with fresh measurements.
+    func retry(resettingBudget: Bool = true) {
         guard let game else { return }
         log.info("stream", "retrying \(game.title)")
+        if resettingBudget {
+            reconnectAttempts = 0
+            reconnectTask?.cancel()
+            reconnectTask = nil
+        }
+        reducedQuality = false
+        poorSince = nil
         phase = .connecting("Reconnecting to \(game.title)")
         reloadToken &+= 1
         startWatchdog()
@@ -169,21 +178,7 @@ final class StreamCoordinator: ObservableObject {
         XboxWebView.Registry.shared.release()
         UIApplication.shared.isIdleTimerDisabled = AppSettings.shared.keepAwake
 
-        if let game, let startedAt {
-            let seconds = Date().timeIntervalSince(startedAt)
-            // Anything shorter than this is a mis-tap, not a play session.
-            if seconds >= 15 {
-                let samples = max(sampleCount, 1)
-                LibraryStore.shared.record(
-                    PlayRecord(gameID: game.id, title: game.title,
-                               startedAt: startedAt, seconds: seconds,
-                               averageFPS: sampleCount > 0 ? fpsTotal / samples : 0,
-                               averageLatencyMs: sampleCount > 0 ? rttTotal / samples : 0,
-                               averageBitrateKbps: sampleCount > 0 ? bitrateTotal / samples : 0)
-                )
-                log.info("stream", "session ended after \(Int(seconds))s")
-            }
-        }
+        recordFinishedSession()
 
         self.startedAt = nil
         game = nil
@@ -196,6 +191,7 @@ final class StreamCoordinator: ObservableObject {
         enhancementMenuOpen = false
         offeredCodecs = ""
         codecOutcome = ""
+        touchInputOutcome = ""
         notice = nil
         phase = .idle
     }
@@ -268,18 +264,86 @@ final class StreamCoordinator: ObservableObject {
         reconnectTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(wait))
             guard !Task.isCancelled else { return }
-            await MainActor.run { self?.retry() }
+            await MainActor.run { self?.retry(resettingBudget: false) }
         }
     }
 
     /// Starts the next queued game without returning to the library first.
+    ///
+    /// This deliberately never passes through `.idle`. The player is a full
+    /// screen cover driven by whether a session is active, so ending one and
+    /// starting the next in the same turn asked SwiftUI to dismiss and
+    /// re-present it at once: the dismissal won, and taking the next game in
+    /// the queue dropped the player back to the library with a session
+    /// starting behind it. The session is written to Activity, the counters
+    /// are reset and the same page is pointed at the new game instead.
     func playNextInQueue() {
         guard let next = LibraryStore.shared.takeNextFromQueue() else {
             exit()
             return
         }
-        exit()
-        play(next)
+        guard XboxAuth.shared.state.isSignedIn else {
+            exit()
+            play(next)
+            return
+        }
+
+        log.info("stream", "moving on to \(next.title) (\(next.id))")
+        recordFinishedSession()
+        watchdog?.cancel()
+        watchdog = nil
+        leaveCheck?.cancel()
+        leaveCheck = nil
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        if StreamRecorder.shared.isRecording {
+            Task { _ = await StreamRecorder.shared.stop() }
+        }
+        ControllerRumble.shared.stop()
+        ControllerRumble.shared.retryAllRoutes(reason: "next in queue")
+
+        game = next
+        resolution = ""
+        stats = nil
+        notice = nil
+        enhancementMenuOpen = false
+        offeredCodecs = ""
+        codecOutcome = ""
+        touchInputOutcome = ""
+        resetSessionMetrics()
+        startedAt = Date()
+        LibraryStore.shared.noteLaunch(next)
+        // The guard measures one sitting, not one game, so it keeps running.
+        phase = .connecting("Starting \(next.title)")
+        startWatchdog()
+    }
+
+    private func resetSessionMetrics() {
+        sampleCount = 0
+        fpsTotal = 0
+        rttTotal = 0
+        bitrateTotal = 0
+        poorSince = nil
+        reducedQuality = false
+        reconnectAttempts = 0
+    }
+
+    /// Writes the session that just finished into Activity, if it was long
+    /// enough to count as one.
+    private func recordFinishedSession() {
+        guard let game, let startedAt else { return }
+        let seconds = Date().timeIntervalSince(startedAt)
+        // Anything shorter than this is a mis-tap, not a play session.
+        guard seconds >= 15 else { return }
+        let samples = max(sampleCount, 1)
+        LibraryStore.shared.record(
+            PlayRecord(gameID: game.id, title: game.title,
+                       startedAt: startedAt, seconds: seconds,
+                       averageFPS: sampleCount > 0 ? fpsTotal / samples : 0,
+                       averageLatencyMs: sampleCount > 0 ? rttTotal / samples : 0,
+                       averageBitrateKbps: sampleCount > 0 ? bitrateTotal / samples : 0)
+        )
+        log.info("stream", "session ended after \(Int(seconds))s")
     }
 
     // MARK: - Reports from the page
@@ -391,6 +455,20 @@ final class StreamCoordinator: ObservableObject {
     /// before, so whether asking for H.265 had worked was invisible unless
     /// the log was exported.
     @Published private(set) var codecOutcome = ""
+
+    /// What forcing touch input actually did, in the page's own words.
+    ///
+    /// Asking is not the same as getting. The server decides whether it has a
+    /// touch layout for a game, so this records what happened instead of
+    /// letting a switch in Settings imply a result.
+    @Published private(set) var touchInputOutcome = ""
+
+    func touchInputReported(state: String, detail: String) {
+        let text = detail.isEmpty ? state : detail
+        guard !text.isEmpty, touchInputOutcome != text else { return }
+        touchInputOutcome = text
+        log.info("stream", "touch input: \(text)")
+    }
 
     func enhancementReported(codecs: String, notes: String) {
         if !codecs.isEmpty { offeredCodecs = codecs }

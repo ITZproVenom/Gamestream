@@ -1265,6 +1265,158 @@ enum WebScripts {
     })();
     """#
 
+    // MARK: - Touch input
+
+    /// Makes Xbox Cloud offer its on-screen controls for every game.
+    ///
+    /// Whether the touch pad appears is not the page's decision: the session
+    /// is set up with an input configuration, and the server only sends the
+    /// touch overlay for a game when that configuration asked for touch
+    /// input. The web client asks for it on the handful of titles Microsoft
+    /// built layouts for and declines it everywhere else, which is why a game
+    /// with no controller attached simply does nothing on a phone.
+    ///
+    /// Better xCloud reaches this by rewriting the site's own JavaScript
+    /// bundle. That means tracking the shape of minified code that changes
+    /// without warning. The configuration has to leave the device over the
+    /// network either way, so this edits the request instead: any JSON body
+    /// on its way to Xbox that carries `enableTouchInput` is rewritten to ask
+    /// for it, and the touch point count is raised to a number a phone can
+    /// actually report.
+    ///
+    /// Nothing here can invent a layout. For a game Microsoft never built one
+    /// for, the server answers with the generic overlay, and if it refuses
+    /// outright the app says so rather than pretending the setting worked.
+    static let touchInputJS = #"""
+    (function() {
+        if (window.__gsTouchInput) return;
+        window.__gsTouchInput = true;
+
+        var MAX_TOUCH_POINTS = 10;
+        var reported = "";
+
+        function post(state, detail) {
+            var summary = state + "|" + (detail || "");
+            if (summary === reported) return;
+            reported = summary;
+            try {
+                window.webkit.messageHandlers.gamestream.postMessage({
+                    type: "touchInput", state: state, detail: detail || ""
+                });
+            } catch (e) {}
+        }
+
+        /// True when the object had a touch configuration to change.
+        function force(node, depth) {
+            if (!node || typeof node !== "object" || depth > 6) return false;
+            var changed = false;
+            if (Object.prototype.hasOwnProperty.call(node, "enableTouchInput")) {
+                if (node.enableTouchInput !== true) {
+                    node.enableTouchInput = true;
+                    changed = true;
+                }
+            }
+            if (Object.prototype.hasOwnProperty.call(node, "maxTouchPoints")) {
+                if (Number(node.maxTouchPoints) < MAX_TOUCH_POINTS) {
+                    node.maxTouchPoints = MAX_TOUCH_POINTS;
+                    changed = true;
+                }
+            }
+            for (var key in node) {
+                if (!Object.prototype.hasOwnProperty.call(node, key)) continue;
+                var value = node[key];
+                if (value && typeof value === "object") {
+                    if (force(value, depth + 1)) changed = true;
+                }
+            }
+            return changed;
+        }
+
+        /// Rewrites a request body, or returns null when there is nothing in
+        /// it that concerns touch input.
+        function rewrite(body) {
+            if (typeof body !== "string" || body.length === 0) return null;
+            if (body.indexOf("enableTouchInput") === -1) return null;
+            var parsed;
+            try {
+                parsed = JSON.parse(body);
+            } catch (e) {
+                post("unreadable", "the configuration was not JSON");
+                return null;
+            }
+            if (!force(parsed, 0)) {
+                post("already on", "the session already asked for touch input");
+                return null;
+            }
+            try {
+                var next = JSON.stringify(parsed);
+                post("forced", "touch input was added to the session configuration");
+                return next;
+            } catch (e) {
+                post("unreadable", "the configuration could not be rewritten");
+                return null;
+            }
+        }
+
+        var nativeFetch = window.fetch;
+        if (typeof nativeFetch === "function") {
+            window.fetch = function(input, init) {
+                try {
+                    if (init && typeof init.body === "string") {
+                        var next = rewrite(init.body);
+                        if (next !== null) {
+                            init = Object.assign({}, init, { body: next });
+                        }
+                    } else if (input && typeof input === "object" &&
+                               typeof input.clone === "function" &&
+                               typeof input.url === "string" &&
+                               input.method && input.method !== "GET") {
+                        // A Request object carries its body as a stream, so it
+                        // has to be read before it can be replaced. Returning
+                        // the promise keeps the call's own semantics.
+                        var request = input;
+                        return request.clone().text().then(function(text) {
+                            var replacement = rewrite(text);
+                            if (replacement === null) {
+                                return nativeFetch.call(window, request, init);
+                            }
+                            return nativeFetch.call(window, new Request(request, {
+                                body: replacement
+                            }), init);
+                        }).catch(function() {
+                            return nativeFetch.call(window, request, init);
+                        });
+                    }
+                } catch (e) {}
+                return nativeFetch.apply(window, arguments);
+            };
+        }
+
+        var nativeSend = window.XMLHttpRequest &&
+            window.XMLHttpRequest.prototype && window.XMLHttpRequest.prototype.send;
+        if (typeof nativeSend === "function") {
+            window.XMLHttpRequest.prototype.send = function(body) {
+                try {
+                    var next = rewrite(body);
+                    if (next !== null) return nativeSend.call(this, next);
+                } catch (e) {}
+                return nativeSend.apply(this, arguments);
+            };
+        }
+
+        // If a session starts and nothing ever carried an input
+        // configuration, the setting did not apply and saying nothing would
+        // be the same as claiming it did.
+        setTimeout(function() {
+            if (reported === "") {
+                post("not offered",
+                     "the session never sent an input configuration, so touch "
+                     + "controls could not be forced on");
+            }
+        }, 30000);
+    })();
+    """#
+
     // MARK: - Better xCloud preferences
 
     /// Writes Better xCloud preferences before the script boots.
