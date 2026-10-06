@@ -75,6 +75,12 @@ struct LibraryView: View {
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .background { AuroraBackground() }
+            // Unfavouriting the last racing game used to leave "Racing"
+            // selected and invisible, so the shelf looked empty and said
+            // there were no favourites at all.
+            .onChange(of: availableGenres) { _, names in
+                if let genre, !names.contains(genre) { self.genre = nil }
+            }
             .navigationTitle("Library")
             .toolbar {
                 if shelf == .lists {
