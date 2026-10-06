@@ -205,9 +205,15 @@ enum RumbleBridge {
             var originalSetRemote = Native.prototype.setRemoteDescription;
             Native.prototype.setRemoteDescription = function() {
                 try {
-                    this.addEventListener("datachannel", function(event) {
-                        hook(event.channel);
-                    });
+                    // Once per connection. This method is called again on
+                    // every renegotiation, and each call used to add another
+                    // listener to the same connection.
+                    if (!this.__gsDataChannelHooked) {
+                        this.__gsDataChannelHooked = true;
+                        this.addEventListener("datachannel", function(event) {
+                            hook(event.channel);
+                        });
+                    }
                 } catch (e) {}
                 return originalSetRemote.apply(this, arguments);
             };
