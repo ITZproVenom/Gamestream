@@ -1,5 +1,4 @@
 import Foundation
-import Network
 
 /// A latency probe against Xbox's own front door, run before a game starts.
 ///
@@ -48,19 +47,14 @@ final class NetworkCheck: ObservableObject {
     /// cloud service. This is the host that serves the stream, so it is the
     /// one worth timing.
     private var regionProbe: URL?
-    private let monitor = NWPathMonitor()
-    @Published private(set) var isOnline = true
-    @Published private(set) var isExpensive = false
+    /// Read from the one path monitor the app runs. This type used to start a
+    /// second `NWPathMonitor` of its own and publish values from it that
+    /// nothing ever read, which was a watcher running for the lifetime of the
+    /// app for no one.
+    var isOnline: Bool { Connectivity.shared.link != .unknown }
+    var isExpensive: Bool { Connectivity.shared.isExpensive }
 
-    private init() {
-        monitor.pathUpdateHandler = { [weak self] path in
-            Task { @MainActor in
-                self?.isOnline = path.status == .satisfied
-                self?.isExpensive = path.isExpensive
-            }
-        }
-        monitor.start(queue: DispatchQueue(label: "gamestream.network"))
-    }
+    private init() {}
 
     /// Remembered so later checks measure the streaming region rather than
     /// the website's CDN.
@@ -75,7 +69,13 @@ final class NetworkCheck: ObservableObject {
     /// than one that swings between 30 and 200.
     @discardableResult
     func measure() async -> Reading {
-        if isChecking, let latest { return latest }
+        // A second caller while the first is still measuring would otherwise
+        // run its own four requests and clear the flag from under the first.
+        if isChecking {
+            if let latest { return latest }
+            return Reading(latencyMs: 0, spreadMs: 0, reachable: isOnline,
+                           measuredAt: Date(), host: "a check already running")
+        }
         isChecking = true
         defer { isChecking = false }
 

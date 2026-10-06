@@ -46,7 +46,11 @@ final class Catalog: ObservableObject {
         guard let code = locale.language.languageCode?.identifier.lowercased() else {
             return "en-us"
         }
-        let region = locale.region?.identifier.lowercased() ?? code
+        // A locale with a language but no region would otherwise produce
+        // "en-en", which neither endpoint accepts.
+        guard let region = locale.region?.identifier.lowercased(), region.count == 2 else {
+            return code == "en" ? "en-us" : "\(code)-\(market.lowercased())"
+        }
         return "\(code)-\(region)"
     }
     /// The catalog runs to a few hundred entries with artwork URLs, which is
@@ -124,16 +128,34 @@ final class Catalog: ObservableObject {
         do {
             let ids = try await fetchIDs()
             log.debug("catalog", "\(ids.count) product ids")
-            let fetched = try await fetchDetails(ids: ids)
+            let details = try await fetchDetails(ids: ids)
             guard !Task.isCancelled else { return }
-            guard !fetched.isEmpty else { throw URLError(.cannotParseResponse) }
+            guard !details.games.isEmpty else { throw URLError(.cannotParseResponse) }
 
-            games = fetched
+            // A page that failed must not silently remove the games it would
+            // have carried. What is already on screen is better information
+            // than nothing, so anything still in the playable list but absent
+            // from this response is kept.
+            var merged = details.games
+            if details.failedPages > 0 {
+                let present = Set(merged.map { $0.id.uppercased() })
+                let playable = Set(ids.map { $0.uppercased() })
+                let retained = games.filter {
+                    playable.contains($0.id.uppercased())
+                        && !present.contains($0.id.uppercased())
+                }
+                merged.append(contentsOf: retained)
+                log.warn("catalog", "\(details.failedPages) of \(details.pageCount) "
+                         + "catalog pages failed; kept \(retained.count) games "
+                         + "from the previous list")
+            }
+
+            games = merged
             updatedAt = Date()
-            if let data = try? JSONEncoder().encode(fetched) {
+            if let data = try? JSONEncoder().encode(merged) {
                 try? data.write(to: Self.cacheURL, options: .atomic)
             }
-            log.info("catalog", "loaded \(fetched.count) games")
+            log.info("catalog", "loaded \(merged.count) games")
         } catch is CancellationError {
         } catch {
             // Keep whatever is already on screen; an error banner beats
@@ -177,7 +199,7 @@ final class Catalog: ObservableObject {
         }
     }
 
-    private func fetchDetails(ids: [String]) async throws -> [Game] {
+    private func fetchDetails(ids: [String]) async throws -> Details {
         let pages = stride(from: 0, to: ids.count, by: Self.pageSize).map { start in
             Array(ids[start..<min(start + Self.pageSize, ids.count)])
         }
@@ -185,15 +207,19 @@ final class Catalog: ObservableObject {
         // Ordered results, fetched in parallel. The index keeps the catalog in
         // the order Microsoft returned it, which is roughly editorial order.
         var collected = [Int: [Game]]()
-        try await withThrowingTaskGroup(of: (Int, [Game]).self) { group in
+        var failedPages = 0
+        try await withThrowingTaskGroup(of: (Int, [Game]?).self) { group in
             for (index, page) in pages.enumerated() {
                 group.addTask {
-                    let games = await Self.fetchPage(page)
-                    return (index, games)
+                    (index, await Self.fetchPage(page))
                 }
             }
             for try await (index, games) in group {
-                collected[index] = games
+                if let games {
+                    collected[index] = games
+                } else {
+                    failedPages += 1
+                }
             }
         }
 
@@ -204,10 +230,20 @@ final class Catalog: ObservableObject {
                 output.append(game)
             }
         }
-        return output
+        return Details(games: output, failedPages: failedPages, pageCount: pages.count)
     }
 
-    private static func fetchPage(_ ids: [String]) async -> [Game] {
+    /// A page that could not be fetched is distinguishable from a page that
+    /// genuinely held nothing. Treating the two the same is how a single
+    /// failed request used to delete forty games from the catalog and report
+    /// a successful refresh.
+    private struct Details {
+        var games: [Game]
+        var failedPages: Int
+        var pageCount: Int
+    }
+
+    private static func fetchPage(_ ids: [String]) async -> [Game]? {
         var components = URLComponents(string: "https://displaycatalog.mp.microsoft.com/v7.0/products")
         components?.queryItems = [
             URLQueryItem(name: "bigIds", value: ids.joined(separator: ",")),
@@ -215,19 +251,18 @@ final class Catalog: ObservableObject {
             URLQueryItem(name: "languages", value: language),
             URLQueryItem(name: "fieldsTemplate", value: "Details")
         ]
-        guard let url = components?.url else { return [] }
+        guard let url = components?.url else { return nil }
 
         var request = URLRequest(url: url)
         request.timeoutInterval = 20
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.setValue("DGU1mcuYo0WMMp+F.1", forHTTPHeaderField: "MS-CV")
 
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               let http = response as? HTTPURLResponse,
               (200...299).contains(http.statusCode),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let products = json["Products"] as? [[String: Any]] else {
-            return []
+            return nil
         }
         return products.compactMap(game(from:))
     }

@@ -83,10 +83,19 @@ final class SessionGuard: ObservableObject {
 
     private func thermalChanged() {
         thermalState = ProcessInfo.processInfo.thermalState
-        guard AppSettings.shared.thermalGuard else { return }
+        // The thermal notification arrives whatever the app is doing. Acting
+        // on it outside a session meant a phone that got warm while browsing
+        // the library announced that it was ending a game, and ended one that
+        // was not running.
+        guard AppSettings.shared.thermalGuard,
+              StreamCoordinator.shared.phase.isActive else { return }
         switch thermalState {
         case .serious:
-            warn("The phone is getting hot. Dropping to 720p to cool down.",
+            // Deliberately not a claim that anything was lowered. The bitrate
+            // ceiling is negotiated when the session is set up, so nothing
+            // changed during one can alter what the server sends.
+            warn("The phone is getting hot. Lowering the quality in Settings and "
+                 + "reconnecting would ease the load.",
                  key: "thermal-serious")
             StreamCoordinator.shared.reduceQuality(reason: "the phone is hot")
         case .critical:

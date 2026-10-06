@@ -211,6 +211,17 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                if settings.touchControls != .hidden {
+                    Toggle("Hide them while a controller is connected",
+                           isOn: $settings.touchAutoOffWithController)
+                    Text("Touch input is granted when the session is negotiated and "
+                         + "cannot be withdrawn afterwards, so a pad connected "
+                         + "mid-game would otherwise leave the on-screen controls "
+                         + "sitting over the picture. They come back if the "
+                         + "controller disconnects.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             SettingsDivider()
