@@ -10,19 +10,43 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 object CloudCatalogService {
-    private const val SIGL =
-        "https://catalog.gamepass.com/sigls/v2?id=29a81209-df6f-41fd-a528-2ae6b91f719c&language=en-us&market=US"
+    private const val SIGL_ID = "29a81209-df6f-41fd-a528-2ae6b91f719c"
     private const val CACHE = "xcloud-catalog-v2.json"
-    @Volatile private var started = false
+
+    /// The cache is read once per process; the flag is not reused as a lock
+    /// for the network fetch, which has its own.
+    @Volatile private var cacheInstalled = false
+    @Volatile private var fetching = false
+
+    /// The device's own market and language, so a player outside the United
+    /// States sees their own catalogue in their own language. Asking for the
+    /// US list everywhere meant titles their region cannot stream at all,
+    /// which fail on the launch page with no explanation.
+    private fun market(): String {
+        val region = java.util.Locale.getDefault().country.uppercase()
+        return if (region.length == 2) region else "US"
+    }
+
+    private fun language(): String {
+        val locale = java.util.Locale.getDefault()
+        val language = locale.language.lowercase().ifBlank { "en" }
+        val region = locale.country.lowercase()
+        return if (region.length == 2) "$language-$region" else language
+    }
+
+    private fun siglUrl(market: String, language: String): String =
+        "https://catalog.gamepass.com/sigls/v2?id=$SIGL_ID&language=$language&market=$market"
 
     fun refreshIfNeeded(context: Context) {
-        if (started) return
-        started = true
+        if (cacheInstalled) return
+        cacheInstalled = true
         loadCache(context)?.takeIf { it.size >= 20 }?.let { GameCatalog.installLiveCatalog(it) }
     }
 
     suspend fun fetchAndInstall(context: Context) = withContext(Dispatchers.IO) {
         refreshIfNeeded(context)
+        if (fetching) return@withContext
+        fetching = true
         try {
             val remote = fetchRemoteProgressive(context)
             if (remote.size >= 20) {
@@ -33,12 +57,18 @@ object CloudCatalogService {
             }
         } catch (_: Exception) {
         } finally {
-            started = false
+            fetching = false
         }
     }
 
     private suspend fun fetchRemoteProgressive(context: Context): List<CatalogGame> {
-        val raw = JSONArray(httpGet(SIGL))
+        val market = market()
+        var raw = JSONArray(httpGet(siglUrl(market, language())))
+        if (raw.length() == 0 && market != "US") {
+            // A market with nothing behind it falls back to the US list
+            // rather than leaving the catalogue empty.
+            raw = JSONArray(httpGet(siglUrl("US", "en-us")))
+        }
         val ids = linkedSetOf<String>()
         for (i in 0 until raw.length()) {
             val row = raw.optJSONObject(i) ?: continue
@@ -49,12 +79,16 @@ object CloudCatalogService {
         val list = ids.toList()
         var index = 0
         var published = false
+        var failedPages = 0
+        var pages = 0
         while (index < list.size) {
             val slice = list.subList(index, minOf(index + 20, list.size)).toList()
             index += 20
+            pages += 1
             try {
                 games += hydrate(slice)
             } catch (_: Exception) {
+                failedPages += 1
             }
             if (!published && games.size >= 24) {
                 val snapshot = games.distinctBy { it.id.uppercase() }
@@ -64,13 +98,28 @@ object CloudCatalogService {
                 published = true
             }
         }
-        return games.distinctBy { it.id.uppercase() }
+        var merged = games.distinctBy { it.id.uppercase() }
+        if (failedPages > 0 && pages > 0) {
+            // A page that failed must not quietly delete the games it would
+            // have carried. Anything still on the playable list but missing
+            // from this pass is kept from what is already on screen, which is
+            // better information than nothing.
+            val playable = list.map { it.uppercase() }.toSet()
+            val present = merged.map { it.id.uppercase() }.toSet()
+            val retained = GameCatalog.games.filter {
+                val key = it.id.uppercase()
+                key in playable && key !in present
+            }
+            if (retained.isNotEmpty()) merged = merged + retained
+        }
+        return merged
     }
 
     private fun hydrate(ids: List<String>): List<CatalogGame> {
         val joined = ids.joinToString(",")
         val url =
-            "https://displaycatalog.mp.microsoft.com/v7.0/products?bigIds=$joined&market=US&languages=en-us&MS-CV=GS.1"
+            "https://displaycatalog.mp.microsoft.com/v7.0/products" +
+                "?bigIds=$joined&market=${market()}&languages=${language()}&MS-CV=GS.1"
         val json = JSONObject(httpGet(url))
         val products = json.optJSONArray("Products") ?: return emptyList()
         val out = mutableListOf<CatalogGame>()
@@ -154,7 +203,7 @@ object CloudCatalogService {
     }
 
     fun clearCache(context: Context) {
-        started = false
+        cacheInstalled = false
         runCatching { cacheFile(context).delete() }
     }
 
