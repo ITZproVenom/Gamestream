@@ -14,7 +14,9 @@ class SearchPrefs(context: Context) {
         prefs.getString(KEY_PINNED, "")?.split("|")?.filter { it.isNotBlank() } ?: emptyList()
 
     fun remember(query: String): List<String> {
-        val q = query.trim()
+        // The list is stored as one bar separated string, so a query
+        // containing a bar would have split into two entries on the way back.
+        val q = query.trim().replace("|", " ").trim()
         if (q.isEmpty()) return recent()
         val next = (listOf(q) + recent().filter { !it.equals(q, ignoreCase = true) }).take(8)
         prefs.edit().putString(KEY_RECENT, next.joinToString("|")).apply()
@@ -26,7 +28,7 @@ class SearchPrefs(context: Context) {
     }
 
     fun togglePin(query: String): List<String> {
-        val q = query.trim()
+        val q = query.trim().replace("|", " ").trim()
         if (q.isEmpty()) return pinned()
         val current = pinned()
         val next = if (current.any { it.equals(q, ignoreCase = true) }) {

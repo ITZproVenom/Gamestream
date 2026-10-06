@@ -86,7 +86,7 @@ fun SettingsScreen(session: SessionStore) {
         "plum" to Color(0xFF240F2E),
         "wine" to Color(0xFF2E0D1A),
         "slate" to Color(0xFF1A1E29),
-        "white" to Color(0xFFF5F5FA)
+        "ink" to Color(0xFF101014)
     )
 
     Column(

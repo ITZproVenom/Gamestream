@@ -60,6 +60,7 @@ import com.gamestream.app.ForYouCatalog
 import com.gamestream.app.GameCatalog
 import com.gamestream.app.GameDiscovery
 import com.gamestream.app.SessionStore
+import com.gamestream.app.ui.GameStreamBackdrop
 
 private fun accentColor(accent: Long): Color = Color(accent.toInt())
 
@@ -128,6 +129,8 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
             .clipToBounds()
             .background(bg)
     ) {
+        GameStreamBackdrop(appearance, Modifier.fillMaxSize())
+
         val constraintsMaxWidth = maxWidth
         val featuredWidth = (constraintsMaxWidth * 0.88f).coerceIn(260.dp, 340.dp)
         val posterWidth = (constraintsMaxWidth * posterFrac).coerceIn(100.dp, 150.dp)
