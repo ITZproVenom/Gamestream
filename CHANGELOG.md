@@ -2,6 +2,55 @@
 
 All notable changes to GameStream are documented here.
 
+## 2.1.0 (beta)
+
+### Fixed
+
+- Taking the next game in the queue dropped you out of the player. The player
+  is a full-screen cover driven by whether a session is active, and moving on
+  ended one session and started the next in the same turn, so SwiftUI was
+  asked to dismiss and re-present it at once. The dismissal won: the next game
+  started behind the library. A session change now never passes through the
+  idle state. The finished game is still written to Activity, the counters
+  still reset, and the same page is pointed at the new launch URL.
+- Pointing the player at a new game loaded it and then immediately reloaded,
+  which re-fetched the page that had been on screen before it.
+- "Try again" kept the exhausted automatic-reconnect budget. After three
+  automatic attempts the manual button worked, but the next drop in that
+  session was reported as an error instead of being rejoined. A manual retry
+  now starts a fresh attempt, and it clears the quality warning latch as well,
+  which was both suppressing the warning for the rest of the session and
+  holding an old timestamp that made the first bad sample of a new attempt
+  trip it immediately.
+
+### Added
+
+- **Touch controls for every game.** Whether the on-screen pad appears is not
+  the page's decision: the session is set up with an input configuration, and
+  the server only sends the touch overlay for a game that asked for touch
+  input. The web client asks on the handful of titles Microsoft built layouts
+  for and declines everywhere else, which is why most games do nothing at all
+  on a phone with no controller attached. Streaming now has a three-way Touch
+  controls setting - Hidden, When offered, Every game - and on Every game the
+  app rewrites the input configuration on its way to Xbox rather than patching
+  the site's minified JavaScript. It cannot invent a layout: a game without
+  one gets the generic overlay, and if the session never sends a configuration
+  at all the app says so instead of implying the setting worked. This replaces
+  the old "hide the site's touch controls" switch, which could only ever take
+  something away; an existing choice to hide them is carried over.
+- **Use less data on cellular.** On a cellular or otherwise metered
+  connection the stream is capped at a chosen bitrate and 720p. It only ever
+  lowers what was asked for, never raises a cap set deliberately, and like
+  every bitrate choice it is negotiated when a session starts, so it applies
+  to the next launch - which Settings now says plainly when the limit is in
+  force.
+- **Open the overlay with the View button.** The player's controls sit over a
+  web page that owns every touch on the video, so reaching them needed a
+  two-finger tap or the grab handle, neither of which is any use on a pad
+  across the room. Press View twice during a game instead. The page still
+  receives the button, so whatever the game does with it keeps working; this
+  only listens alongside it. Off by default.
+
 ## 2.0.0 — 2026-09-27 (beta)
 
 A rebuild of the iOS app. Two problems ran underneath most of the reported

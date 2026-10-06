@@ -120,6 +120,8 @@ struct GameStreamApp: App {
         }
         UIApplication.shared.isIdleTimerDisabled = settings.keepAwake
         rumble.start()
+        Connectivity.shared.start()
+        ControllerShortcuts.shared.start()
 
         async let session = auth.refresh(reason: "launch")
         async let script: Void = BetterXCloud.shared.refreshIfNeeded()

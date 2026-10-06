@@ -82,6 +82,38 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    /// What the site's on-screen controls should do.
+    ///
+    /// This replaced a single "hide the touch controls" switch, which could
+    /// only ever take something away. Whether the overlay appears at all is
+    /// decided by the session's input configuration, not by CSS, so the three
+    /// states here are genuinely different things: hide what the site draws,
+    /// leave the site's own judgement alone, or ask for touch input on every
+    /// game.
+    enum TouchControls: String, CaseIterable, Identifiable, Sendable {
+        case hidden, whenOffered, everyGame
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .hidden: return "Hidden"
+            case .whenOffered: return "When offered"
+            case .everyGame: return "Every game"
+            }
+        }
+
+        /// Better xCloud's own touch controller setting, kept in step so the
+        /// two cannot disagree inside the same stream.
+        var betterXCloudValue: String {
+            switch self {
+            case .hidden: return "off"
+            case .whenOffered: return "default"
+            case .everyGame: return "all"
+            }
+        }
+    }
+
     enum Region: String, CaseIterable, Identifiable, Sendable {
         case auto, northAmerica, europe, asia, australia
 
@@ -136,6 +168,10 @@ final class AppSettings: ObservableObject {
         static let saturation = "settings.saturation"
         static let contrast = "settings.contrast"
         static let hideTouchControls = "settings.hideTouchControls"
+        static let touchControls = "settings.touchControls"
+        static let cellularLimit = "settings.cellularLimit"
+        static let cellularBitrate = "settings.cellularBitrateMbps"
+        static let overlayButton = "settings.overlayButton"
     }
 
     @Published var theme: Theme { didSet { store(theme.rawValue, Key.theme) } }
@@ -212,8 +248,31 @@ final class AppSettings: ObservableObject {
     @Published var contrast: Int {
         didSet { store(contrast, Key.contrast); applyToLiveStream() }
     }
-    @Published var hideTouchControls: Bool {
-        didSet { store(hideTouchControls, Key.hideTouchControls); applyToLiveStream() }
+    @Published var touchControls: TouchControls {
+        didSet { store(touchControls.rawValue, Key.touchControls); applyToLiveStream() }
+    }
+
+    /// What the enhancement layer is told to hide. Derived so the CSS and the
+    /// session configuration can never contradict each other.
+    var hideTouchControls: Bool { touchControls == .hidden }
+
+    /// Spend less on a cellular connection. The ceiling is negotiated when a
+    /// session starts, so this applies to the next game rather than the one
+    /// on screen.
+    @Published var limitOnCellular: Bool {
+        didSet { store(limitOnCellular, Key.cellularLimit) }
+    }
+    @Published var cellularBitrateMbps: Int {
+        didSet { store(cellularBitrateMbps, Key.cellularBitrate) }
+    }
+
+    /// Open GameStream's overlay with the controller's View button, so the
+    /// player does not have to find the screen to reach it.
+    @Published var overlayButtonEnabled: Bool {
+        didSet {
+            store(overlayButtonEnabled, Key.overlayButton)
+            ControllerShortcuts.shared.settingsChanged()
+        }
     }
 
     private let defaults = UserDefaults.standard
@@ -252,7 +311,48 @@ final class AppSettings: ObservableObject {
         sharpness = defaults.object(forKey: Key.sharpness) as? Int ?? 0
         saturation = defaults.object(forKey: Key.saturation) as? Int ?? 100
         contrast = defaults.object(forKey: Key.contrast) as? Int ?? 100
-        hideTouchControls = defaults.object(forKey: Key.hideTouchControls) as? Bool ?? true
+        // Migrated from the old switch: someone who had chosen to hide the
+        // site's controls keeps them hidden, and everyone else gets the
+        // site's own judgement rather than a silent change of behaviour.
+        if let stored = defaults.string(forKey: Key.touchControls),
+           let mode = TouchControls(rawValue: stored) {
+            touchControls = mode
+        } else if let legacy = defaults.object(forKey: Key.hideTouchControls) as? Bool {
+            touchControls = legacy ? .hidden : .whenOffered
+        } else {
+            touchControls = .hidden
+        }
+        limitOnCellular = defaults.object(forKey: Key.cellularLimit) as? Bool ?? true
+        cellularBitrateMbps = defaults.object(forKey: Key.cellularBitrate) as? Int ?? 5
+        overlayButtonEnabled = defaults.object(forKey: Key.overlayButton) as? Bool ?? false
+    }
+
+    /// The bitrate ceiling that applies to a session started right now.
+    ///
+    /// A cellular ceiling is not a second setting fighting the first: it is
+    /// the lower of the two, so turning the limit on can only ever reduce
+    /// what is asked for, never raise a cap the player set deliberately.
+    var effectiveBitrateMbps: Int {
+        guard limitOnCellular, Connectivity.shared.isMetered else { return maxBitrateMbps }
+        if maxBitrateMbps == 0 { return cellularBitrateMbps }
+        return min(maxBitrateMbps, cellularBitrateMbps)
+    }
+
+    /// The resolution that applies to a session started right now. A metered
+    /// link gets 720p unless a lower resolution was already chosen.
+    var effectiveQuality: Quality {
+        guard limitOnCellular, Connectivity.shared.isMetered else { return quality }
+        switch quality {
+        case .auto, .p1080, .p1080hq: return .p720
+        case .p720: return .p720
+        }
+    }
+
+    /// Set when the ceiling in force is not the one the player chose, so the
+    /// interface can say why rather than looking broken.
+    var isLimitedByConnection: Bool {
+        limitOnCellular && Connectivity.shared.isMetered
+            && (effectiveBitrateMbps != maxBitrateMbps || effectiveQuality != quality)
     }
 
     /// The preferences handed to Better xCloud before it boots.
@@ -264,7 +364,8 @@ final class AppSettings: ObservableObject {
     /// own statistics bar kept appearing over ours.
     func betterXCloudGlobalPreferences() -> [String: String] {
         var values: [String: String] = [
-            "stream.video.resolution": quality.betterXCloudValue
+            "stream.video.resolution": effectiveQuality.betterXCloudValue,
+            "touchController.mode": touchControls.betterXCloudValue
         ]
         // Bits per second. Zero is the script's "unlimited", which is its
         // maximum of 15 Mbps rather than genuinely uncapped: the server
@@ -272,8 +373,9 @@ final class AppSettings: ObservableObject {
         //
         // This is negotiated into the session description when the connection
         // is set up, so it can only ever apply to the next session.
-        if maxBitrateMbps > 0 {
-            values["stream.video.maxBitrate"] = String(maxBitrateMbps * 1_000_000)
+        let ceiling = effectiveBitrateMbps
+        if ceiling > 0 {
+            values["stream.video.maxBitrate"] = String(ceiling * 1_000_000)
         }
         if matchStreamStyle {
             // The dark base is the only one of its themes that a translucent
@@ -329,7 +431,7 @@ final class AppSettings: ObservableObject {
         StreamEnhancer.Configuration(
             enabled: enhancerEnabled,
             preferHEVC: preferHEVC,
-            bitrateKbps: maxBitrateMbps > 0 ? maxBitrateMbps * 1000 : 0,
+            bitrateKbps: effectiveBitrateMbps > 0 ? effectiveBitrateMbps * 1000 : 0,
             sharpness: sharpness,
             saturation: saturation,
             contrast: contrast,
