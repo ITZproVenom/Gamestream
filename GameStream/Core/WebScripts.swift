@@ -1032,20 +1032,40 @@ enum WebScripts {
             reader.height = video.videoHeight;
             var context = reader.getContext("2d", { alpha: false, willReadFrequently: true });
             var frames = [];
+            // A stalled stream never presents another frame, and without a
+            // deadline the promise simply never settles: the screenshot
+            // button would spin for the rest of the session. Whatever has
+            // been collected by then is stacked instead.
+            var settled = false;
+            var deadline = Date.now() + 1500;
+
+            function finish() {
+                if (settled) return;
+                settled = true;
+                if (!frames.length) {
+                    resolve({ error: "no frame was presented" });
+                    return;
+                }
+                try {
+                    resolve(stack(video, frames) || { error: "nothing was captured" });
+                } catch (e) {
+                    resolve({ error: String(e) });
+                }
+            }
+
+            setTimeout(finish, 1800);
 
             function next() {
-                if (frames.length >= count) {
-                    try {
-                        resolve(stack(video, frames) || { error: "nothing was captured" });
-                    } catch (e) {
-                        resolve({ error: String(e) });
-                    }
+                if (settled) return;
+                if (frames.length >= count || Date.now() > deadline) {
+                    finish();
                     return;
                 }
                 try {
                     context.drawImage(video, 0, 0, reader.width, reader.height);
                     frames.push(context.getImageData(0, 0, reader.width, reader.height).data);
                 } catch (e) {
+                    settled = true;
                     resolve({ error: String(e) });
                     return;
                 }
