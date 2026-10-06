@@ -41,8 +41,15 @@ enum DeepLink {
     /// Resolves an identifier the way a person would mean it: exact product
     /// ID first, then slug, then a title match.
     static func game(for identifier: String, in catalog: Catalog) -> Game? {
-        let all = catalog.games
+        // The library is checked alongside the catalog rather than after it.
+        // A shortcut or a Spotlight result can arrive before the catalog has
+        // loaded, which on a cold start is most of the time, and the games
+        // someone is most likely to ask for by name are the ones already in
+        // their own library.
+        let library = LibraryStore.shared
+        let all = catalog.games + library.recents + library.favorites + library.queue
         if let exact = all.first(where: { $0.matches(id: identifier) }) { return exact }
+        if let remembered = library.knownGame(id: identifier) { return remembered }
         if let slug = all.first(where: { $0.slug.caseInsensitiveCompare(identifier) == .orderedSame }) {
             return slug
         }

@@ -275,7 +275,7 @@ struct ActivityView: View {
                         } footer: {
                             Text(total(of: group.records))
                         }
-                        .listRowBackground(Color.white.opacity(0.06))
+                        .listRowBackground(Color.primary.opacity(0.06))
                     }
                 }
             }

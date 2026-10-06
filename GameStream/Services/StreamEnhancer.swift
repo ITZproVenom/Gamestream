@@ -52,6 +52,14 @@ enum StreamEnhancer {
         var report = { codecs: [], chosen: null, bitrate: null, notes: [] };
         window.__gsEnhanceReport = report;
 
+        /// Notes are for the stats readout, so one line of each kind is
+        /// enough. Renegotiation happens repeatedly in a long session and the
+        /// list used to grow with it.
+        function note(text) {
+            if (report.notes.indexOf(text) === -1) report.notes.push(text);
+            if (report.notes.length > 8) report.notes.shift();
+        }
+
         function post(payload) {
             try {
                 window.webkit.messageHandlers.gamestream.postMessage(payload);
@@ -127,7 +135,16 @@ enum StreamEnhancer {
                     return;
                 }
             }
-            lines.splice(section.start + 1, 0, "b=AS:" + kbps);
+            // A media section's lines have a fixed order: m=, then i=, then
+            // c=, and only then b=. Inserting the bandwidth line directly
+            // after m=video put it ahead of c=, which is a malformed
+            // description that a strict parser is entitled to reject.
+            var at = section.start + 1;
+            while (at < section.end
+                   && (lines[at].indexOf("i=") === 0 || lines[at].indexOf("c=") === 0)) {
+                at++;
+            }
+            lines.splice(at, 0, "b=AS:" + kbps);
         }
 
         function edit(sdp) {
@@ -142,9 +159,9 @@ enum StreamEnhancer {
             if (config.preferHEVC) {
                 if (prefer(lines, section, "H265")) {
                     report.chosen = "H265";
-                    report.notes.push("asked for H.265");
+                    note("asked for H.265");
                 } else {
-                    report.notes.push("H.265 was not offered by the server");
+                    note("H.265 was not offered by the server");
                 }
             }
             if (config.bitrateKbps > 0) {
@@ -179,8 +196,13 @@ enum StreamEnhancer {
                     } catch (e) {}
                 });
 
+                // The extra arguments are forwarded, not dropped: the
+                // older callback form of these methods takes a success and a
+                // failure handler, and a page using it would otherwise never
+                // hear back.
                 var setLocal = pc.setLocalDescription.bind(pc);
                 pc.setLocalDescription = function(description) {
+                    var rest = Array.prototype.slice.call(arguments, 1);
                     try {
                         if (description && description.sdp) {
                             description = {
@@ -189,11 +211,12 @@ enum StreamEnhancer {
                             };
                         }
                     } catch (e) {}
-                    return setLocal(description);
+                    return setLocal.apply(null, [description].concat(rest));
                 };
 
                 var setRemote = pc.setRemoteDescription.bind(pc);
                 pc.setRemoteDescription = function(description) {
+                    var rest = Array.prototype.slice.call(arguments, 1);
                     try {
                         if (description && description.sdp) {
                             var lines = description.sdp.split(/\r\n|\n/);
@@ -208,7 +231,7 @@ enum StreamEnhancer {
                             }
                         }
                     } catch (e) {}
-                    return setRemote(description);
+                    return setRemote.apply(null, [description].concat(rest));
                 };
 
                 return pc;

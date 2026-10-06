@@ -27,6 +27,7 @@ enum Theme {
 /// something worth refracting — glass over a flat grey reads as grey.
 struct AuroraBackground: View {
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var settings: AppSettings
 
     @State private var drift: CGFloat = 0
@@ -51,6 +52,12 @@ struct AuroraBackground: View {
         }
         .ignoresSafeArea()
         .onAppear {
+            // Reduce Motion means no endless drift: the gradient is drawn
+            // once, in its mid position, and left alone.
+            guard !reduceMotion else {
+                drift = 0.5
+                return
+            }
             withAnimation(.easeInOut(duration: 14).repeatForever(autoreverses: true)) {
                 drift = 1
             }

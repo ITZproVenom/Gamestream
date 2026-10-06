@@ -15,6 +15,7 @@ import androidx.lifecycle.viewModelScope
 class SessionStore(app: Application) : AndroidViewModel(app) {
     private val prefs = app.getSharedPreferences("gamestream", Context.MODE_PRIVATE)
     private val playActivity = PlayActivity.get(app)
+    private val known = KnownGames.get(app)
     private var didConsumeLaunchResume = false
 
     var isSignedIn by mutableStateOf(false)
@@ -35,7 +36,10 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
     var offerPlayNext by mutableStateOf(false)
     var resumeLastOnOpen by mutableStateOf(prefs.getBoolean(KEY_RESUME, false))
         private set
-    var favoriteIds by mutableStateOf(prefs.getStringSet(KEY_FAVS, emptySet())?.toSet() ?: emptySet())
+    // An ordered list, not a set. SharedPreferences gives a string set back
+    // in whatever order it likes, so favourites used to come back shuffled
+    // after every restart.
+    var favoriteIds by mutableStateOf(loadFavorites(prefs))
         private set
     var recentIds by mutableStateOf(prefs.getString("recent_ids", "")?.split(",")?.filter { it.isNotBlank() } ?: emptyList())
         private set
@@ -91,6 +95,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
     fun openHome() { returnToHub() }
     fun openXboxCloud() { returnToHub() }
     fun openGame(game: CatalogGame) {
+        known.remember(game)
         webUrl = IDLE_URL
         isStreaming = false
         offerPlayNext = false
@@ -99,6 +104,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         rememberRecent(game.id)
     }
     fun playGame(game: CatalogGame) {
+        known.remember(game)
         pendingJs = null
         webUrl = game.launchUrl
         isStreaming = true
@@ -148,8 +154,13 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
     }
     fun isFavorite(id: String) = favoriteIds.contains(id)
     fun toggleFavorite(game: CatalogGame) {
-        favoriteIds = if (favoriteIds.contains(game.id)) favoriteIds - game.id else setOf(game.id) + favoriteIds
-        prefs.edit().putStringSet(KEY_FAVS, favoriteIds).apply()
+        favoriteIds = if (favoriteIds.contains(game.id)) {
+            favoriteIds.filter { it != game.id }
+        } else {
+            known.remember(game)
+            listOf(game.id) + favoriteIds
+        }
+        prefs.edit().putString(KEY_FAVS_ORDER, favoriteIds.joinToString(",")).apply()
     }
     fun rememberRecent(id: String) {
         recentIds = listOf(id) + recentIds.filter { it != id }
@@ -158,6 +169,7 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
     }
     fun isQueued(id: String) = queueIds.contains(id)
     fun toggleQueue(game: CatalogGame) {
+        known.remember(game)
         queueIds = if (queueIds.contains(game.id)) queueIds.filter { it != game.id } else (queueIds + game.id).take(16)
         prefs.edit().putString("queue_ids", queueIds.joinToString(",")).apply()
     }
@@ -165,15 +177,15 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         queueIds = queueIds.filter { it != id }
         prefs.edit().putString("queue_ids", queueIds.joinToString(",")).apply()
     }
-    fun queuedGames(): List<CatalogGame> = queueIds.mapNotNull { id -> GameCatalog.games.find { it.id == id } }
+    fun queuedGames(): List<CatalogGame> = queueIds.mapNotNull { GameCatalog.find(it) }
     fun playNextQueued(): Boolean {
         val next = queuedGames().firstOrNull() ?: return false
         dequeue(next.id)
         playGame(next)
         return true
     }
-    fun favoriteGames(): List<CatalogGame> = favoriteIds.mapNotNull { id -> GameCatalog.games.find { it.id == id } }
-    fun recentGames(): List<CatalogGame> = recentIds.mapNotNull { id -> GameCatalog.games.find { it.id == id } }
+    fun favoriteGames(): List<CatalogGame> = favoriteIds.mapNotNull { GameCatalog.find(it) }
+    fun recentGames(): List<CatalogGame> = recentIds.mapNotNull { GameCatalog.find(it) }
     fun openSearch(query: String) {
         val q = query.trim()
         if (q.isEmpty()) return
@@ -285,8 +297,22 @@ class SessionStore(app: Application) : AndroidViewModel(app) {
         private const val KEY_RES = "resolution"
         private const val KEY_REGION = "region"
         private const val KEY_FAVS = "favorite_ids"
+        private const val KEY_FAVS_ORDER = "favorite_ids_order"
         private const val KEY_RESUME = "resume_last_on_open"
         private const val KEY_BX_PREFS = "bx_prefs_v1"
+        /// Reads the ordered list, migrating the old unordered set once.
+        private fun loadFavorites(prefs: android.content.SharedPreferences): List<String> {
+            val ordered = prefs.getString(KEY_FAVS_ORDER, null)
+            if (ordered != null) {
+                return ordered.split(",").filter { it.isNotBlank() }
+            }
+            val legacy = prefs.getStringSet(KEY_FAVS, emptySet())?.filter { it.isNotBlank() }.orEmpty()
+            if (legacy.isNotEmpty()) {
+                prefs.edit().putString(KEY_FAVS_ORDER, legacy.joinToString(",")).apply()
+            }
+            return legacy
+        }
+
         fun isStreamingUrl(url: String): Boolean {
             val lower = url.lowercase()
             if (lower.contains("/play/games")) return false

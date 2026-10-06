@@ -14,6 +14,7 @@ import android.webkit.WebViewClient
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -33,6 +34,11 @@ fun XboxWebView(
     val context = LocalContext.current
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
     val rumble = remember { ControllerRumble.get(context) }
+
+    // What the view was last asked to load. The factory loads the first URL
+    // itself, and without this the effect below saw an empty WebView.url a
+    // moment later and loaded the same page a second time.
+    val requested = remember { mutableStateOf(session.webUrl) }
 
     val webView = remember {
         WebView(context).apply {
@@ -92,14 +98,32 @@ fun XboxWebView(
     }
 
     DisposableEffect(Unit) {
-        onDispose { rumble.stop() }
+        onDispose {
+            rumble.stop()
+            // Leaving the player has to stop the session for real. A detached
+            // WebView keeps its page alive: the stream kept running, the Xbox
+            // session stayed open and the game's audio carried on playing
+            // over the rest of the app.
+            runCatching {
+                webView.stopLoading()
+                webView.webChromeClient = null
+                webView.removeJavascriptInterface("GameStreamBridge")
+                webView.loadUrl("about:blank")
+                (webView.parent as? ViewGroup)?.removeView(webView)
+                webView.destroy()
+            }
+        }
     }
 
     LaunchedEffect(session.webUrl) {
         val current = webView.url ?: ""
-        if (!urlsEquivalent(current, session.webUrl)) {
-            webView.loadUrl(session.webUrl)
+        if (urlsEquivalent(requested.value, session.webUrl) &&
+            (current.isEmpty() || urlsEquivalent(current, session.webUrl))
+        ) {
+            return@LaunchedEffect
         }
+        requested.value = session.webUrl
+        webView.loadUrl(session.webUrl)
     }
 
     LaunchedEffect(session.reloadNonce) {

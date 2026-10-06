@@ -59,7 +59,18 @@ object BetterXCloudInjector {
             if(s.textContent!==css)s.textContent=css;
           }
           apply();
-          try{new MutationObserver(apply).observe(document.documentElement,{childList:true,subtree:true});}catch(e){}
+          // The stream page mutates its DOM constantly, and reacting to every
+          // mutation meant this ran thousands of times a second while a game
+          // was running. One pass per frame at most is plenty.
+          var queued=false;
+          function schedule(){
+            if(queued)return;
+            queued=true;
+            var run=function(){queued=false;apply();};
+            if(window.requestAnimationFrame)window.requestAnimationFrame(run);
+            else setTimeout(run,16);
+          }
+          try{new MutationObserver(schedule).observe(document.documentElement,{childList:true,subtree:true});}catch(e){}
           setInterval(apply,2000);
         })();
     """.trimIndent()

@@ -56,7 +56,7 @@ class CollectionStore(context: Context) {
     }
 
     fun games(collection: GameCollection): List<CatalogGame> =
-        collection.gameIds.mapNotNull { id -> GameCatalog.games.find { it.id == id } }
+        collection.gameIds.mapNotNull { id -> GameCatalog.find(id) }
 
     private fun persist(items: List<GameCollection>) {
         val arr = JSONArray()

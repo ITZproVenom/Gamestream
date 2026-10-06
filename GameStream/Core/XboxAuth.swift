@@ -68,6 +68,9 @@ final class XboxAuth: NSObject, ObservableObject {
     private var probeLoaded = false
     private var probeIndex = 0
     private var probeLoading = false
+    /// Which load the timeout belongs to, so a timer armed for one attempt
+    /// cannot abandon the next one.
+    private var probeLoadGeneration = 0
     /// Every caller waiting on the current load. A single continuation slot
     /// would be overwritten when two checks overlap, and the overwritten one
     /// would never resume, hanging the app on "Checking your Xbox session".
@@ -149,7 +152,7 @@ final class XboxAuth: NSObject, ObservableObject {
         guard let probeView else {
             lastError = "Could not create the authentication probe."
             log.error("auth", "probe webview unavailable")
-            apply(.signedOut)
+            applyUndetermined()
             return state
         }
 
@@ -166,7 +169,7 @@ final class XboxAuth: NSObject, ObservableObject {
             lastError = error.localizedDescription
             log.error("auth", "probe failed: \(error.localizedDescription)")
             lastCheck = Date()
-            apply(.signedOut)
+            applyUndetermined()
             return state
         }
 
@@ -176,7 +179,7 @@ final class XboxAuth: NSObject, ObservableObject {
             lastError = "The Xbox page returned an unreadable response."
             log.error("auth", "probe returned no usable payload")
             lastCheck = Date()
-            apply(.signedOut)
+            applyUndetermined()
             return state
         }
 
@@ -254,8 +257,10 @@ final class XboxAuth: NSObject, ObservableObject {
         }
         await store.removeData(ofTypes: types, for: matching)
 
+        // The next check reloads the probe through the same state machine.
+        // Loading it here raced that machine, and a reply arriving outside it
+        // was discarded, leaving the probe marked unloaded either way.
         probeLoaded = false
-        probeView?.load(URLRequest(url: probeURL))
         log.info("auth", "cleared \(matching.count) website data record(s)")
     }
 
@@ -264,6 +269,19 @@ final class XboxAuth: NSObject, ObservableObject {
     private func apply(_ next: State) {
         guard state != next else { return }
         state = next
+    }
+
+    /// The check could not be carried out. That is not the same as being
+    /// signed out, and treating it as such is how a brief network failure at
+    /// launch threw a signed-in user back to the sign-in screen with a valid
+    /// session sitting in the data store. A session already known to be good
+    /// is kept until a check actually says otherwise.
+    private func applyUndetermined() {
+        guard !state.isSignedIn else {
+            log.warn("auth", "could not re-check the session; keeping the one we have")
+            return
+        }
+        apply(.signedOut)
     }
 
     /// True when the probe answered "I could not read storage" instead of
@@ -302,6 +320,11 @@ final class XboxAuth: NSObject, ObservableObject {
             // one can be throttled by the system and never finish.
             attachToWindow(view)
             probeView = view
+        } else if probeView?.superview == nil, let view = probeView {
+            // The first attempt can happen before any window exists, and a
+            // fully detached webview is throttled by the system and may never
+            // finish loading.
+            attachToWindow(view)
         }
 
         guard !probeLoaded, let probeView else { return }
@@ -310,11 +333,14 @@ final class XboxAuth: NSObject, ObservableObject {
             probeWaiters.append(continuation)
             guard !probeLoading else { return }
             probeLoading = true
+            probeLoadGeneration += 1
+            let generation = probeLoadGeneration
             probeView.load(URLRequest(url: probeURL))
             // Never let a hung network request block the UI forever.
             Task { [weak self] in
                 try? await Task.sleep(for: .seconds(12))
-                guard let self, self.probeLoading else { return }
+                guard let self, self.probeLoading,
+                      self.probeLoadGeneration == generation else { return }
                 self.log.warn("auth", "probe load timed out")
                 self.finishProbeLoad(success: false, detail: "timed out")
             }

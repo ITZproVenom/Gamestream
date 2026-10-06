@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -58,6 +60,7 @@ import com.gamestream.app.ForYouCatalog
 import com.gamestream.app.GameCatalog
 import com.gamestream.app.GameDiscovery
 import com.gamestream.app.SessionStore
+import com.gamestream.app.ui.GameStreamBackdrop
 
 private fun accentColor(accent: Long): Color = Color(accent.toInt())
 
@@ -72,11 +75,19 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
     var detail by remember { mutableStateOf<CatalogGame?>(null) }
     var filter by remember { mutableStateOf("Home") }
     val filtering = query.isNotBlank()
-    val matches = remember(query) { GameCatalog.matches(query) }
+    // The catalogue arrives after the first frame, so anything remembered
+    // from it has to be keyed on it as well. Without this the search results
+    // and every shelf stayed as they were built from the seed list.
+    val catalogSize = GameCatalog.games.size
+    val matches = remember(query, catalogSize) { GameCatalog.matches(query) }
     val recents = session.recentGames()
     val favs = session.favoriteGames()
-    val forYou = remember(session.favoriteIds, session.recentIds) { ForYouCatalog.forYou(favs, recents) }
-    val because = remember(session.recentIds) { ForYouCatalog.becauseYouPlayed(recents) }
+    val forYou = remember(session.favoriteIds, session.recentIds, catalogSize) {
+        ForYouCatalog.forYou(favs, recents)
+    }
+    val because = remember(session.recentIds, catalogSize) {
+        ForYouCatalog.becauseYouPlayed(recents)
+    }
 
     val primaryChips = listOf("Home", "Library", "Browse", "For You", "Favorites", "Recents")
     val genreChips = if (appearance.showGenreFilters) {
@@ -95,7 +106,7 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
             ?: GameCatalog.games.filter { it.genre == filter }
     }
 
-    val shelves = remember(session.favoriteIds, session.recentIds, session.queueIds) {
+    val shelves = remember(session.favoriteIds, session.recentIds, session.queueIds, catalogSize) {
         buildList {
             val queued = session.queuedGames()
             if (queued.isNotEmpty()) add("Up Next" to queued)
@@ -118,6 +129,8 @@ fun GameHub(session: SessionStore, modifier: Modifier = Modifier) {
             .clipToBounds()
             .background(bg)
     ) {
+        GameStreamBackdrop(appearance, Modifier.fillMaxSize())
+
         val constraintsMaxWidth = maxWidth
         val featuredWidth = (constraintsMaxWidth * 0.88f).coerceIn(260.dp, 340.dp)
         val posterWidth = (constraintsMaxWidth * posterFrac).coerceIn(100.dp, 150.dp)
@@ -374,13 +387,19 @@ private fun ActivityStrip(session: SessionStore) {
     }
 }
 
+/// A lazy row, deliberately.
+///
+/// Browse hands this the whole catalogue. A plain Row with a scroll modifier
+/// builds every card it is given before any of them are on screen, which for
+/// several hundred games meant several hundred cards and as many artwork
+/// requests for the dozen the player can actually see.
 @Composable
 private fun PosterRow(games: List<CatalogGame>, session: SessionStore, width: Dp, onOpen: (CatalogGame) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        games.forEach { game ->
+        itemsIndexed(games) { _, game ->
             PosterCard(
                 game,
                 session.isFavorite(game.id),

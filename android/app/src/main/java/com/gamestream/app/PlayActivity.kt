@@ -46,8 +46,13 @@ class PlayActivity private constructor(context: Context) {
     }
 
     fun begin(id: String, title: String) {
-        end()
         if (id.isBlank()) return
+        // Already timing this game. The page reports its URL every second
+        // and a half, and every report used to end the session and start a
+        // new one, so the elapsed time never reached the twenty seconds a
+        // session needs to be recorded. Playtime stayed at zero forever.
+        if (activeId == id) return
+        end()
         activeId = id
         activeStart = System.currentTimeMillis()
         if (!stats.containsKey(id)) {
@@ -100,7 +105,10 @@ class PlayActivity private constructor(context: Context) {
     }
 
     fun gamesForHub(): List<CatalogGame> =
-        rankedThisWeek().mapNotNull { stat -> GameCatalog.games.find { it.id == stat.id } ?: GameCatalog.games.find { it.title.equals(stat.title, true) } }
+        rankedThisWeek().mapNotNull { stat ->
+            GameCatalog.find(stat.id)
+                ?: GameCatalog.games.firstOrNull { it.title.equals(stat.title, true) }
+        }
 
     private fun normalizeWeeks() {
         val anchor = startOfWeek()
@@ -133,7 +141,12 @@ class PlayActivity private constructor(context: Context) {
 
     private fun startOfWeek(): Long {
         val cal = Calendar.getInstance()
-        cal.set(Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
+        // Counted backwards from today rather than set directly: assigning
+        // DAY_OF_WEEK depends on how the calendar numbers the week and can
+        // land on a date in the future, which would wipe the week's totals.
+        var back = cal.get(Calendar.DAY_OF_WEEK) - cal.firstDayOfWeek
+        if (back < 0) back += 7
+        cal.add(Calendar.DAY_OF_MONTH, -back)
         cal.set(Calendar.HOUR_OF_DAY, 0)
         cal.set(Calendar.MINUTE, 0)
         cal.set(Calendar.SECOND, 0)

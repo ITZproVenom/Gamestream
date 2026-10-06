@@ -41,8 +41,17 @@ struct ResumeLastGameIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        if let last = LibraryStore.shared.activity.first {
+        // Activity only records sessions that lasted at least fifteen
+        // seconds, so someone who had played but never settled into a game
+        // got nothing from this at all. Recents is the better answer and the
+        // activity list is the fallback.
+        let library = LibraryStore.shared
+        if let recent = library.recents.first {
+            PendingIntent.shared.request = .play(recent.id)
+        } else if let last = library.activity.first {
             PendingIntent.shared.request = .play(last.gameID)
+        } else {
+            PendingIntent.shared.request = .library
         }
         return .result()
     }

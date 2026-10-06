@@ -10,11 +10,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.gamestream.app.AppearancePrefs
 
-private fun accentColor(name: String): Color = when (name) {
+/// Every accent the settings screen offers has a colour here.
+///
+/// Rose, cyan and mono were listed as choices and had no case of their own,
+/// so picking any of them quietly left the app violet.
+fun accentColor(name: String): Color = when (name) {
     "green", "emerald" -> Color(0xFF2ED9A0)
     "blue", "azure" -> Color(0xFF4A94FF)
     "orange", "gold" -> Color(0xFFF5C04A)
     "crimson" -> Color(0xFFF2476B)
+    "rose" -> Color(0xFFFF7AA8)
+    "cyan" -> Color(0xFF3FD2E0)
+    "mono" -> Color(0xFFBFC2CC)
     else -> Color(0xFF8B7CFF)
 }
 
@@ -22,6 +29,11 @@ private fun accentColor(name: String): Color = when (name) {
 fun GameStreamTheme(content: @Composable () -> Unit) {
     val context = LocalContext.current
     val appearance = remember { AppearancePrefs(context) }
+    // Read so a change in Settings re-themes the app immediately. These are
+    // plain preference reads, so without the shared revision the accent and
+    // the light or dark choice only took effect after a restart.
+    @Suppress("UNUSED_VARIABLE")
+    val revision = appearance.revision
     val dark = when (appearance.mode) {
         "light" -> false
         "system" -> isSystemInDarkTheme()

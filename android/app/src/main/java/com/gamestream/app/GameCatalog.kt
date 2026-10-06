@@ -58,6 +58,18 @@ object GameCatalog {
 
     val games: List<CatalogGame> get() = live
 
+    /// Consulted when a product id is not in the current catalogue. Set by
+    /// [KnownGames], which keeps a copy of everything the user has touched.
+    @Volatile
+    var fallback: ((String) -> CatalogGame?)? = null
+
+    /// The one way to turn a stored id back into a game. Product ids come
+    /// back from Microsoft in mixed case, so the comparison ignores it.
+    fun find(id: String): CatalogGame? {
+        if (id.isBlank()) return null
+        return games.firstOrNull { it.id.equals(id, ignoreCase = true) } ?: fallback?.invoke(id)
+    }
+
     fun installLiveCatalog(incoming: List<CatalogGame>) {
         val unique = incoming
             .map { it.copy(id = it.id.trim()) }

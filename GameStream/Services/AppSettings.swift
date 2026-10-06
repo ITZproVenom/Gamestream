@@ -172,6 +172,8 @@ final class AppSettings: ObservableObject {
         static let cellularLimit = "settings.cellularLimit"
         static let cellularBitrate = "settings.cellularBitrateMbps"
         static let overlayButton = "settings.overlayButton"
+        static let touchAutoOff = "settings.touchAutoOff"
+        static let launchIntro = "settings.launchIntro"
     }
 
     @Published var theme: Theme { didSet { store(theme.rawValue, Key.theme) } }
@@ -252,9 +254,32 @@ final class AppSettings: ObservableObject {
         didSet { store(touchControls.rawValue, Key.touchControls); applyToLiveStream() }
     }
 
-    /// What the enhancement layer is told to hide. Derived so the CSS and the
-    /// session configuration can never contradict each other.
-    var hideTouchControls: Bool { touchControls == .hidden }
+    /// Put the on-screen pad away while a controller is connected.
+    ///
+    /// Forcing touch input is decided once, when the session is negotiated, so
+    /// the overlay cannot be withdrawn later by asking Xbox again. Plugging a
+    /// controller in mid-game would otherwise leave a thumbstick and a row of
+    /// buttons sitting over the picture with nothing using them.
+    @Published var touchAutoOffWithController: Bool {
+        didSet { store(touchAutoOffWithController, Key.touchAutoOff); applyToLiveStream() }
+    }
+
+    /// What the enhancement layer is told to hide. Derived so the CSS, the
+    /// session configuration and the attached hardware can never contradict
+    /// each other.
+    var hideTouchControls: Bool {
+        if touchControls == .hidden { return true }
+        if touchAutoOffWithController, ControllerShortcuts.shared.hasController {
+            return true
+        }
+        return false
+    }
+
+    /// A controller appeared or went away. The enhancement layer accepts a new
+    /// configuration at any time, so this takes effect in the running game.
+    func controllerPresenceChanged() {
+        applyToLiveStream()
+    }
 
     /// Spend less on a cellular connection. The ceiling is negotiated when a
     /// session starts, so this applies to the next game rather than the one
@@ -265,6 +290,9 @@ final class AppSettings: ObservableObject {
     @Published var cellularBitrateMbps: Int {
         didSet { store(cellularBitrateMbps, Key.cellularBitrate) }
     }
+
+    /// Play the opening animation when the app is launched cold.
+    @Published var launchIntro: Bool { didSet { store(launchIntro, Key.launchIntro) } }
 
     /// Open GameStream's overlay with the controller's View button, so the
     /// player does not have to find the screen to reach it.
@@ -325,6 +353,8 @@ final class AppSettings: ObservableObject {
         limitOnCellular = defaults.object(forKey: Key.cellularLimit) as? Bool ?? true
         cellularBitrateMbps = defaults.object(forKey: Key.cellularBitrate) as? Int ?? 5
         overlayButtonEnabled = defaults.object(forKey: Key.overlayButton) as? Bool ?? false
+        touchAutoOffWithController = defaults.object(forKey: Key.touchAutoOff) as? Bool ?? true
+        launchIntro = defaults.object(forKey: Key.launchIntro) as? Bool ?? true
     }
 
     /// The bitrate ceiling that applies to a session started right now.
@@ -365,7 +395,8 @@ final class AppSettings: ObservableObject {
     func betterXCloudGlobalPreferences() -> [String: String] {
         var values: [String: String] = [
             "stream.video.resolution": effectiveQuality.betterXCloudValue,
-            "touchController.mode": touchControls.betterXCloudValue
+            "touchController.mode": touchControls.betterXCloudValue,
+            "touchController.autoOff": touchAutoOffWithController ? "true" : "false"
         ]
         // Bits per second. Zero is the script's "unlimited", which is its
         // maximum of 15 Mbps rather than genuinely uncapped: the server

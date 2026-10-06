@@ -33,16 +33,29 @@ final class ControllerShortcuts {
         let center = NotificationCenter.default
         observers.append(center.addObserver(forName: .GCControllerDidConnect,
                                            object: nil, queue: .main) { _ in
-            MainActor.assumeIsolated { ControllerShortcuts.shared.install() }
+            MainActor.assumeIsolated { ControllerShortcuts.shared.presenceChanged() }
         })
         observers.append(center.addObserver(forName: .GCControllerDidDisconnect,
                                            object: nil, queue: .main) { _ in
-            MainActor.assumeIsolated { ControllerShortcuts.shared.install() }
+            MainActor.assumeIsolated { ControllerShortcuts.shared.presenceChanged() }
         })
         install()
     }
 
     func settingsChanged() { install() }
+
+    /// Whether a pad is attached right now.
+    var hasController: Bool { !GCController.controllers().isEmpty }
+
+    /// A pad appeared or went away: claim or release the View button, and tell
+    /// Settings so the on-screen controls can get out of the way.
+    func presenceChanged() {
+        install()
+        AppLog.shared.info("controller", hasController
+                           ? "a controller is attached"
+                           : "no controller is attached")
+        AppSettings.shared.controllerPresenceChanged()
+    }
 
     private func install() {
         let enabled = AppSettings.shared.overlayButtonEnabled

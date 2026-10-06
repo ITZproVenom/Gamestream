@@ -22,10 +22,12 @@ final class LibraryStore: ObservableObject {
         static let queue = "library.queue.v1"
         static let lists = "library.lists.v1"
         static let activity = "library.activity.v1"
+        static let known = "library.known.v1"
     }
 
     private static let recentsLimit = 30
     private static let activityLimit = 300
+    private static let knownLimit = 600
 
     private init() {
         favorites = Self.load([Game].self, Key.favorites) ?? []
@@ -33,7 +35,35 @@ final class LibraryStore: ObservableObject {
         queue = Self.load([Game].self, Key.queue) ?? []
         lists = Self.load([GameList].self, Key.lists) ?? []
         activity = Self.load([PlayRecord].self, Key.activity) ?? []
+        known = Self.load([String: Game].self, Key.known) ?? [:]
     }
+
+    /// Every game the library has ever held, kept so a list can still show a
+    /// game the catalog has stopped returning.
+    ///
+    /// Favourites and recents store the whole `Game`, which is why they
+    /// survive a thin catalog response. A list stores identifiers only, so it
+    /// had the original 1.x problem all to itself: a game that left Game Pass,
+    /// or a catalog request that simply did not include it, dropped out of the
+    /// list with no trace and no explanation.
+    private var known: [String: Game] = [:]
+
+    private func remember(_ game: Game) {
+        let key = game.id.lowercased()
+        guard known[key] != game else { return }
+        known[key] = game
+        // Bounded, so a long-lived install cannot grow this without limit.
+        if known.count > Self.knownLimit {
+            let keep = Set(
+                (favorites + recents + queue).map { $0.id.lowercased() }
+                    + lists.flatMap { $0.gameIDs }.map { $0.lowercased() }
+            )
+            known = known.filter { keep.contains($0.key) }
+        }
+        save(known, Key.known)
+    }
+
+    func knownGame(id: String) -> Game? { known[id.lowercased()] }
 
     // MARK: - Favourites
 
@@ -47,6 +77,7 @@ final class LibraryStore: ObservableObject {
         } else {
             favorites.insert(game, at: 0)
         }
+        remember(game)
         save(favorites, Key.favorites)
     }
 
@@ -60,6 +91,7 @@ final class LibraryStore: ObservableObject {
     func noteLaunch(_ game: Game) {
         recents.removeAll { $0.matches(id: game.id) }
         recents.insert(game, at: 0)
+        remember(game)
         if recents.count > Self.recentsLimit {
             recents.removeLast(recents.count - Self.recentsLimit)
         }
@@ -83,6 +115,7 @@ final class LibraryStore: ObservableObject {
         } else {
             queue.append(game)
         }
+        remember(game)
         save(queue, Key.queue)
     }
 
@@ -132,6 +165,7 @@ final class LibraryStore: ObservableObject {
             lists[index].gameIDs.remove(at: existing)
         } else {
             lists[index].gameIDs.append(game.id)
+            remember(game)
         }
         save(lists, Key.lists)
     }
@@ -147,6 +181,8 @@ final class LibraryStore: ObservableObject {
             catalog.game(id: id)
                 ?? favorites.first { $0.matches(id: id) }
                 ?? recents.first { $0.matches(id: id) }
+                ?? queue.first { $0.matches(id: id) }
+                ?? knownGame(id: id)
         }
     }
 

@@ -73,6 +73,12 @@ struct HomeView: View {
             .scrollEdgeEffectStyle(.soft, for: .top)
             .background { AuroraBackground() }
             .refreshable { await catalog.refresh() }
+            // Game Pass changes every month, and a filter left pointing at a
+            // genre that is no longer in the catalog showed an empty shelf
+            // under a heading naming it.
+            .onChange(of: catalog.games) { _, _ in
+                if let genre, !catalog.genres.contains(genre) { self.genre = nil }
+            }
             .navigationTitle(greeting)
             .toolbarTitleDisplayMode(.inlineLarge)
             .toolbar {

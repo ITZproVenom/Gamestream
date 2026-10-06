@@ -8,11 +8,21 @@ import androidx.compose.runtime.setValue
 class AppearancePrefs(context: Context) {
     private val prefs = context.getSharedPreferences("gamestream.appearance", Context.MODE_PRIVATE)
 
-    var revision by mutableIntStateOf(0)
-        private set
+    companion object {
+        private var sharedRevision by mutableIntStateOf(0)
+    }
+
+    /// Shared by every instance.
+    ///
+    /// Each screen builds its own AppearancePrefs, and the counter used to
+    /// live on the instance, so changing a setting bumped only the copy the
+    /// settings screen was holding. Nothing else in the app noticed until it
+    /// was rebuilt from scratch, which is why the hub kept its old spacing,
+    /// background and poster size until the app was restarted.
+    val revision: Int get() = sharedRevision
 
     private fun bump() {
-        revision += 1
+        sharedRevision += 1
     }
 
     var mode: String
@@ -101,7 +111,9 @@ class AppearancePrefs(context: Context) {
             "plum" -> 0xFF240F2E.toInt()
             "wine" -> 0xFF2E0D1A.toInt()
             "slate" -> 0xFF1A1E29.toInt()
-            "white" -> 0xFFF5F5FA.toInt()
+            // "white" was offered as a background while every label in the
+            // app is drawn in white, so choosing it made the interface
+            // invisible. An existing choice is read back as the dark default.
             else -> 0xFF0A0A12.toInt()
         }
         "midnight" -> 0xFF050514.toInt()
