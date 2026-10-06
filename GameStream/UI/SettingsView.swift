@@ -117,6 +117,17 @@ struct SettingsView: View {
 
     private var appearance: some View {
         SettingsGroup("Appearance", icon: "paintbrush.fill") {
+            VStack(alignment: .leading, spacing: 5) {
+                Toggle("Opening animation", isOn: $settings.launchIntro)
+                Text("A short wordmark animation on a cold launch, drawn in the "
+                     + "accent colour. Tap to skip it. With Reduce Motion on it is "
+                     + "a plain fade.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsDivider()
+
             Picker("Theme", selection: $settings.theme) {
                 ForEach(AppSettings.Theme.allCases) { theme in
                     Text(theme.title).tag(theme)

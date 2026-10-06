@@ -173,6 +173,7 @@ final class AppSettings: ObservableObject {
         static let cellularBitrate = "settings.cellularBitrateMbps"
         static let overlayButton = "settings.overlayButton"
         static let touchAutoOff = "settings.touchAutoOff"
+        static let launchIntro = "settings.launchIntro"
     }
 
     @Published var theme: Theme { didSet { store(theme.rawValue, Key.theme) } }
@@ -290,6 +291,9 @@ final class AppSettings: ObservableObject {
         didSet { store(cellularBitrateMbps, Key.cellularBitrate) }
     }
 
+    /// Play the opening animation when the app is launched cold.
+    @Published var launchIntro: Bool { didSet { store(launchIntro, Key.launchIntro) } }
+
     /// Open GameStream's overlay with the controller's View button, so the
     /// player does not have to find the screen to reach it.
     @Published var overlayButtonEnabled: Bool {
@@ -350,6 +354,7 @@ final class AppSettings: ObservableObject {
         cellularBitrateMbps = defaults.object(forKey: Key.cellularBitrate) as? Int ?? 5
         overlayButtonEnabled = defaults.object(forKey: Key.overlayButton) as? Bool ?? false
         touchAutoOffWithController = defaults.object(forKey: Key.touchAutoOff) as? Bool ?? true
+        launchIntro = defaults.object(forKey: Key.launchIntro) as? Bool ?? true
     }
 
     /// The bitrate ceiling that applies to a session started right now.

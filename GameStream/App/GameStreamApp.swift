@@ -45,7 +45,22 @@ struct GameStreamApp: App {
             AppLog.shared.info("deeplink", "playing \(game.title)")
             stream.play(game)
         case .open(let identifier):
-            guard let game = DeepLink.game(for: identifier, in: catalog) else { return }
+            guard let game = DeepLink.game(for: identifier, in: catalog) else {
+                // Opening from Spotlight on a cold start used to do nothing
+                // at all: the catalog was empty, there was no match, and the
+                // tap was dropped without a word.
+                AppLog.shared.warn("deeplink", "no game matches \(identifier) yet; "
+                                   + "waiting for the catalogue")
+                Task {
+                    if catalog.games.isEmpty { await catalog.refresh() }
+                    guard let found = DeepLink.game(for: identifier, in: catalog) else {
+                        AppLog.shared.warn("deeplink", "no game matches \(identifier)")
+                        return
+                    }
+                    RootView.Navigator.shared.show(found)
+                }
+                return
+            }
             RootView.Navigator.shared.show(game)
         case .search(let text):
             RootView.Navigator.shared.search(text)

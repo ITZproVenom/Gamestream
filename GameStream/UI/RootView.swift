@@ -15,6 +15,7 @@ struct RootView: View {
     /// that is already up: the request is dropped and the tap does nothing
     /// at all. The sheet is closed first and the player follows it.
     @State private var showingPlayer = false
+    @State private var showingIntro = false
 
     /// Named MainTab, not Tab: SwiftUI's own `Tab` view is used below, and a
     /// nested type with the same name shadows it.
@@ -40,19 +41,50 @@ struct RootView: View {
     }
 
     var body: some View {
-        Group {
-            switch auth.state {
-            case .unknown:
-                startup
-            case .signedOut:
-                WelcomeView()
-            case .signedIn:
-                shell
+        ZStack {
+            Group {
+                switch auth.state {
+                case .unknown:
+                    startup
+                case .signedOut:
+                    WelcomeView()
+                case .signedIn:
+                    shell
+                }
+            }
+            .tint(settings.accent.color)
+            .preferredColorScheme(settings.theme.colorScheme)
+            .animation(.smooth(duration: 0.28), value: auth.state)
+
+            // Over the top of everything, including the session check, so the
+            // first thing on screen is the app rather than a spinner. It is
+            // only ever shown once per cold launch.
+            if showingIntro {
+                IntroView(accent: settings.accent.color) {
+                    withAnimation(.easeInOut(duration: 0.45)) { showingIntro = false }
+                    IntroGate.shared.markPlayed()
+                }
+                .transition(.opacity)
+                .zIndex(10)
             }
         }
-        .tint(settings.accent.color)
-        .preferredColorScheme(settings.theme.colorScheme)
-        .animation(.smooth(duration: 0.28), value: auth.state)
+        .onAppear {
+            showingIntro = settings.launchIntro && !IntroGate.shared.hasPlayed
+        }
+    }
+
+    /// Whether the opening animation has already run in this process.
+    ///
+    /// Held outside the view because SwiftUI can rebuild the root view for
+    /// reasons that have nothing to do with launching: the sign-in state
+    /// settling is one, and replaying the intro every time it did would be
+    /// the worst version of this feature.
+    @MainActor
+    final class IntroGate {
+        static let shared = IntroGate()
+        private(set) var hasPlayed = false
+        private init() {}
+        func markPlayed() { hasPlayed = true }
     }
 
     private var startup: some View {

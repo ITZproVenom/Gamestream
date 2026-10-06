@@ -12,6 +12,13 @@ enum SpotlightIndex {
     private static let indexedKey = "spotlight.indexedIdentifiers"
 
     static func update(with games: [Game]) {
+        // A refresh that failed leaves an empty catalog, and taking that at
+        // face value emptied iOS search of the whole library because of one
+        // bad request.
+        guard !games.isEmpty else {
+            AppLog.shared.debug("spotlight", "nothing to index; leaving the index alone")
+            return
+        }
         let kept = Array(games.prefix(400))
         removeDeparted(keeping: kept)
 
