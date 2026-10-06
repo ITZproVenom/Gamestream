@@ -49,9 +49,17 @@ struct StreamView: View {
                         hud.transition(.opacity.combined(with: .move(edge: .top)))
                     }
                     if showingStats {
-                        statsStrip
-                            .padding(.horizontal, 16)
-                            .transition(.move(edge: .top).combined(with: .opacity))
+                        // Eight read-outs do not fit across a phone held in
+                        // landscape. The HUD above was already given this
+                        // treatment; the strip was still being clipped at the
+                        // trailing edge, which hid the codec and resolution.
+                        ScrollView(.horizontal) {
+                            statsStrip
+                        }
+                        .scrollIndicators(.hidden)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .transition(.move(edge: .top).combined(with: .opacity))
                     }
                     Spacer(minLength: 0)
                 }
@@ -407,7 +415,6 @@ struct StreamView: View {
         .padding(.horizontal, 13)
         .padding(.vertical, 8)
         .glassEffect(.regular, in: Capsule())
-        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(label(for: stats.quality))
     }
