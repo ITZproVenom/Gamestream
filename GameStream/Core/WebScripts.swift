@@ -1228,6 +1228,11 @@ enum WebScripts {
         var LABELS = ["play", "play now", "play with ads", "resume", "continue playing"];
         var attempts = 0;
         var maxAttempts = 40;      // ~30 seconds at 750 ms
+        // A click is given time to have an effect. Without this the same
+        // Play button was pressed again every 750 ms until the video started,
+        // and a second press can cancel what the first one began.
+        var clickedAt = 0;
+        var clickCooldown = 4000;
 
         var timer = setInterval(function() {
             try {
@@ -1244,6 +1249,8 @@ enum WebScripts {
                     }
                 }
 
+                if (Date.now() - clickedAt < clickCooldown) return;
+
                 var nodes = document.querySelectorAll('button, [role="button"]');
                 for (var j = 0; j < nodes.length; j++) {
                     var node = nodes[j];
@@ -1253,6 +1260,7 @@ enum WebScripts {
                     if (!text) continue;
                     if (LABELS.indexOf(text) === -1) continue;
                     node.click();
+                    clickedAt = Date.now();
                     try {
                         window.webkit.messageHandlers.gamestream.postMessage({
                             type: "autoStart", label: text
@@ -1388,7 +1396,9 @@ enum WebScripts {
                         });
                     }
                 } catch (e) {}
-                return nativeFetch.apply(window, arguments);
+                // Passed on explicitly rather than through `arguments`, so
+                // the rewritten init is the one that actually goes out.
+                return nativeFetch.call(window, input, init);
             };
         }
 
