@@ -21,7 +21,7 @@ targets:
         CFBundleName: GameStream
         # The base version. CI adds the number of commits since this line last
         # changed, so bumping it here restarts the patch count.
-        CFBundleShortVersionString: "2.1.0"
+        CFBundleShortVersionString: "2.1.1"
         CFBundleVersion: "1"
         # Stamped by CI. "dev" means a locally generated project.
         GSCommit: "dev"

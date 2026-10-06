@@ -2,6 +2,73 @@
 
 All notable changes to GameStream are documented here.
 
+## 2.1.1 (beta)
+
+An audit pass over both apps. Nothing here is a new feature; all of it is
+behaviour that was wrong.
+
+### iOS
+
+- Touch controls stand down when a controller is connected, and come back when
+  it disconnects.
+- A catalogue page that failed to load no longer deletes the games it would
+  have carried. The pages that did load are merged with what is already on
+  screen, and the failure is logged rather than reported as a successful
+  refresh.
+- Favourites, recents and the queue keep a copy of every game they were told
+  to remember, so a game missing from today's Game Pass response cannot
+  disappear from your own library.
+- The thermal warning only speaks while a stream is running, and no longer
+  claims the resolution was lowered, which it never was.
+- A failed or unreadable account check no longer reports a signed-out account
+  over a session that is known to work.
+- Search prepares its folded text when the catalogue changes instead of folding
+  every title, genre and description on each keystroke.
+- The two time formatters clamp their input, so a bad reading cannot trap.
+- The animated backdrop holds still when Reduce Motion is on.
+- The bandwidth line is written after the connection line, which is the order a
+  session description requires, and both description setters forward their
+  remaining arguments so the older callback form still reports back.
+- The rumble data channel is hooked once per connection rather than once per
+  renegotiation.
+- The auto-start helper gives a Play press four seconds to take effect instead
+  of pressing again every second until the video starts.
+- The stacked screenshot has a deadline: a stalled stream used to leave it
+  waiting for a frame that was never coming.
+- A locale with no region no longer produces a language tag like "en-en", a
+  second redundant network monitor is gone, and the Library genre filter is
+  cleared when the selected genre leaves the shelf.
+- New: a short wordmark animation on launch, which can be turned off in
+  Appearance.
+
+### Android (1.6.0)
+
+- Playtime was never recorded at all. The page reports its URL every second and
+  a half and each report ended the timed session and started a new one, so the
+  elapsed time never reached the twenty seconds a session needs to count.
+- Favourites, recents, the queue and collections stored only a product id and
+  looked the rest up in the live catalogue, so anything today's response did
+  not carry vanished from your library. A full copy of every game you touch is
+  kept now.
+- The catalogue was fetched for market US in English whatever the device asked
+  for, which meant titles your region cannot stream. It uses your market and
+  language, falling back to the US list only when the local market is empty.
+- A catalogue page that failed deleted games, as on iOS.
+- Leaving the player left the web view alive, so the stream kept running and
+  the game audio carried on over the rest of the app.
+- The first launch loaded the page twice.
+- Poster rows built a card and an artwork request for every game handed to
+  them, including the whole catalogue in Browse. They are lazy now.
+- Appearance settings did nothing until the app was restarted. The accent,
+  theme, layout, density and background now apply immediately.
+- Rose, cyan and mono were offered as accents with no colour behind them.
+- Aurora, Still and Mesh all drew the same flat fill. They are real gradients
+  now, and they hold still when motion is reduced.
+- White was offered as a background colour while every label in the app is
+  white, which made the interface invisible.
+- Favourites came back in a random order after a restart.
+- The Better xCloud restyle reacted to every DOM mutation on the stream page.
+
 ## 2.1.0 (beta)
 
 ### Fixed
