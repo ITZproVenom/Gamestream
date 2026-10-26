@@ -87,28 +87,41 @@ struct StatsView: View {
             GlassCard {
                 VStack(alignment: .leading, spacing: 12) {
                     SectionHeader(title: "Stream quality")
-                    Text("Average frame rate and latency across your last "
-                         + "\(measured.count) measured sessions.")
+                    Text("Separate scales keep frame rate and latency readable.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    Chart(Array(measured)) { record in
-                        LineMark(
-                            x: .value("Session", record.startedAt),
-                            y: .value("Frames per second", record.averageFPS)
-                        )
-                        .foregroundStyle(by: .value("Measure", "FPS"))
-                        .interpolationMethod(.monotone)
-
-                        LineMark(
-                            x: .value("Session", record.startedAt),
-                            y: .value("Latency", record.averageLatencyMs)
-                        )
-                        .foregroundStyle(by: .value("Measure", "Latency (ms)"))
-                        .interpolationMethod(.monotone)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Frames per second")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Chart(Array(measured)) { record in
+                            LineMark(
+                                x: .value("Session", record.startedAt),
+                                y: .value("Frames per second", record.averageFPS)
+                            )
+                            .foregroundStyle(.green)
+                            .interpolationMethod(.monotone)
+                        }
+                        .chartYAxis { AxisMarks(position: .leading) }
+                        .frame(height: 120)
                     }
-                    .chartLegend(position: .bottom, spacing: 8)
-                    .frame(height: 170)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Latency (ms)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Chart(Array(measured)) { record in
+                            LineMark(
+                                x: .value("Session", record.startedAt),
+                                y: .value("Latency", record.averageLatencyMs)
+                            )
+                            .foregroundStyle(.orange)
+                            .interpolationMethod(.monotone)
+                        }
+                        .chartYAxis { AxisMarks(position: .leading) }
+                        .frame(height: 120)
+                    }
 
                     HStack(spacing: 10) {
                         StatChip(value: "\(averageOf(measured, \.averageFPS))",
