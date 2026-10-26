@@ -163,7 +163,16 @@ struct LibraryView: View {
     @ViewBuilder
     private var gamesGrid: some View {
         if games.isEmpty {
-            emptyState
+            if shelf == .allGames, catalog.isLoading {
+                LoadingNotice()
+            } else if shelf == .allGames, let error = catalog.errorMessage {
+                ErrorNotice(title: "Catalog unavailable", message: error) {
+                    Task { await catalog.refresh() }
+                }
+                .padding(.horizontal, Theme.pageInset)
+            } else {
+                emptyState
+            }
         } else {
             LazyVGrid(columns: columns, spacing: 22) {
                 ForEach(games) { game in
