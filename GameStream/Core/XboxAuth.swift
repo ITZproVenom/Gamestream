@@ -68,6 +68,8 @@ final class XboxAuth: NSObject, ObservableObject {
     private var probeLoaded = false
     private var probeIndex = 0
     private var probeLoading = false
+    /// The navigation whose completion is allowed to release probe waiters.
+    private var probeNavigationID: ObjectIdentifier?
     /// Which load the timeout belongs to, so a timer armed for one attempt
     /// cannot abandon the next one.
     private var probeLoadGeneration = 0
@@ -342,14 +344,21 @@ final class XboxAuth: NSObject, ObservableObject {
             probeLoading = true
             probeLoadGeneration += 1
             let generation = probeLoadGeneration
-            probeView.load(URLRequest(url: probeURL))
+            let navigation = probeView.load(URLRequest(url: probeURL))
+            probeNavigationID = navigation.map { ObjectIdentifier($0) }
+            guard navigation != nil else {
+                finishProbeLoad(success: false, detail: "navigation did not start",
+                                 generation: generation)
+                return
+            }
             // Never let a hung network request block the UI forever.
             Task { [weak self] in
                 try? await Task.sleep(for: .seconds(12))
                 guard let self, self.probeLoading,
                       self.probeLoadGeneration == generation else { return }
                 self.log.warn("auth", "probe load timed out")
-                self.finishProbeLoad(success: false, detail: "timed out")
+                self.finishProbeLoad(success: false, detail: "timed out",
+                                     generation: generation)
             }
         }
     }
@@ -364,10 +373,15 @@ final class XboxAuth: NSObject, ObservableObject {
         window.sendSubviewToBack(view)
     }
 
-    private func finishProbeLoad(success: Bool, detail: String) {
+    private func finishProbeLoad(success: Bool, detail: String,
+                                 navigation: WKNavigation? = nil, generation: Int? = nil) {
         guard probeLoading else { return }
+        if let generation, generation != probeLoadGeneration { return }
+        if let navigation,
+           probeNavigationID != ObjectIdentifier(navigation) { return }
         probeLoading = false
         probeLoaded = success
+        probeNavigationID = nil
         if !success { log.warn("auth", "probe load failed: \(detail)") }
         let waiters = probeWaiters
         probeWaiters.removeAll()
@@ -377,19 +391,28 @@ final class XboxAuth: NSObject, ObservableObject {
 
 extension XboxAuth: WKNavigationDelegate {
     nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        Task { @MainActor in finishProbeLoad(success: true, detail: "") }
+        guard let navigation else { return }
+        Task { @MainActor in
+            finishProbeLoad(success: true, detail: "", navigation: navigation)
+        }
     }
 
     nonisolated func webView(_ webView: WKWebView, didFail navigation: WKNavigation!,
                              withError error: Error) {
+        guard let navigation else { return }
         let detail = error.localizedDescription
-        Task { @MainActor in finishProbeLoad(success: false, detail: detail) }
+        Task { @MainActor in
+            finishProbeLoad(success: false, detail: detail, navigation: navigation)
+        }
     }
 
     nonisolated func webView(_ webView: WKWebView,
                              didFailProvisionalNavigation navigation: WKNavigation!,
                              withError error: Error) {
+        guard let navigation else { return }
         let detail = error.localizedDescription
-        Task { @MainActor in finishProbeLoad(success: false, detail: detail) }
+        Task { @MainActor in
+            finishProbeLoad(success: false, detail: detail, navigation: navigation)
+        }
     }
 }
