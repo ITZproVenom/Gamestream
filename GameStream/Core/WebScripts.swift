@@ -347,9 +347,13 @@ enum WebScripts {
             var open = false;
             for (var d = 0; d < dialogs.length; d++) {
                 var node = dialogs[d];
-                if (node.classList.contains("bx-gone")) continue;
+                if (node.classList.contains("bx-gone") || node.getAttribute("aria-hidden") === "true") continue;
+                var style = window.getComputedStyle(node);
                 var box = node.getBoundingClientRect();
-                if (box.width > 8 && box.height > 8) { open = true; break; }
+                var opacity = parseFloat(style.opacity || "1");
+                if (style.display !== "none" && style.visibility !== "hidden"
+                    && style.visibility !== "collapse" && opacity > 0.01
+                    && box.width > 8 && box.height > 8) { open = true; break; }
             }
             var overlays = document.querySelectorAll(".bx-dialog-overlay");
             for (var i = 0; i < overlays.length; i++) {
@@ -789,9 +793,13 @@ enum WebScripts {
             var open = false;
             for (var d = 0; d < dialogs.length; d++) {
                 var node = dialogs[d];
-                if (node.classList.contains("bx-gone")) continue;
+                if (node.classList.contains("bx-gone") || node.getAttribute("aria-hidden") === "true") continue;
+                var style = window.getComputedStyle(node);
                 var box = node.getBoundingClientRect();
-                if (box.width > 8 && box.height > 8) { open = true; break; }
+                var opacity = parseFloat(style.opacity || "1");
+                if (style.display !== "none" && style.visibility !== "hidden"
+                    && style.visibility !== "collapse" && opacity > 0.01
+                    && box.width > 8 && box.height > 8) { open = true; break; }
             }
             if (open) return "a dialog is still open";
 
