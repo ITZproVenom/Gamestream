@@ -2,7 +2,7 @@ import SwiftUI
 
 struct LibraryView: View {
     enum Shelf: String, CaseIterable, Identifiable {
-        case favorites, recents, queue, lists
+        case allGames, favorites, recents, queue, lists
 
         var id: String { rawValue }
 
@@ -12,6 +12,7 @@ struct LibraryView: View {
             case .recents: return "Recent"
             case .queue: return "Up next"
             case .lists: return "Lists"
+            case .allGames: return "All games"
             }
         }
 
@@ -21,6 +22,7 @@ struct LibraryView: View {
             case .recents: return "clock.fill"
             case .queue: return "text.line.first.and.arrowtriangle.forward"
             case .lists: return "folder.fill"
+            case .allGames: return "square.grid.2x2.fill"
             }
         }
     }
@@ -161,7 +163,16 @@ struct LibraryView: View {
     @ViewBuilder
     private var gamesGrid: some View {
         if games.isEmpty {
-            emptyState
+            if shelf == .allGames, catalog.isLoading {
+                LoadingNotice()
+            } else if shelf == .allGames, let error = catalog.errorMessage {
+                ErrorNotice(title: "Catalog unavailable", message: error) {
+                    Task { await catalog.refresh() }
+                }
+                .padding(.horizontal, Theme.pageInset)
+            } else {
+                emptyState
+            }
         } else {
             LazyVGrid(columns: columns, spacing: 22) {
                 ForEach(games) { game in
@@ -211,6 +222,10 @@ struct LibraryView: View {
                         message: "Queue a few games and the player can roll straight into the next one.")
         case .lists:
             EmptyView()
+        case .allGames:
+            EmptyNotice(systemImage: "square.grid.2x2",
+                        title: "Catalog is loading",
+                        message: "Cloud games will appear here when the catalog is ready.")
         }
     }
 
@@ -222,6 +237,7 @@ struct LibraryView: View {
         case .recents: return library.recents
         case .queue: return library.queue
         case .lists: return []
+        case .allGames: return catalog.games
         }
     }
 

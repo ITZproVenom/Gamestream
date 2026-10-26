@@ -415,8 +415,25 @@ struct StreamView: View {
         .padding(.horizontal, 13)
         .padding(.vertical, 8)
         .glassEffect(.regular, in: Capsule())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(label(for: stats.quality))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(statsAccessibilityLabel(stats))
+    }
+
+    private func statsAccessibilityLabel(_ stats: StreamStats) -> String {
+        var parts = [label(for: stats.quality)]
+        parts.append("\(stats.fps) frames per second")
+        if stats.bitrateKbps >= 1000 {
+            parts.append(String(format: "%.1f megabits per second", Double(stats.bitrateKbps) / 1000))
+        } else {
+            parts.append("\(stats.bitrateKbps) kilobits per second")
+        }
+        parts.append("\(stats.rttMs) milliseconds round-trip time")
+        parts.append("\(stats.jitterMs) milliseconds jitter")
+        parts.append("\(stats.decodeMs) milliseconds decode time")
+        parts.append("\(stats.framesDropped) frames dropped")
+        if !stats.codec.isEmpty { parts.append(stats.codec) }
+        if !stats.resolution.isEmpty { parts.append(stats.resolution) }
+        return parts.joined(separator: ", ")
     }
 
     private func statChip(_ value: String, _ caption: String) -> some View {

@@ -339,16 +339,16 @@ final class AppSettings: ObservableObject {
         sharpness = defaults.object(forKey: Key.sharpness) as? Int ?? 0
         saturation = defaults.object(forKey: Key.saturation) as? Int ?? 100
         contrast = defaults.object(forKey: Key.contrast) as? Int ?? 100
-        // Migrated from the old switch: someone who had chosen to hide the
-        // site's controls keeps them hidden, and everyone else gets the
-        // site's own judgement rather than a silent change of behaviour.
+        // Preserve an explicit prior choice. If nothing was configured, defer
+        // to Xbox's per-game judgement so supported touch layouts are usable
+        // on a phone without requiring a controller first.
         if let stored = defaults.string(forKey: Key.touchControls),
            let mode = TouchControls(rawValue: stored) {
             touchControls = mode
         } else if let legacy = defaults.object(forKey: Key.hideTouchControls) as? Bool {
             touchControls = legacy ? .hidden : .whenOffered
         } else {
-            touchControls = .hidden
+            touchControls = .whenOffered
         }
         limitOnCellular = defaults.object(forKey: Key.cellularLimit) as? Bool ?? true
         cellularBitrateMbps = defaults.object(forKey: Key.cellularBitrate) as? Int ?? 5

@@ -213,7 +213,7 @@ struct ListPickerView: View {
                     HStack {
                         TextField("Name", text: $newListName)
                         Button("Add") {
-                            library.createList(named: newListName)
+                            library.createList(named: newListName, including: game)
                             newListName = ""
                         }
                         .disabled(newListName.trimmingCharacters(in: .whitespaces).isEmpty)
