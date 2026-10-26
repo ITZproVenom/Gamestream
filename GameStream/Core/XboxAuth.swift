@@ -78,6 +78,8 @@ final class XboxAuth: NSObject, ObservableObject {
     /// The in-flight check, so overlapping callers share one result instead of
     /// racing each other through the same webview.
     private var refreshTask: Task<State, Never>?
+    /// Invalidates work that finishes after a user signs out.
+    private var authGeneration = 0
     private var watchTask: Task<Void, Never>?
     private var lastRedirectNote: Date?
     private let log = AppLog.shared
@@ -127,17 +129,18 @@ final class XboxAuth: NSObject, ObservableObject {
             log.debug("auth", "joining the check already running (\(reason))")
             return await existing.value
         }
+        let generation = authGeneration
         let task = Task { [weak self] () -> State in
             guard let self else { return .unknown }
-            return await self.performRefresh(reason: reason)
+            return await self.performRefresh(reason: reason, generation: generation)
         }
         refreshTask = task
         let result = await task.value
-        refreshTask = nil
+        if generation == authGeneration { refreshTask = nil }
         return result
     }
 
-    private func performRefresh(reason: String) async -> State {
+    private func performRefresh(reason: String, generation: Int) async -> State {
         isChecking = true
         defer { isChecking = false }
         log.debug("auth", "checking (\(reason))")
@@ -183,6 +186,7 @@ final class XboxAuth: NSObject, ObservableObject {
             return state
         }
 
+        guard generation == authGeneration else { return state }
         let signedIn = payload["signedIn"] as? Bool ?? false
         let gamertag = (payload["gamertag"] as? String ?? "").trimmingCharacters(in: .whitespaces)
         // Memory only. This is a bearer token for the account; it is not
@@ -241,6 +245,9 @@ final class XboxAuth: NSObject, ObservableObject {
 
     func signOut() async {
         log.info("auth", "signing out")
+        authGeneration &+= 1
+        refreshTask?.cancel()
+        refreshTask = nil
         endWatching()
         apply(.signedOut)
         xstsToken = nil
