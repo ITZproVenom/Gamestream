@@ -23,6 +23,8 @@ final class Catalog: ObservableObject {
     /// player outside the United States sees their own catalogue and their
     /// own language; a market with nothing behind it falls back to US rather
     /// than showing an empty library.
+    private static let siglID = "29a81209-df6f-41fd-a528-2ae6b91f719c"
+
     /// Free-to-play cloud titles are not guaranteed to appear in the Game Pass
     /// SIGL above. Keep known launchable titles searchable even when that feed
     /// omits them; merge by product ID so they never duplicate catalog entries.
