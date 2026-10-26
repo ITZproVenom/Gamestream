@@ -18,6 +18,7 @@ struct SettingsView: View {
     @State private var showingDiagnostics = false
     @State private var showingSignOut = false
     @State private var showingClearActivity = false
+    @State private var showingClearRecents = false
     @State private var refreshingScript = false
     @State private var copiedReport = false
     @State private var reinstalled: Bool?
@@ -69,6 +70,14 @@ struct SettingsView: View {
             } message: {
                 Text("This permanently deletes your play sessions and Insights history. "
                      + "Favorites, lists and recently played games will stay.")
+            }
+            .confirmationDialog("Clear recently played?", isPresented: $showingClearRecents,
+                                titleVisibility: .visible) {
+                Button("Clear recently played", role: .destructive) {
+                    library.clearRecents()
+                }
+            } message: {
+                Text("This removes your recently played list. Favorites, lists and activity history stay.")
             }
         }
     }
@@ -718,7 +727,7 @@ struct SettingsView: View {
             SettingsDivider()
 
             Button {
-                library.clearRecents()
+                showingClearRecents = true
             } label: {
                 SettingsRowLabel(title: "Clear recently played", icon: "clock.arrow.circlepath")
             }
