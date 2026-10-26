@@ -1,4 +1,9 @@
 import Foundation
+import CryptoKit
+
+private func betterXCloudSHA256(_ data: Data) -> String {
+    SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+}
 
 /// Downloads and caches the Better xCloud userscript.
 ///
@@ -9,8 +14,14 @@ import Foundation
 actor BetterXCloud {
     static let shared = BetterXCloud()
 
+    /// This is deliberately pinned: the userscript executes inside the signed-in
+    /// Xbox origin. Update the version and both digests only after reviewing a
+    /// new upstream release; changing the pin requires a GameStream app release.
+    private static let pinnedVersion = "6.7.12"
+    private static let pinnedScriptSHA256 = "bb78931b4ec94d68cb18da97fa4ae1f88e6b3103bc159905931b2238a51b517e"
+    private static let pinnedCachedScriptSHA256 = "2523abe72fd574e5645ff3a7ba50e6626f28aa50344efd42b909e23333694205"
     private static let sourceURL = URL(
-        string: "https://github.com/redphx/better-xcloud/releases/latest/download/better-xcloud.user.js"
+        string: "https://github.com/redphx/better-xcloud/releases/download/v6.7.12/better-xcloud.user.js"
     )!
     private static let scriptKey = "betterXCloud.script"
     private static let fetchedKey = "betterXCloud.fetchedAt"
@@ -66,8 +77,10 @@ actor BetterXCloud {
     /// Read synchronously when building a webview configuration, which happens
     /// on the main actor and cannot await.
     nonisolated var cachedScript: String? {
-        let value = UserDefaults.standard.string(forKey: Self.scriptKey)
-        return (value?.isEmpty == false) ? value : nil
+        guard UserDefaults.standard.string(forKey: Self.versionKey) == Self.pinnedVersion,
+              let value = UserDefaults.standard.string(forKey: Self.scriptKey),
+              betterXCloudSHA256(Data(value.utf8)) == Self.pinnedCachedScriptSHA256 else { return nil }
+        return value
     }
 
     nonisolated var lastFetched: Date? {
@@ -106,17 +119,26 @@ actor BetterXCloud {
                 await log(.warn, "unexpected response fetching Better xCloud")
                 return false
             }
-            guard let raw = String(data: data, encoding: .utf8), raw.count > 1000 else {
-                await log(.warn, "Better xCloud download was too small to use")
+            guard betterXCloudSHA256(data) == Self.pinnedScriptSHA256 else {
+                await log(.warn, "Better xCloud checksum did not match the pinned release")
+                return false
+            }
+            guard let raw = String(data: data, encoding: .utf8), raw.count > 1000,
+                  Self.parseVersion(raw) == Self.pinnedVersion else {
+                await log(.warn, "Better xCloud pinned release was not valid UTF-8 or had an unexpected version")
                 return false
             }
             let script = Self.stripUserScriptHeader(raw)
-            let version = Self.parseVersion(raw)
+            guard betterXCloudSHA256(Data(script.utf8)) == Self.pinnedCachedScriptSHA256 else {
+                await log(.warn, "Better xCloud stripped script did not match the pinned digest")
+                return false
+            }
+            let version = Self.pinnedVersion
             UserDefaults.standard.set(script, forKey: Self.scriptKey)
             UserDefaults.standard.set(Date(), forKey: Self.fetchedKey)
             UserDefaults.standard.set(version, forKey: Self.versionKey)
-            await log(.info, "Better xCloud \(version ?? "?") installed "
-                      + "(\(script.count) characters)")
+            await log(.info, "Better xCloud \(version) installed "
+                      + "(\(script.count) characters; pinned digest verified)")
             return true
         } catch {
             await log(.warn, "could not fetch Better xCloud: \(error.localizedDescription)")
