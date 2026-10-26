@@ -184,7 +184,7 @@ final class Catalog: ObservableObject {
             var merged = details.games
             if details.failedPages > 0 {
                 let present = Set(merged.map { $0.id.uppercased() })
-                let playable = Set(ids.map { $0.uppercased() })
+                let playable = Set(catalog.ids.map { $0.uppercased() })
                 let retained = games.filter {
                     playable.contains($0.id.uppercased())
                         && !present.contains($0.id.uppercased())
