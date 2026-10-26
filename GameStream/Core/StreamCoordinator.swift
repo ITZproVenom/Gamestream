@@ -503,12 +503,15 @@ final class StreamCoordinator: ObservableObject {
     }
 
     func streamStarted(width: Int, height: Int) {
+        // Ignore late messages from a webview whose session has already ended.
+        // Without this guard, a delayed page callback could resurrect an exited
+        // stream and present a blank player over the library.
+        guard case .connecting = phase else { return }
         watchdog?.cancel()
         watchdog = nil
         if width > 0, height > 0 {
             resolution = "\(width)×\(height)"
         }
-        guard phase != .playing else { return }
         phase = .playing
         log.info("stream", "playing\(resolution.isEmpty ? "" : " at \(resolution)")")
     }
