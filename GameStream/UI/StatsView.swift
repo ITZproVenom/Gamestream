@@ -92,23 +92,35 @@ struct StatsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    Chart(Array(measured)) { record in
-                        LineMark(
-                            x: .value("Session", record.startedAt),
-                            y: .value("Frames per second", record.averageFPS)
-                        )
-                        .foregroundStyle(by: .value("Measure", "FPS"))
-                        .interpolationMethod(.monotone)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Frame rate · FPS")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Chart(Array(measured)) { record in
+                            LineMark(
+                                x: .value("Session", record.startedAt),
+                                y: .value("Frames per second", record.averageFPS)
+                            )
+                            .foregroundStyle(.tint)
+                            .interpolationMethod(.monotone)
+                        }
+                        .chartYAxis { AxisMarks(position: .leading) }
+                        .frame(height: 88)
 
-                        LineMark(
-                            x: .value("Session", record.startedAt),
-                            y: .value("Latency", record.averageLatencyMs)
-                        )
-                        .foregroundStyle(by: .value("Measure", "Latency (ms)"))
-                        .interpolationMethod(.monotone)
+                        Text("Latency · ms")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Chart(Array(measured)) { record in
+                            LineMark(
+                                x: .value("Session", record.startedAt),
+                                y: .value("Latency (ms)", record.averageLatencyMs)
+                            )
+                            .foregroundStyle(.orange)
+                            .interpolationMethod(.monotone)
+                        }
+                        .chartYAxis { AxisMarks(position: .leading) }
+                        .frame(height: 88)
                     }
-                    .chartLegend(position: .bottom, spacing: 8)
-                    .frame(height: 170)
 
                     HStack(spacing: 10) {
                         StatChip(value: "\(averageOf(measured, \.averageFPS))",
