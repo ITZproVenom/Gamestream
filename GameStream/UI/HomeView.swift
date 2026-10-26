@@ -10,7 +10,6 @@ struct HomeView: View {
     @Binding var showingBrowser: Bool
 
     @State private var showingActivity = false
-    @State private var genre: String?
 
     var body: some View {
         NavigationStack {
@@ -52,12 +51,8 @@ struct HomeView: View {
                         }
                     }
 
-                    if !catalog.genres.isEmpty {
-                        genreBrowser
-                    }
-
                     if !catalog.games.isEmpty {
-                        section(genre.map { "More in \($0)" } ?? "In the cloud",
+                        section("In the cloud",
                                 subtitle: "\(catalog.games.count) games ready to stream") {
                             GameShelf(games: popular, width: 138)
                         }
@@ -73,12 +68,6 @@ struct HomeView: View {
             .scrollEdgeEffectStyle(.soft, for: .top)
             .background { AuroraBackground() }
             .refreshable { await catalog.refresh() }
-            // Game Pass changes every month, and a filter left pointing at a
-            // genre that is no longer in the catalog showed an empty shelf
-            // under a heading naming it.
-            .onChange(of: catalog.games) { _, _ in
-                if let genre, !catalog.genres.contains(genre) { self.genre = nil }
-            }
             .navigationTitle(greeting)
             .toolbarTitleDisplayMode(.inlineLarge)
             .toolbar {
@@ -158,33 +147,8 @@ struct HomeView: View {
         .padding(.horizontal, Theme.pageInset)
     }
 
-    // MARK: - Genres
-
-    private var genreBrowser: some View {
-        VStack(alignment: .leading, spacing: 13) {
-            SectionHeader(title: "Browse", subtitle: "Filter the shelf below")
-                .padding(.horizontal, Theme.pageInset)
-
-            ScrollView(.horizontal) {
-                HStack(spacing: 9) {
-                    FilterChip(title: "All", isSelected: genre == nil) {
-                        withAnimation(.smooth) { genre = nil }
-                    }
-                    ForEach(catalog.genres, id: \.self) { name in
-                        FilterChip(title: name, isSelected: genre == name) {
-                            withAnimation(.smooth) { genre = (genre == name) ? nil : name }
-                        }
-                    }
-                }
-                .padding(.horizontal, Theme.pageInset)
-            }
-            .scrollIndicators(.hidden)
-        }
-    }
-
     private var popular: [Game] {
-        let base = genre.map { catalog.games(inGenre: $0) } ?? catalog.games
-        return Array(base.prefix(24))
+        Array(catalog.games.prefix(24))
     }
 
     // MARK: - Helpers
