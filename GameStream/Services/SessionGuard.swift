@@ -51,6 +51,9 @@ final class SessionGuard: ObservableObject {
                 await MainActor.run { self?.tick() }
             }
         }
+        // A device may already be hot before streaming starts; don't depend
+        // on a future thermal notification to enforce the guard.
+        thermalChanged()
     }
 
     func end() {
