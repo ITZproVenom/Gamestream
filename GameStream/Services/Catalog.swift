@@ -23,7 +23,21 @@ final class Catalog: ObservableObject {
     /// player outside the United States sees their own catalogue and their
     /// own language; a market with nothing behind it falls back to US rather
     /// than showing an empty library.
-    private static let siglID = "29a81209-df6f-41fd-a528-2ae6b91f719c"
+    /// Free-to-play cloud titles are not guaranteed to appear in the Game Pass
+    /// SIGL above. Keep known launchable titles searchable even when that feed
+    /// omits them; merge by product ID so they never duplicate catalog entries.
+    private static let additionalCloudGames = [
+        Game(id: "BT5P2X999VH2", slug: "fortnite", title: "Fortnite",
+             tagline: "Battle Royale", genre: "Action")
+    ]
+
+    private static func includingAdditionalCloudGames(_ source: [Game]) -> [Game] {
+        var result = source
+        for game in additionalCloudGames where !result.contains(where: { $0.matches(id: game.id) }) {
+            result.append(game)
+        }
+        return result
+    }
 
     static func siglURL(market: String, language: String) -> URL? {
         var components = URLComponents(string: "https://catalog.gamepass.com/sigls/v2")
@@ -72,12 +86,14 @@ final class Catalog: ObservableObject {
     private init() {
         // Show the previous catalog immediately; a cold start should never be
         // an empty screen just because the network is slow.
+        var cachedGames: [Game] = []
         if let data = try? Data(contentsOf: Self.cacheURL),
            let cached = try? JSONDecoder().decode([Game].self, from: data) {
-            games = cached
+            cachedGames = cached
             updatedAt = (try? Self.cacheURL.resourceValues(forKeys: [.contentModificationDateKey]))?
                 .contentModificationDate
         }
+        games = Self.includingAdditionalCloudGames(cachedGames)
     }
 
     var genres: [String] {
@@ -175,6 +191,7 @@ final class Catalog: ObservableObject {
                          + "from the previous list")
             }
 
+            merged = Self.includingAdditionalCloudGames(merged)
             games = merged
             updatedAt = Date()
             if let data = try? JSONEncoder().encode(merged) {
