@@ -245,7 +245,12 @@ final class StreamRecorder: NSObject, ObservableObject {
     }
 
     func start() async -> String {
-        guard !isRecording else { return "Already recording." }
+        switch state {
+        case .starting, .recording, .saving:
+            return "A recording is already starting, running, or saving."
+        case .idle, .failed:
+            break
+        }
         state = .starting
         if await startFromPage() {
             route = .page

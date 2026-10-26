@@ -13,6 +13,8 @@ actor PosterCache {
     private let memory = NSCache<NSURL, UIImage>()
     private let directory: URL
     private var inFlight: [URL: Task<UIImage?, Never>] = [:]
+    /// Invalidates downloads that began before the user cleared the cache.
+    private var clearGeneration = 0
 
     private init() {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
@@ -29,6 +31,7 @@ actor PosterCache {
         // the same poster from several cells at once while scrolling.
         if let existing = inFlight[url] { return await existing.value }
 
+        let generation = clearGeneration
         let task = Task<UIImage?, Never> { [directory] in
             let file = Self.fileURL(for: url, in: directory)
             if let data = try? Data(contentsOf: file), let image = UIImage(data: data) {
@@ -42,12 +45,14 @@ actor PosterCache {
                   let image = UIImage(data: data) else {
                 return nil
             }
+            guard generation == clearGeneration, !Task.isCancelled else { return nil }
             try? data.write(to: file, options: .atomic)
             return image
         }
 
         inFlight[url] = task
         let image = await task.value
+        guard generation == clearGeneration else { return image }
         inFlight[url] = nil
         if let image {
             // Without a cost the total cost limit never applies and the cache
@@ -65,6 +70,9 @@ actor PosterCache {
     }
 
     func clear() {
+        clearGeneration &+= 1
+        for task in inFlight.values { task.cancel() }
+        inFlight.removeAll()
         memory.removeAllObjects()
         try? FileManager.default.removeItem(at: directory)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
