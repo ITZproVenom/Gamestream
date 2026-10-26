@@ -239,12 +239,24 @@ enum WebScripts {
         setInterval(scan, 700);
 
         // Surface the site's own error dialogs instead of leaving a black screen.
+        // Error screens can remain mounted during a reconnect; emit only once
+        // per visible node/message, then allow the same message again after it
+        // disappears or changes.
+        var lastErrorNode = null;
+        var lastErrorText = "";
         setInterval(function() {
             try {
                 var node = document.querySelector('[class*="ErrorScreen"], [class*="error-screen"], [data-testid*="error"]');
-                if (!node) return;
+                if (!node) {
+                    lastErrorNode = null;
+                    lastErrorText = "";
+                    return;
+                }
                 var text = (node.innerText || "").trim();
-                if (text.length > 4 && text.length < 400) {
+                if (text.length > 4 && text.length < 400
+                    && (node !== lastErrorNode || text !== lastErrorText)) {
+                    lastErrorNode = node;
+                    lastErrorText = text;
                     post("streamError", { message: text });
                 }
             } catch (e) {}
