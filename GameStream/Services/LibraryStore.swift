@@ -134,11 +134,15 @@ final class LibraryStore: ObservableObject {
 
     // MARK: - Lists
 
-    func createList(named name: String) {
+    @discardableResult
+    func createList(named name: String, including game: Game? = nil) -> UUID? {
         let clean = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !clean.isEmpty else { return }
-        lists.append(GameList(name: clean))
+        guard !clean.isEmpty else { return nil }
+        let list = GameList(name: clean, gameIDs: game.map { [$0.id] } ?? [])
+        lists.append(list)
+        if let game { remember(game) }
         save(lists, Key.lists)
+        return list.id
     }
 
     func deleteList(_ list: GameList) {
