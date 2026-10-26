@@ -17,6 +17,15 @@ struct SearchView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     if query.isEmpty {
                         idleContent
+                    } else if catalog.games.isEmpty {
+                        if let error = catalog.errorMessage {
+                            ErrorNotice(title: "Catalog unavailable", message: error) {
+                                Task { await catalog.refresh() }
+                            }
+                            .padding(.horizontal, Theme.pageInset)
+                        } else {
+                            LoadingNotice()
+                        }
                     } else if results.isEmpty {
                         EmptyNotice(systemImage: "magnifyingglass",
                                     title: "No matches",
@@ -43,6 +52,7 @@ struct SearchView: View {
                 // every other row off the right edge with it.
                 .containerRelativeFrame(.horizontal)
             }
+            .refreshable { await catalog.refresh() }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .background { AuroraBackground() }
             .navigationTitle("Search")

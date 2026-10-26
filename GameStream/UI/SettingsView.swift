@@ -251,6 +251,8 @@ struct SettingsView: View {
                         get: { Double(settings.cellularBitrateMbps) },
                         set: { settings.cellularBitrateMbps = Int($0) }
                     ), in: 2...10, step: 1)
+                    .accessibilityLabel("Cellular data limit")
+                    .accessibilityValue("\(settings.cellularBitrateMbps) megabits per second")
                 }
                 Text(cellularExplanation)
                     .font(.caption)
@@ -369,6 +371,8 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                     Slider(value: $settings.rumbleIntensity, in: 0.5...2.5, step: 0.1)
+                        .accessibilityLabel("Controller rumble intensity")
+                        .accessibilityValue(String(format: "%.1f times", settings.rumbleIntensity))
                 }
 
                 SettingsDivider()
@@ -458,6 +462,9 @@ struct SettingsView: View {
                     get: { Double(settings.maxBitrateMbps) },
                     set: { settings.maxBitrateMbps = Int($0) }
                 ), in: 0...15, step: 1)
+                .accessibilityLabel("Stream bitrate limit")
+                .accessibilityValue(settings.maxBitrateMbps == 0
+                                    ? "Unlimited" : "\(settings.maxBitrateMbps) megabits per second")
                 Text("Unlimited means Xbox's own maximum of 15 Mbps; there is nothing "
                      + "above that to ask for. A limit is negotiated when a session "
                      + "starts, so it applies to the next game you launch.")
@@ -505,6 +512,8 @@ struct SettingsView: View {
                         get: { Double(settings.sharpness) },
                         set: { settings.sharpness = Int($0) }
                     ), in: 0...5, step: 1)
+                    .accessibilityLabel("Sharpness")
+                    .accessibilityValue(settings.sharpness == 0 ? "Off" : "\(settings.sharpness)")
                     Text("A real sharpening kernel over the video. It cannot add detail "
                          + "the stream never sent, and high settings make compression "
                          + "blocks more obvious, not less.")
@@ -524,6 +533,8 @@ struct SettingsView: View {
                         get: { Double(settings.saturation) },
                         set: { settings.saturation = Int($0) }
                     ), in: 50...150, step: 5)
+                    .accessibilityLabel("Saturation")
+                    .accessibilityValue("\(settings.saturation) percent")
                 }
 
                 VStack(alignment: .leading, spacing: 7) {
@@ -538,6 +549,8 @@ struct SettingsView: View {
                         get: { Double(settings.contrast) },
                         set: { settings.contrast = Int($0) }
                     ), in: 50...150, step: 5)
+                    .accessibilityLabel("Contrast")
+                    .accessibilityValue("\(settings.contrast) percent")
                 }
             }
 
@@ -578,6 +591,9 @@ struct SettingsView: View {
                     get: { Double(settings.sessionLimitMinutes) },
                     set: { settings.sessionLimitMinutes = Int($0) }
                 ), in: 0...240, step: 15)
+                .accessibilityLabel("Session time limit")
+                .accessibilityValue(settings.sessionLimitMinutes == 0
+                                    ? "Off" : "\(settings.sessionLimitMinutes) minutes")
                 Text("The game ends itself when the time is up, with warnings at "
                      + "five minutes and one minute.")
                     .font(.caption)
@@ -616,6 +632,8 @@ struct SettingsView: View {
                     get: { Double(settings.recordingBitrateMbps) },
                     set: { settings.recordingBitrateMbps = Int($0) }
                 ), in: 4...40, step: 2)
+                .accessibilityLabel("Clip recording quality")
+                .accessibilityValue("\(settings.recordingBitrateMbps) megabits per second")
                 Text("How much detail a recorded clip keeps. Higher costs storage.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -635,6 +653,8 @@ struct SettingsView: View {
                     get: { Double(settings.recordingLimitMinutes) },
                     set: { settings.recordingLimitMinutes = Int($0) }
                 ), in: 1...30, step: 1)
+                .accessibilityLabel("Stop recording after")
+                .accessibilityValue("\(settings.recordingLimitMinutes) minutes")
                 Text("A recording left running cannot fill the device.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
