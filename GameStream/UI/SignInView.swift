@@ -88,6 +88,7 @@ struct SignInView: View {
 /// Shown instead of the app when there is no usable Xbox session.
 struct WelcomeView: View {
     @EnvironmentObject private var auth: XboxAuth
+    @ScaledMetric(relativeTo: .largeTitle) private var headingSize: CGFloat = 46
     @State private var showingSignIn = false
     @State private var appear = false
 
@@ -95,58 +96,61 @@ struct WelcomeView: View {
         ZStack {
             AuroraBackground()
 
-            VStack(alignment: .leading, spacing: 26) {
-                Spacer()
+            GeometryReader { geometry in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 26) {
+                        Image(systemName: "cloud.fill")
+                            .font(.system(size: 44, weight: .bold))
+                            .foregroundStyle(.tint)
+                            .padding(18)
+                            .glassEffect(.regular, in: Circle())
 
-                Image(systemName: "cloud.fill")
-                    .font(.system(size: 44, weight: .bold))
-                    .foregroundStyle(.tint)
-                    .padding(18)
-                    .glassEffect(.regular, in: Circle())
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("GameStream")
+                                .font(.system(size: headingSize, weight: .bold, design: .rounded))
+                            Text("Xbox Cloud Gaming, without the clutter.")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                        }
 
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("GameStream")
-                        .font(.system(size: 46, weight: .bold, design: .rounded))
-                    Text("Xbox Cloud Gaming, without the clutter.")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                }
-
-                Text("Sign in with your Microsoft account to play the games included "
-                     + "with Xbox Game Pass Ultimate. The sign-in page is Microsoft's own.")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Button {
-                    showingSignIn = true
-                } label: {
-                    HStack {
-                        Text("Continue with Microsoft").font(.headline)
-                        Spacer()
-                        Image(systemName: "arrow.up.right")
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 16)
-                }
-                .buttonStyle(.glassProminent)
-                .buttonBorderShape(.capsule)
-
-                if auth.isChecking {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text("Checking your Xbox session…")
-                            .font(.footnote)
+                        Text("Sign in with your Microsoft account to play the games included "
+                             + "with Xbox Game Pass Ultimate. The sign-in page is Microsoft's own.")
+                            .font(.body)
                             .foregroundStyle(.secondary)
-                    }
-                }
+                            .fixedSize(horizontal: false, vertical: true)
 
-                Spacer()
+                        Button {
+                            showingSignIn = true
+                        } label: {
+                            HStack {
+                                Text("Continue with Microsoft").font(.headline)
+                                Spacer()
+                                Image(systemName: "arrow.up.right")
+                            }
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 16)
+                        }
+                        .buttonStyle(.glassProminent)
+                        .buttonBorderShape(.capsule)
+
+                        if auth.isChecking {
+                            HStack(spacing: 8) {
+                                ProgressView().controlSize(.small)
+                                Text("Checking your Xbox session…")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: 520)
+                    .frame(minHeight: geometry.size.height, alignment: .center)
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 28)
+                    .opacity(appear ? 1 : 0)
+                    .offset(y: appear ? 0 : 16)
+                }
+                .scrollIndicators(.hidden)
             }
-            .frame(maxWidth: 520)
-            .padding(.horizontal, 28)
-            .opacity(appear ? 1 : 0)
-            .offset(y: appear ? 0 : 16)
         }
         .task {
             withAnimation(.smooth(duration: 0.5)) { appear = true }

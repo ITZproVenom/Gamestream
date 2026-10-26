@@ -17,6 +17,7 @@ struct SettingsView: View {
     @State private var cacheSize = 0
     @State private var showingDiagnostics = false
     @State private var showingSignOut = false
+    @State private var showingClearActivity = false
     @State private var refreshingScript = false
     @State private var copiedReport = false
     @State private var reinstalled: Bool?
@@ -59,6 +60,15 @@ struct SettingsView: View {
             } message: {
                 Text("This clears the Xbox and Microsoft cookies stored in the app. "
                      + "Your favorites, lists and activity stay.")
+            }
+            .confirmationDialog("Clear activity history?", isPresented: $showingClearActivity,
+                                titleVisibility: .visible) {
+                Button("Clear activity log", role: .destructive) {
+                    library.clearActivity()
+                }
+            } message: {
+                Text("This permanently deletes your play sessions and Insights history. "
+                     + "Favorites, lists and recently played games will stay.")
             }
         }
     }
@@ -717,7 +727,7 @@ struct SettingsView: View {
             SettingsDivider()
 
             Button {
-                library.clearActivity()
+                showingClearActivity = true
             } label: {
                 SettingsRowLabel(title: "Clear activity log", icon: "list.bullet.rectangle",
                                  destructive: true)
