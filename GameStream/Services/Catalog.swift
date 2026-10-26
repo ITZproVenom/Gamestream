@@ -169,9 +169,11 @@ final class Catalog: ObservableObject {
         defer { if generation == loadGeneration { isLoading = false } }
 
         do {
-            let ids = try await fetchIDs()
-            log.debug("catalog", "\(ids.count) product ids")
-            let details = try await fetchDetails(ids: ids)
+            let catalog = try await fetchIDs()
+            log.debug("catalog", "\(catalog.ids.count) product ids for \(catalog.market)")
+            let details = try await fetchDetails(ids: catalog.ids,
+                                                 market: catalog.market,
+                                                 language: catalog.language)
             guard !Task.isCancelled else { return }
             guard !details.games.isEmpty else { throw URLError(.cannotParseResponse) }
 
@@ -209,13 +211,16 @@ final class Catalog: ObservableObject {
         }
     }
 
-    private func fetchIDs() async throws -> [String] {
-        var ids = try await Self.fetchIDs(market: Self.market, language: Self.language)
-        if ids.isEmpty, Self.market != "US" {
-            log.warn("catalog", "no cloud list for \(Self.market); using US")
+    private func fetchIDs() async throws -> (ids: [String], market: String, language: String) {
+        let currentMarket = Self.market
+        let currentLanguage = Self.language
+        var ids = try await Self.fetchIDs(market: currentMarket, language: currentLanguage)
+        if ids.isEmpty, currentMarket != "US" {
+            log.warn("catalog", "no cloud list for \(currentMarket); using US")
             ids = try await Self.fetchIDs(market: "US", language: "en-us")
+            return (ids, "US", "en-us")
         }
-        return ids
+        return (ids, currentMarket, currentLanguage)
     }
 
     private static func fetchIDs(market: String, language: String) async throws -> [String] {
@@ -243,7 +248,7 @@ final class Catalog: ObservableObject {
         }
     }
 
-    private func fetchDetails(ids: [String]) async throws -> Details {
+    private func fetchDetails(ids: [String], market: String, language: String) async throws -> Details {
         let pages = stride(from: 0, to: ids.count, by: Self.pageSize).map { start in
             Array(ids[start..<min(start + Self.pageSize, ids.count)])
         }
@@ -255,7 +260,7 @@ final class Catalog: ObservableObject {
         try await withThrowingTaskGroup(of: (Int, [Game]?).self) { group in
             for (index, page) in pages.enumerated() {
                 group.addTask {
-                    (index, await Self.fetchPage(page))
+                    (index, await Self.fetchPage(page, market: market, language: language))
                 }
             }
             for try await (index, games) in group {
@@ -287,7 +292,7 @@ final class Catalog: ObservableObject {
         var pageCount: Int
     }
 
-    private static func fetchPage(_ ids: [String]) async -> [Game]? {
+    private static func fetchPage(_ ids: [String], market: String, language: String) async -> [Game]? {
         var components = URLComponents(string: "https://displaycatalog.mp.microsoft.com/v7.0/products")
         components?.queryItems = [
             URLQueryItem(name: "bigIds", value: ids.joined(separator: ",")),
