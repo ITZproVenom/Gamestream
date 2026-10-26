@@ -264,7 +264,16 @@ final class StreamCoordinator: ObservableObject {
         reconnectTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(wait))
             guard !Task.isCancelled else { return }
-            await MainActor.run { self?.retry(resettingBudget: false) }
+            await MainActor.run {
+                guard let self else { return }
+                guard AppSettings.shared.autoReconnect else {
+                    self.reconnectTask = nil
+                    self.phase = .failed("Automatic reconnection is off. You can retry manually.")
+                    self.log.info("stream", "scheduled reconnect skipped because auto-reconnect was turned off")
+                    return
+                }
+                self.retry(resettingBudget: false)
+            }
         }
     }
 
