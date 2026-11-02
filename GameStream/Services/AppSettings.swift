@@ -154,7 +154,6 @@ final class AppSettings: ObservableObject {
         static let phoneRumbleFallback = "settings.phoneRumbleFallback"
         static let autoReconnect = "settings.autoReconnect"
         static let sessionLimit = "settings.sessionLimitMinutes"
-        static let thermalGuard = "settings.thermalGuard"
         static let batteryGuard = "settings.batteryGuard"
         static let adaptiveQuality = "settings.adaptiveQuality"
         static let preflightCheck = "settings.preflightCheck"
@@ -206,7 +205,6 @@ final class AppSettings: ObservableObject {
     @Published var autoReconnect: Bool { didSet { store(autoReconnect, Key.autoReconnect) } }
     /// Minutes before a session ends itself. Zero means no limit.
     @Published var sessionLimitMinutes: Int { didSet { store(sessionLimitMinutes, Key.sessionLimit) } }
-    @Published var thermalGuard: Bool { didSet { store(thermalGuard, Key.thermalGuard) } }
     @Published var batteryGuard: Bool { didSet { store(batteryGuard, Key.batteryGuard) } }
     /// Drop the resolution by itself when the connection cannot hold it.
     @Published var adaptiveQuality: Bool { didSet { store(adaptiveQuality, Key.adaptiveQuality) } }
@@ -322,7 +320,6 @@ final class AppSettings: ObservableObject {
         phoneRumbleFallback = defaults.object(forKey: Key.phoneRumbleFallback) as? Bool ?? true
         autoReconnect = defaults.object(forKey: Key.autoReconnect) as? Bool ?? true
         sessionLimitMinutes = defaults.object(forKey: Key.sessionLimit) as? Int ?? 0
-        thermalGuard = defaults.object(forKey: Key.thermalGuard) as? Bool ?? true
         batteryGuard = defaults.object(forKey: Key.batteryGuard) as? Bool ?? true
         adaptiveQuality = defaults.object(forKey: Key.adaptiveQuality) as? Bool ?? true
         preflightCheck = defaults.object(forKey: Key.preflightCheck) as? Bool ?? true

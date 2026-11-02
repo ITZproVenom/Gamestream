@@ -9,7 +9,6 @@ struct SettingsView: View {
     @EnvironmentObject private var rumble: ControllerRumble
     @StateObject private var network = NetworkCheck.shared
     @StateObject private var stream = StreamCoordinator.shared
-    @StateObject private var guardian = SessionGuard.shared
     @StateObject private var connectivity = Connectivity.shared
 
     @Binding var showingBrowser: Bool
@@ -621,18 +620,6 @@ struct SettingsView: View {
 
             SettingsDivider()
 
-            Toggle("Stop if the phone overheats", isOn: $settings.thermalGuard)
-            HStack {
-                Text("Thermal state").font(.caption)
-                Spacer()
-                Text(guardian.thermalDescription)
-                    .font(.caption)
-                    .foregroundStyle(guardian.thermalState == .nominal
-                                     ? AnyShapeStyle(.secondary) : AnyShapeStyle(.orange))
-            }
-
-            SettingsDivider()
-
             Toggle("Warn on low battery", isOn: $settings.batteryGuard)
         }
     }
@@ -884,7 +871,6 @@ struct DiagnosticsView: View {
     @StateObject private var log = AppLog.shared
     @StateObject private var network = NetworkCheck.shared
     @StateObject private var stream = StreamCoordinator.shared
-    @StateObject private var guardian = SessionGuard.shared
     @Environment(\.dismiss) private var dismiss
     @State private var crashReport: String?
     @State private var crashSummary: String?
@@ -982,7 +968,6 @@ struct DiagnosticsView: View {
         lines.append("Controller: " + (rumble.controllerName ?? "none")
                      + (rumble.supportsHaptics ? " with haptics" : " without haptics"))
         if let reading = network.latest { lines.append("Connection: \(reading.detail)") }
-        lines.append("Thermal state: \(guardian.thermalDescription)")
         return lines
     }
 
