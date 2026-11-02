@@ -2,6 +2,46 @@
 
 All notable changes to GameStream are documented here.
 
+## Unreleased (iOS beta)
+
+### Library, search, and home
+
+- Added an **All games** Library shelf using a lazy grid, so the full catalog is available without increasing Home's 24-game shelf cap (kept for performance).
+- Added Fortnite as a curated cloud-game fallback when Microsoft's Game Pass catalog feed omits it; deduplicated by product ID.
+- Search now distinguishes catalog loading/failure from a genuine no-match result and offers retry.
+- Added loading and retryable catalog-error states to Library.
+- Removed the extra genre-filter row from Home to reduce visual clutter; browsing and filtering remain in Library.
+- Added US market/language metadata when the catalog falls back to Microsoft's US feed.
+
+### Streaming and recovery
+
+- Better xCloud's dimming overlay cleanup now checks actual dialog visibility, reducing stale blur after a menu closes.
+- Persistent Xbox error screens are reported once per visible message, avoiding duplicate callbacks that could abort automatic reconnect.
+- Pending reconnects recheck Auto Reconnect after backoff; switching it off prevents the scheduled retry.
+- Late stream-start callbacks are ignored after the session exits.
+- New installs use Xbox's per-game touch-layout choice by default; existing explicit touch-control preferences are retained.
+
+### Library, recording, and diagnostics
+
+- Creating a list from a game's detail page now adds that game to the new list.
+- Recording start rejects duplicate attempts while capture is starting, recording, or saving.
+- Clearing artwork cache cancels and invalidates in-flight poster downloads so they cannot repopulate the cleared cache.
+- VoiceOver now announces the actual stream metrics, and Insights displays FPS and latency on separate scales.
+- Search/Settings controls expose catalog recovery and accessible slider labels/values.
+- Settings asks for confirmation before clearing activity or recently-played history.
+- The signed-out welcome screen scales with Dynamic Type and scrolls on compact or large-text layouts.
+
+### Authentication and integration integrity
+
+- Sign-out invalidates in-flight authentication refreshes so a late result cannot restore the signed-in state.
+- Authentication probe callbacks are matched to their originating navigation, preventing stale callbacks from completing a newer fallback load.
+- Better xCloud is pinned to reviewed v6.7.12 and its downloaded and cached script SHA-256 digests are verified before injection. Updating it now requires a reviewed GameStream release.
+
+### Thermal guard removal (iOS)
+
+- Removed the overheating toggle, thermal-status display, thermal observer, heat notices, quality advice, automatic stream termination, and thermal diagnostics output.
+- Low-battery protection, session time limits, and network-based adaptive quality are unchanged.
+
 ## 2.1.1 (beta)
 
 An audit pass over both apps. Nothing here is a new feature; all of it is

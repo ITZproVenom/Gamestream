@@ -194,7 +194,7 @@ jobs:
           echo "name=iOS Beta ${{ steps.version.outputs.short }} (build ${{ steps.version.outputs.build }})" >> "$GITHUB_OUTPUT"
 
           python3 - "${{ steps.version.outputs.short }}" "${{ steps.version.outputs.build }}" "$SHORT_SHA" <<'PY'
-          import subprocess, sys
+          import re, subprocess, sys
           from pathlib import Path
 
           version, build, sha = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -215,6 +215,11 @@ jobs:
           if not commits:
               commits = ["- No new commits since the previous beta."]
 
+          changelog = Path("CHANGELOG.md").read_text()
+          match = re.search(r"^## Unreleased \(iOS beta\)\s*\n(.*?)(?=^## |\Z)",
+                            changelog, flags=re.MULTILINE | re.DOTALL)
+          detailed = match.group(1).strip() if match else ""
+
           body = "\n".join([
               f"## iOS Beta {version} (build {build})",
               "",
@@ -224,6 +229,10 @@ jobs:
               "### Changes",
               "",
               *commits,
+              "",
+              "### Detailed changelog",
+              "",
+              detailed,
               "",
               "---",
               "",

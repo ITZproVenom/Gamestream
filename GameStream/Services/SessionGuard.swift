@@ -1,8 +1,10 @@
 import Foundation
 import UIKit
 
-/// Watches the things that end a cloud gaming session badly: a hot phone, a
-/// flat battery, and a session that was meant to be twenty minutes.
+/// Watches the things that end a cloud gaming session badly: a flat battery
+/// and a session that was meant to be twenty minutes.
+///
+/// Battery and session time limits remain active during a stream.
 ///
 /// None of this is advice given once at launch. A stream is a sustained load,
 /// and the phone's condition during minute forty is what matters.
@@ -10,29 +12,19 @@ import UIKit
 final class SessionGuard: ObservableObject {
     static let shared = SessionGuard()
 
-    @Published private(set) var thermalState: ProcessInfo.ThermalState = .nominal
     @Published private(set) var batteryLevel: Double = 1
     @Published private(set) var isCharging = false
     /// Seconds left on the session limit, when one is set.
     @Published private(set) var remaining: TimeInterval?
 
     private var ticker: Task<Void, Never>?
-    private var observers: [NSObjectProtocol] = []
     private var warnedAt: Set<String> = []
     private var limit: TimeInterval?
     private var startedAt: Date?
 
     private init() {
         UIDevice.current.isBatteryMonitoringEnabled = true
-        thermalState = ProcessInfo.processInfo.thermalState
         readBattery()
-
-        let center = NotificationCenter.default
-        observers.append(center.addObserver(
-            forName: ProcessInfo.thermalStateDidChangeNotification,
-            object: nil, queue: .main) { _ in
-                Task { @MainActor in SessionGuard.shared.thermalChanged() }
-            })
     }
 
     // MARK: - Session lifetime
@@ -81,32 +73,6 @@ final class SessionGuard: ObservableObject {
 
     // MARK: - Conditions
 
-    private func thermalChanged() {
-        thermalState = ProcessInfo.processInfo.thermalState
-        // The thermal notification arrives whatever the app is doing. Acting
-        // on it outside a session meant a phone that got warm while browsing
-        // the library announced that it was ending a game, and ended one that
-        // was not running.
-        guard AppSettings.shared.thermalGuard,
-              StreamCoordinator.shared.phase.isActive else { return }
-        switch thermalState {
-        case .serious:
-            // Deliberately not a claim that anything was lowered. The bitrate
-            // ceiling is negotiated when the session is set up, so nothing
-            // changed during one can alter what the server sends.
-            warn("The phone is getting hot. Lowering the quality in Settings and "
-                 + "reconnecting would ease the load.",
-                 key: "thermal-serious")
-            StreamCoordinator.shared.reduceQuality(reason: "the phone is hot")
-        case .critical:
-            warn("The phone is too hot to keep streaming. Ending the game.",
-                 key: "thermal-critical")
-            StreamCoordinator.shared.exit()
-        default:
-            break
-        }
-    }
-
     private func readBattery() {
         let level = UIDevice.current.batteryLevel
         batteryLevel = level < 0 ? 1 : Double(level)
@@ -132,15 +98,5 @@ final class SessionGuard: ObservableObject {
         warnedAt.insert(key)
         AppLog.shared.warn("session", text)
         StreamCoordinator.shared.show(notice: text)
-    }
-
-    var thermalDescription: String {
-        switch thermalState {
-        case .nominal: return "Normal"
-        case .fair: return "Warm"
-        case .serious: return "Hot"
-        case .critical: return "Overheating"
-        @unknown default: return "Unknown"
-        }
     }
 }
