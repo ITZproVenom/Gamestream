@@ -162,25 +162,50 @@ final class XboxAuth: NSObject, ObservableObject {
         }
 
         var result: Any?
+        var probeError: String?
         do {
             result = try await probeView.evaluateJavaScript(WebScripts.authProbeJS)
-            // A document with no reachable storage answers with an error
-            // rather than a verdict; the full page always has storage.
-            if storageUnavailable(in: result), advanceProbeCandidate() {
-                await ensureProbeLoaded()
-                result = try await probeView.evaluateJavaScript(WebScripts.authProbeJS)
-            }
         } catch {
-            lastError = error.localizedDescription
-            log.error("auth", "probe failed: \(error.localizedDescription)")
+            // The lightweight robots.txt document can load successfully yet
+            // still reject JavaScript evaluation. That is not proof that the
+            // Xbox account is signed out; try the full Xbox page before
+            // changing the app's account state.
+            probeError = error.localizedDescription
+        }
+
+        let initialPayload = authPayload(from: result)
+        let needsFullPageProbe = probeIndex == 0 && (
+            probeError != nil
+                || initialPayload == nil
+                || storageUnavailable(in: result)
+                || initialPayload?["signedIn"] as? Bool != true
+        )
+        if needsFullPageProbe, advanceProbeCandidate() {
+            await ensureProbeLoaded()
+            guard probeLoaded else {
+                lastError = "Could not load the full Xbox sign-in page."
+                lastCheck = Date()
+                applyUndetermined()
+                return state
+            }
+            do {
+                result = try await probeView.evaluateJavaScript(WebScripts.authProbeJS)
+            } catch {
+                lastError = error.localizedDescription
+                log.error("auth", "full-page probe failed: \(error.localizedDescription)")
+                lastCheck = Date()
+                applyUndetermined()
+                return state
+            }
+        } else if let probeError {
+            lastError = probeError
+            log.error("auth", "probe failed: \(probeError)")
             lastCheck = Date()
             applyUndetermined()
             return state
         }
 
-        guard let json = result as? String,
-              let data = json.data(using: .utf8),
-              let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        guard let payload = authPayload(from: result) else {
             lastError = "The Xbox page returned an unreadable response."
             log.error("auth", "probe returned no usable payload")
             lastCheck = Date()
@@ -291,6 +316,12 @@ final class XboxAuth: NSObject, ObservableObject {
             return
         }
         apply(.signedOut)
+    }
+
+    private func authPayload(from result: Any?) -> [String: Any]? {
+        guard let json = result as? String,
+              let data = json.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
 
     /// True when the probe answered "I could not read storage" instead of
