@@ -3,13 +3,13 @@ import SwiftUI
 struct SearchView: View {
     @EnvironmentObject private var catalog: Catalog
     @EnvironmentObject private var library: LibraryStore
-    @EnvironmentObject private var stream: StreamCoordinator
     @StateObject private var history = SearchHistory.shared
 
     @State private var query = ""
+    @State private var showingXboxResults = false
+    @State private var searchReloadToken = 0
+    @State private var submittedSearchURL: URL?
     @StateObject private var navigator = RootView.Navigator.shared
-
-    private let columns = [GridItem(.adaptive(minimum: 116, maximum: 190), spacing: 16)]
 
     var body: some View {
         NavigationStack {
@@ -17,29 +17,22 @@ struct SearchView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     if query.isEmpty {
                         idleContent
-                    } else if catalog.games.isEmpty {
-                        if let error = catalog.errorMessage {
-                            ErrorNotice(title: "Catalog unavailable", message: error) {
-                                Task { await catalog.refresh() }
-                            }
-                            .padding(.horizontal, Theme.pageInset)
-                        } else {
-                            LoadingNotice()
-                        }
-                    } else if results.isEmpty {
-                        EmptyNotice(systemImage: "magnifyingglass",
-                                    title: "No matches",
-                                    message: "Nothing in the cloud catalog matches “\(query)”. "
-                                        + "Titles come and go from Game Pass, so it may have left.")
                     } else {
-                        Text("\(results.count) result\(results.count == 1 ? "" : "s")")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, Theme.pageInset)
-
-                        LazyVGrid(columns: columns, spacing: 22) {
-                            ForEach(results) { game in
-                                GameTile(game: game) { stream.play(game) }
+                        VStack(alignment: .leading, spacing: 14) {
+                            SectionHeader(title: "Search Xbox Cloud Gaming",
+                                          subtitle: "Live results from Xbox.com")
+                            GlassCard {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text("Search Xbox's current cloud catalog for “\(query.trimmingCharacters(in: .whitespacesAndNewlines))”.")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                    Button(action: openXboxResults) {
+                                        Label("View live Xbox results", systemImage: "magnifyingglass")
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .buttonStyle(.glassProminent)
+                                    .buttonBorderShape(.capsule)
+                                }
                             }
                         }
                         .padding(.horizontal, Theme.pageInset)
@@ -58,7 +51,7 @@ struct SearchView: View {
             .navigationTitle("Search")
             .searchable(text: $query, prompt: "Games, genres, anything")
             .searchToolbarBehavior(.minimize)
-            .onSubmit(of: .search) { history.record(query) }
+            .onSubmit(of: .search) { openXboxResults() }
             // A search handed in from a Shortcut or a link arrives here.
             .onChange(of: navigator.searchSeed) { _, seed in
                 guard let seed, !seed.isEmpty else { return }
@@ -66,7 +59,41 @@ struct SearchView: View {
                 navigator.searchSeed = nil
             }
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
+            .sheet(isPresented: $showingXboxResults) {
+                NavigationStack {
+                    XboxWebView(role: .browse,
+                                url: submittedSearchURL ?? XboxAuth.playURL,
+                                reloadToken: searchReloadToken)
+                        .ignoresSafeArea(edges: .bottom)
+                        .navigationTitle("Xbox Cloud Search")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Done") { showingXboxResults = false }
+                            }
+                            ToolbarItem(placement: .primaryAction) {
+                                Button {
+                                    searchReloadToken &+= 1
+                                } label: {
+                                    Image(systemName: "arrow.clockwise")
+                                }
+                                .accessibilityLabel("Reload Xbox search")
+                            }
+                        }
+                }
+            }
         }
+    }
+
+    private func openXboxResults() {
+        let clean = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return }
+        history.record(clean)
+        var components = URLComponents(string: "https://www.xbox.com/play/search")
+        components?.queryItems = [URLQueryItem(name: "q", value: clean)]
+        guard let url = components?.url else { return }
+        submittedSearchURL = url
+        showingXboxResults = true
     }
 
     @ViewBuilder
@@ -140,9 +167,5 @@ struct SearchView: View {
                 GameShelf(games: Array(library.favorites.prefix(12)))
             }
         }
-    }
-
-    private var results: [Game] {
-        catalog.search(query)
     }
 }

@@ -4,6 +4,14 @@ All notable changes to GameStream are documented here.
 
 ## Unreleased (iOS beta)
 
+### Search
+
+- Search now submits queries to Xbox Cloud Gaming's live search page inside the app instead of treating the locally cached Game Pass catalog as the authoritative search source.
+- Live Xbox results can include current cloud-playable titles that are missing from GameStream's local catalog, such as free-to-play listings.
+- Recent searches are still saved locally for convenience; the result set itself is provided by Xbox.com.
+
+## Unreleased (iOS beta)
+
 ### Library, search, and home
 
 - Added an **All games** Library shelf using a lazy grid, so the full catalog is available without increasing Home's 24-game shelf cap (kept for performance).
