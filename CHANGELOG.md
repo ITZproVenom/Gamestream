@@ -7,6 +7,7 @@ All notable changes to GameStream are documented here.
 ### Authentication
 
 - If the lightweight Xbox storage probe returns no token or cannot be read, retry against the full Xbox Cloud Gaming page before showing the signed-out screen. A probe failure alone no longer forces a login prompt.
+- Microsoft sign-in `target=_blank` windows now remain separate WKWebViews, preserving the top-level browsing context used by passkey flows while retaining the shared Xbox data store.
 
 ### Search
 

@@ -186,6 +186,7 @@ struct XboxWebView: UIViewRepresentable {
     static func dismantleUIView(_ webView: WKWebView, coordinator: Coordinator) {
         // The player webview is intentionally kept alive between presentations.
         if coordinator.role != .stream {
+            coordinator.closePopups()
             webView.stopLoading()
             webView.navigationDelegate = nil
         }
@@ -295,6 +296,7 @@ struct XboxWebView: UIViewRepresentable {
         var loadedURL: URL?
         var reloadToken = 0
         private weak var webView: WKWebView?
+        private var signInPopups: [WKWebView] = []
         private let log = AppLog.shared
 
         init(role: Role, onSearchResults: ((URL, [Game], String, String) -> Void)? = nil) {
@@ -304,6 +306,16 @@ struct XboxWebView: UIViewRepresentable {
 
         func attach(to webView: WKWebView) {
             self.webView = webView
+        }
+
+        func closePopups() {
+            for popup in signInPopups {
+                popup.stopLoading()
+                popup.navigationDelegate = nil
+                popup.uiDelegate = nil
+                popup.removeFromSuperview()
+            }
+            signInPopups.removeAll()
         }
 
         // MARK: Messages from the page
@@ -445,11 +457,38 @@ struct XboxWebView: UIViewRepresentable {
         func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                      for navigationAction: WKNavigationAction,
                      windowFeatures: WKWindowFeatures) -> WKWebView? {
-            if let url = navigationAction.request.url, navigationAction.targetFrame == nil {
-                AppLog.shared.debug("web", "following popup to \(url.host ?? "a new window")")
-                webView.load(navigationAction.request)
+            guard let url = navigationAction.request.url,
+                  navigationAction.targetFrame == nil else { return nil }
+            AppLog.shared.debug("web", "following popup to \(url.host ?? "a new window")")
+
+            if role == .signIn {
+                // Keep Microsoft sign-in popups as their own top-level WebView.
+                // Redirecting target=_blank into the current page can discard
+                // the popup's user-activation/WebAuthn context used by passkeys.
+                // WebKit supplies the popup configuration, which retains the
+                // shared persistent Xbox website data store.
+                let popup = WKWebView(frame: webView.bounds, configuration: configuration)
+                popup.customUserAgent = XboxAuth.userAgent
+                popup.navigationDelegate = self
+                popup.uiDelegate = self
+                popup.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                webView.addSubview(popup)
+                signInPopups.append(popup)
+                return popup
             }
+
+            webView.load(navigationAction.request)
             return nil
+        }
+
+        @MainActor
+        func webViewDidClose(_ webView: WKWebView) {
+            guard let index = signInPopups.firstIndex(where: { $0 === webView }) else { return }
+            webView.stopLoading()
+            webView.navigationDelegate = nil
+            webView.uiDelegate = nil
+            webView.removeFromSuperview()
+            signInPopups.remove(at: index)
         }
 
         // The site uses these for consent and error prompts; without a
