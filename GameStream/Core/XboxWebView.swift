@@ -15,6 +15,9 @@ struct XboxWebView: UIViewRepresentable {
         case signIn
         /// Plain xbox.com browsing.
         case browse
+        /// A Cloud Gaming search page whose rendered results are returned to the
+        /// native Search UI.
+        case searchResults
         /// A game launch page, with the player scripts and rumble bridge.
         case stream
     }
@@ -23,6 +26,8 @@ struct XboxWebView: UIViewRepresentable {
     let url: URL
     /// Bumping this reloads the page without recreating the webview.
     var reloadToken: Int = 0
+    /// Receives native models extracted from Xbox's rendered search results.
+    var onSearchResults: ((URL, [Game], String, String) -> Void)? = nil
 
     @MainActor
     final class Registry {
@@ -106,7 +111,7 @@ struct XboxWebView: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(role: role)
+        Coordinator(role: role, onSearchResults: onSearchResults)
     }
 
     func makeUIView(context: Context) -> WKWebView {
@@ -163,6 +168,7 @@ struct XboxWebView: UIViewRepresentable {
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
+        context.coordinator.onSearchResults = onSearchResults
         let addressChanged = context.coordinator.loadedURL != url
         if addressChanged {
             context.coordinator.loadedURL = url
@@ -194,6 +200,12 @@ struct XboxWebView: UIViewRepresentable {
                                               injectionTime: .atDocumentEnd,
                                               forMainFrameOnly: true))
 
+        if role == .searchResults {
+            controller.addUserScript(WKUserScript(source: WebScripts.xboxSearchResultsJS,
+                                                  injectionTime: .atDocumentEnd,
+                                                  forMainFrameOnly: true))
+            return
+        }
         guard role == .stream else { return }
 
         // The rumble bridge must wrap createDataChannel before the page opens
@@ -279,13 +291,15 @@ struct XboxWebView: UIViewRepresentable {
         ) -> Bool { true }
 
         let role: Role
+        var onSearchResults: ((URL, [Game], String, String) -> Void)?
         var loadedURL: URL?
         var reloadToken = 0
         private weak var webView: WKWebView?
         private let log = AppLog.shared
 
-        init(role: Role) {
+        init(role: Role, onSearchResults: ((URL, [Game], String, String) -> Void)? = nil) {
             self.role = role
+            self.onSearchResults = onSearchResults
         }
 
         func attach(to webView: WKWebView) {
@@ -306,6 +320,33 @@ struct XboxWebView: UIViewRepresentable {
 
         private func handle(type: String, body: [String: Any]) {
             switch type {
+            case "xboxSearchResults":
+                guard role == .searchResults,
+                      let href = body["href"] as? String,
+                      let sourceURL = URL(string: href),
+                      sourceURL.scheme == "https",
+                      sourceURL.host == "www.xbox.com",
+                      sourceURL.path.contains("/play/search") else { return }
+                let status = body["status"] as? String ?? "error"
+                let message = body["message"] as? String ?? ""
+                var seen = Set<String>()
+                let rows = body["items"] as? [[String: Any]] ?? []
+                let games = rows.compactMap { row -> Game? in
+                    guard let id = row["id"] as? String,
+                          (8...20).contains(id.count),
+                          id.unicodeScalars.allSatisfy({ CharacterSet.alphanumerics.contains($0) }),
+                          seen.insert(id.uppercased()).inserted,
+                          let slug = row["slug"] as? String, !slug.isEmpty,
+                          slug.unicodeScalars.allSatisfy({ CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-").contains($0) }),
+                          let title = row["title"] as? String, !title.isEmpty else { return nil }
+                    let poster = (row["image"] as? String).flatMap { URL(string: $0) }
+                    let safePoster = poster.flatMap {
+                        $0.scheme == "https" && $0.host == "store-images.s-microsoft.com" ? $0 : nil
+                    }
+                    return Game(id: id, slug: slug, title: title, tagline: "",
+                                genre: "Cloud", posterURL: safePoster)
+                }
+                onSearchResults?(sourceURL, games, status, message)
             case "nav":
                 let kind = body["kind"] as? String ?? "other"
                 StreamCoordinator.shared.pageChanged(kind: kind,

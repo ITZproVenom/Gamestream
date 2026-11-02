@@ -266,6 +266,95 @@ enum WebScripts {
 
     // MARK: - Stream presentation
 
+    /// Extracts only Xbox Cloud Gaming's rendered search-result cards so the
+    /// native Search tab can present live Xbox results without showing the site.
+    /// This intentionally reads rendered links instead of relying on an
+    /// undocumented search API; if Xbox changes its page markup, extraction
+    /// fails with a visible state rather than silently falling back locally.
+    static let xboxSearchResultsJS = #"""
+    (function() {
+        if (window.__gsXboxSearchResults) return;
+        window.__gsXboxSearchResults = true;
+        var lastSignature = "";
+        var attempts = 0;
+        var observer = null;
+        var timer = null;
+        var finished = false;
+
+        function send(status, items, message) {
+            var href = location.href || "";
+            var signature = status + "|" + href + "|" + JSON.stringify(items || []) + "|" + (message || "");
+            if (signature === lastSignature) return;
+            lastSignature = signature;
+            try {
+                window.webkit.messageHandlers.gamestream.postMessage({
+                    type: "xboxSearchResults", href: href, status: status,
+                    items: items || [], message: message || ""
+                });
+            } catch (e) {}
+        }
+
+        function scan() {
+            attempts++;
+            var root = document.querySelector("#gamepass-root");
+            if (!root) {
+                if (attempts >= 30) {
+                    finished = true;
+                    if (timer) clearInterval(timer);
+                    send("error", [], "Xbox search did not load. Check your connection and try again.");
+                }
+                return;
+            }
+            if (!observer) {
+                observer = new MutationObserver(scan);
+                observer.observe(root, { childList: true, subtree: true, characterData: true });
+            }
+            var seen = {};
+            var items = [];
+            var links = root.querySelectorAll('a[href*="/play/games/"]');
+            for (var i = 0; i < links.length; i++) {
+                var link = links[i];
+                var url;
+                try { url = new URL(link.href, location.href); } catch (e) { continue; }
+                if (url.hostname !== "www.xbox.com" || url.protocol !== "https:") continue;
+                var parts = url.pathname.split("/").filter(Boolean);
+                if (parts.length < 4 || parts[0] !== "play" || parts[1] !== "games") continue;
+                var slug = parts[2];
+                var id = parts[3];
+                if (!/^[A-Za-z0-9]{8,20}$/.test(id) || seen[id.toUpperCase()]) continue;
+                var titleNode = link.querySelector('[class*="title"]');
+                var title = titleNode ? (titleNode.innerText || "").trim()
+                                      : (link.innerText || "").trim().split("\n")[0].trim();
+                if (!title) continue;
+                seen[id.toUpperCase()] = true;
+                var image = link.querySelector("img");
+                var imageURL = image ? (image.currentSrc || image.src || "") : "";
+                items.push({ id: id, slug: slug, title: title, image: imageURL });
+            }
+            if (items.length) {
+                send("results", items, "");
+                return;
+            }
+            var text = (root.innerText || "").toLowerCase();
+            if (text.indexOf("nothing's come up yet") !== -1
+                || text.indexOf("no results") !== -1) {
+                finished = true;
+                if (timer) clearInterval(timer);
+                send("empty", [], "No Xbox Cloud Gaming titles match this search.");
+                return;
+            }
+            if (attempts >= 30 && !finished) {
+                finished = true;
+                if (timer) clearInterval(timer);
+                send("error", [], "Xbox search results did not arrive. Try again.");
+            }
+        }
+
+        timer = setInterval(scan, 500);
+        scan();
+    })();
+    """#
+
     /// Hides site chrome, but only on a launch page and only what is safe.
     ///
     /// The 1.x version matched `[class*="header"]`, `[class*="banner"]` and
