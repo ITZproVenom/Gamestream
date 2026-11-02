@@ -4,6 +4,10 @@ All notable changes to GameStream are documented here.
 
 ## Unreleased (iOS beta)
 
+### Authentication
+
+- If the lightweight Xbox storage probe returns no token or cannot be read, retry against the full Xbox Cloud Gaming page before showing the signed-out screen. A probe failure alone no longer forces a login prompt.
+
 ### Search
 
 - Search submits to Xbox Cloud Gaming's official live search route and renders the returned games as native GameStream cards, rather than using the local catalog as the result set.
