@@ -56,7 +56,7 @@ struct StreamView: View {
                         ScrollView(.horizontal) {
                             statsStrip
                         }
-                        .scrollIndicators(.hidden)
+                        .scrollIndicators(.visible)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 16)
                         .transition(.move(edge: .top).combined(with: .opacity))
@@ -166,32 +166,38 @@ struct StreamView: View {
     }
 
     private func failure(_ message: String) -> some View {
-        VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 38))
-                .foregroundStyle(.orange)
-            Text("The stream stopped")
-                .font(.title3.weight(.bold))
-                .foregroundStyle(.white)
-            Text(message)
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.75))
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 38))
+                        .foregroundStyle(.orange)
+                    Text("The stream stopped")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.white)
+                    Text(message)
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.75))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
 
-            HStack(spacing: 12) {
-                Button("Close") { stream.exit() }
-                    .buttonStyle(.glass)
-                    .buttonBorderShape(.capsule)
-                    .tint(.white)
-                Button("Try again") { stream.retry() }
-                    .buttonStyle(.glassProminent)
-                    .buttonBorderShape(.capsule)
+                    HStack(spacing: 12) {
+                        Button("Close") { stream.exit() }
+                            .buttonStyle(.glass)
+                            .buttonBorderShape(.capsule)
+                            .tint(.white)
+                        Button("Try again") { stream.retry() }
+                            .buttonStyle(.glassProminent)
+                            .buttonBorderShape(.capsule)
+                    }
+                    .padding(.top, 6)
+                }
+                .padding(34)
+                .frame(maxWidth: 460)
+                .frame(maxWidth: .infinity, minHeight: geometry.size.height, alignment: .center)
             }
-            .padding(.top, 6)
+            .scrollIndicators(.visible)
         }
-        .padding(34)
-        .frame(maxWidth: 460)
     }
 
     // MARK: - HUD
@@ -221,7 +227,7 @@ struct StreamView: View {
                         hudReadouts
                     }
                 }
-                .scrollIndicators(.hidden)
+                .scrollIndicators(.visible)
                 .defaultScrollAnchor(.trailing)
             }
         }
