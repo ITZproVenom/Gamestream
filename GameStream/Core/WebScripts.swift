@@ -353,6 +353,10 @@ enum WebScripts {
         /// genuinely open, so the script keeps control of its own element.
         function sweepOverlay() {
             if (!onLaunchPage()) return;
+            // No overlay means there cannot be stale dimming to clean up.
+            // Avoid scanning dialogs and forcing layout/style reads 2x/sec
+            // throughout an otherwise ordinary stream.
+            if (!document.querySelector(".bx-dialog-overlay")) return;
             var dialogs = document.querySelectorAll(
                 ".bx-settings-dialog, .bx-navigation-dialog, .bx-centered-dialog, .bx-key-binding-dialog"
             );
@@ -560,25 +564,28 @@ enum WebScripts {
         }
 
         async function sample() {
+            // Drop closed peer connections so repeated page reconnects do not
+            // leave objects in this polling list forever.
+            connections = connections.filter(function(pc) {
+                return pc && pc.connectionState !== "closed";
+            });
             for (var i = 0; i < connections.length; i++) {
                 var pc = connections[i];
-                if (!pc || pc.connectionState === "closed") continue;
 
                 var report_ = null;
                 try { report_ = await pc.getStats(); } catch (e) { continue; }
 
                 var video = null, pair = null, codecName = "";
+                var codecs = {};
                 report_.forEach(function(entry) {
                     if (entry.type === "inbound-rtp" && entry.kind === "video") video = entry;
                     if (entry.type === "candidate-pair" && entry.nominated) pair = entry;
-                });
-                if (!video) continue;
-
-                report_.forEach(function(entry) {
-                    if (entry.type === "codec" && video && entry.id === video.codecId) {
-                        codecName = (entry.mimeType || "").replace("video/", "");
+                    if (entry.type === "codec") {
+                        codecs[entry.id] = (entry.mimeType || "").replace("video/", "");
                     }
                 });
+                if (!video) continue;
+                codecName = codecs[video.codecId] || "";
 
                 var last = previous[video.id] || null;
                 var bitrate = 0;
