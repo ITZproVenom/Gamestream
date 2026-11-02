@@ -6,17 +6,17 @@ All notable changes to GameStream are documented here.
 
 ### Search
 
-- Search now submits queries to Xbox Cloud Gaming's live search page inside the app instead of treating the locally cached Game Pass catalog as the authoritative search source.
-- Live Xbox results can include current cloud-playable titles that are missing from GameStream's local catalog, such as free-to-play listings.
-- Recent searches are still saved locally for convenience; the result set itself is provided by Xbox.com.
-
-## Unreleased (iOS beta)
+- Search submits to Xbox Cloud Gaming's official live search route and renders the returned games as native GameStream cards, rather than using the local catalog as the result set.
+- Live Xbox results can include currently cloud-playable titles omitted from GameStream's cached Game Pass feed, including free-to-play listings.
+- Result titles, product IDs, slugs, and artwork come from Xbox's rendered search cards; selecting a result continues through GameStream's native details and stream flow.
+- Xbox no-results and page-load failures are shown separately with retry. Recent search terms remain stored locally.
+- No undocumented search API is called; if Xbox changes its page markup, GameStream shows an extraction error instead of silently falling back to local-only matches.
 
 ### Library, search, and home
 
 - Added an **All games** Library shelf using a lazy grid, so the full catalog is available without increasing Home's 24-game shelf cap (kept for performance).
 - Added Fortnite as a curated cloud-game fallback when Microsoft's Game Pass catalog feed omits it; deduplicated by product ID.
-- Search now distinguishes catalog loading/failure from a genuine no-match result and offers retry.
+- Recent searches remain available locally for convenience; typed game searches always use Xbox's live results.
 - Added loading and retryable catalog-error states to Library.
 - Removed the extra genre-filter row from Home to reduce visual clutter; browsing and filtering remain in Library.
 - Added US market/language metadata when the catalog falls back to Microsoft's US feed.
