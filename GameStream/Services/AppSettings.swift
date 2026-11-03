@@ -30,7 +30,7 @@ final class AppSettings: ObservableObject {
     }
 
     enum Accent: String, CaseIterable, Identifiable, Sendable {
-        case purple, blue, green, orange, pink
+        case purple, blue, green, orange, pink, cyan, teal, gold, red
         var id: String { rawValue }
         var title: String { rawValue.capitalized }
         /// The same colour as CSS needs it, for styling the in-stream menus.
@@ -43,6 +43,10 @@ final class AppSettings: ObservableObject {
             case .green: return "52,199,89"
             case .orange: return "255,149,0"
             case .pink: return "255,45,85"
+            case .cyan: return "50,210,240"
+            case .teal: return "48,200,170"
+            case .gold: return "245,180,45"
+            case .red: return "255,69,58"
             }
         }
 
@@ -53,8 +57,52 @@ final class AppSettings: ObservableObject {
             case .green: return .green
             case .orange: return .orange
             case .pink: return .pink
+            case .cyan: return .cyan
+            case .teal: return .teal
+            case .gold: return Color(red: 0.96, green: 0.70, blue: 0.16)
+            case .red: return .red
             }
         }
+    }
+
+    enum Backdrop: String, CaseIterable, Identifiable, Sendable {
+        case aurora, midnight, ocean, sunset, forest, rose, monochrome
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .aurora: return "Aurora"
+            case .midnight: return "Midnight"
+            case .ocean: return "Ocean"
+            case .sunset: return "Sunset"
+            case .forest: return "Forest"
+            case .rose: return "Rose Gold"
+            case .monochrome: return "Monochrome"
+            }
+        }
+        func previewColors(accent: Color) -> [Color] {
+            switch self {
+            case .aurora:
+                return [accent, accent.opacity(0.55), Color(red: 0.03, green: 0.05, blue: 0.12)]
+            case .midnight:
+                return [Color(red: 0.23, green: 0.29, blue: 0.75), Color(red: 0.10, green: 0.13, blue: 0.38), Color(red: 0.025, green: 0.035, blue: 0.12)]
+            case .ocean:
+                return [Color(red: 0.02, green: 0.64, blue: 0.74), Color(red: 0.04, green: 0.28, blue: 0.49), Color(red: 0.015, green: 0.07, blue: 0.16)]
+            case .sunset:
+                return [Color(red: 1.0, green: 0.43, blue: 0.28), Color(red: 0.69, green: 0.22, blue: 0.52), Color(red: 0.13, green: 0.045, blue: 0.20)]
+            case .forest:
+                return [Color(red: 0.18, green: 0.68, blue: 0.42), Color(red: 0.08, green: 0.38, blue: 0.29), Color(red: 0.025, green: 0.10, blue: 0.09)]
+            case .rose:
+                return [Color(red: 0.91, green: 0.48, blue: 0.55), Color(red: 0.55, green: 0.23, blue: 0.39), Color(red: 0.13, green: 0.055, blue: 0.14)]
+            case .monochrome:
+                return [Color(red: 0.68, green: 0.72, blue: 0.82), Color(red: 0.30, green: 0.34, blue: 0.43), Color(red: 0.055, green: 0.065, blue: 0.085)]
+            }
+        }
+    }
+
+    enum CardSurface: String, CaseIterable, Identifiable, Sendable {
+        case glass, tinted, solid
+        var id: String { rawValue }
+        var title: String { rawValue.capitalized }
     }
 
     enum Quality: String, CaseIterable, Identifiable, Sendable {
@@ -143,6 +191,8 @@ final class AppSettings: ObservableObject {
     private enum Key {
         static let theme = "settings.theme"
         static let accent = "settings.accent"
+        static let backdrop = "settings.backdrop"
+        static let cardSurface = "settings.cardSurface"
         static let keepAwake = "settings.keepAwake"
         static let quality = "settings.quality"
         static let region = "settings.region"
@@ -177,6 +227,8 @@ final class AppSettings: ObservableObject {
 
     @Published var theme: Theme { didSet { store(theme.rawValue, Key.theme) } }
     @Published var accent: Accent { didSet { store(accent.rawValue, Key.accent) } }
+    @Published var backdrop: Backdrop { didSet { store(backdrop.rawValue, Key.backdrop) } }
+    @Published var cardSurface: CardSurface { didSet { store(cardSurface.rawValue, Key.cardSurface) } }
     @Published var keepAwake: Bool { didSet { store(keepAwake, Key.keepAwake) } }
     @Published var quality: Quality { didSet { store(quality.rawValue, Key.quality) } }
     @Published var region: Region { didSet { store(region.rawValue, Key.region) } }
@@ -307,6 +359,8 @@ final class AppSettings: ObservableObject {
         let defaults = UserDefaults.standard
         theme = Theme(rawValue: defaults.string(forKey: Key.theme) ?? "") ?? .system
         accent = Accent(rawValue: defaults.string(forKey: Key.accent) ?? "") ?? .purple
+        backdrop = Backdrop(rawValue: defaults.string(forKey: Key.backdrop) ?? "") ?? .aurora
+        cardSurface = CardSurface(rawValue: defaults.string(forKey: Key.cardSurface) ?? "") ?? .glass
         keepAwake = defaults.object(forKey: Key.keepAwake) as? Bool ?? true
         quality = Quality(rawValue: defaults.string(forKey: Key.quality) ?? "") ?? .auto
         region = Region(rawValue: defaults.string(forKey: Key.region) ?? "") ?? .auto

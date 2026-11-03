@@ -155,28 +155,96 @@ struct SettingsView: View {
 
             SettingsDivider()
 
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Card surface")
+                    .font(.subheadline.weight(.semibold))
+                Picker("Card surface", selection: $settings.cardSurface) {
+                    ForEach(AppSettings.CardSurface.allCases) { surface in
+                        Text(surface.title).tag(surface)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text("Choose Glass for translucent cards, Tinted for an accent wash, or Solid for an opaque surface.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsDivider()
+
             VStack(alignment: .leading, spacing: 11) {
-                Text("Accent").font(.subheadline.weight(.semibold))
-                HStack(spacing: 13) {
-                    ForEach(AppSettings.Accent.allCases) { accent in
+                Text("World")
+                    .font(.subheadline.weight(.semibold))
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    ForEach(AppSettings.Backdrop.allCases) { backdrop in
                         Button {
-                            withAnimation(.smooth) { settings.accent = accent }
+                            withAnimation(.smooth(duration: 0.45)) { settings.backdrop = backdrop }
                         } label: {
-                            Circle()
-                                .fill(accent.color)
-                                .frame(width: 32, height: 32)
-                                .overlay {
-                                    if settings.accent == accent {
-                                        Image(systemName: "checkmark")
+                            ZStack(alignment: .bottomLeading) {
+                                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                                    .fill(LinearGradient(colors: backdrop.previewColors(accent: settings.accent.color),
+                                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    .frame(height: 66)
+                                HStack(spacing: 5) {
+                                    Text(backdrop.title)
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.white)
+                                    Spacer(minLength: 0)
+                                    if settings.backdrop == backdrop {
+                                        Image(systemName: "checkmark.circle.fill")
                                             .font(.caption.weight(.bold))
                                             .foregroundStyle(.white)
                                     }
                                 }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 8)
+                            }
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                                    .strokeBorder(settings.backdrop == backdrop
+                                                  ? Color.white.opacity(0.9) : Color.white.opacity(0.12),
+                                                  lineWidth: settings.backdrop == backdrop ? 2 : 1)
+                            }
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(accent.title)
+                        .accessibilityLabel("\(backdrop.title) background")
+                        .accessibilityAddTraits(settings.backdrop == backdrop ? [.isSelected] : [])
                     }
-                    Spacer(minLength: 0)
+                }
+            }
+
+            SettingsDivider()
+
+            VStack(alignment: .leading, spacing: 11) {
+                Text("Accent").font(.subheadline.weight(.semibold))
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 12) {
+                    ForEach(AppSettings.Accent.allCases) { accent in
+                        Button {
+                            withAnimation(.smooth) { settings.accent = accent }
+                        } label: {
+                            VStack(spacing: 5) {
+                                Circle()
+                                    .fill(accent.color.gradient)
+                                    .frame(width: 30, height: 30)
+                                    .overlay {
+                                        if settings.accent == accent {
+                                            Image(systemName: "checkmark")
+                                                .font(.caption.weight(.bold))
+                                                .foregroundStyle(.white)
+                                                .shadow(color: .black.opacity(0.35), radius: 2)
+                                        }
+                                    }
+                                    .overlay { Circle().strokeBorder(.white.opacity(0.22), lineWidth: 1) }
+                                Text(accent.title)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(accent.title) accent")
+                        .accessibilityAddTraits(settings.accent == accent ? [.isSelected] : [])
+                    }
                 }
             }
         }

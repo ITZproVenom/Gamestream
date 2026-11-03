@@ -65,14 +65,35 @@ struct AuroraBackground: View {
     }
 
     private var mesh: [Color] {
-        let accent = settings.accent.color
-        let deep = accent.mix(with: .black, by: scheme == .dark ? 0.55 : 0.1)
         let base = Color(uiColor: .systemBackground)
+        let palette = settings.backdrop.previewColors(accent: settings.accent.color)
+        let glow = palette[0]
+        let secondary = palette[1]
+        let deep = palette[2]
         return [
-            deep, accent.opacity(0.7), base,
-            accent.opacity(0.35), base, deep.opacity(0.8),
-            base, accent.opacity(0.5), base
+            deep, secondary.opacity(0.72), base,
+            glow.opacity(0.38), base, deep.opacity(0.82),
+            base, secondary.opacity(0.56), base
         ]
+    }
+}
+
+/// Applies the user's card treatment consistently to reusable content surfaces.
+struct CardSurfaceModifier<S: Shape>: ViewModifier {
+    @EnvironmentObject private var settings: AppSettings
+    let shape: S
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        switch settings.cardSurface {
+        case .glass:
+            content.glassEffect(.regular, in: shape)
+        case .tinted:
+            content.glassEffect(.regular.tint(settings.accent.color.opacity(0.22)), in: shape)
+        case .solid:
+            content.background(Color(uiColor: .secondarySystemBackground), in: shape)
+                .overlay(shape.strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
+        }
     }
 }
 
@@ -87,12 +108,7 @@ struct GlassCard<Content: View>: View {
     var body: some View {
         content
             .padding(padding)
-            .glassEffect(
-                tinted
-                    ? .regular.tint(settings.accent.color.opacity(0.22))
-                    : .regular,
-                in: Theme.cardShape
-            )
+            .modifier(CardSurfaceModifier(shape: Theme.cardShape))
     }
 }
 
@@ -149,7 +165,7 @@ struct StatChip: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .glassEffect(.regular, in: Theme.tileShape)
+        .modifier(CardSurfaceModifier(shape: Theme.tileShape))
     }
 }
 
@@ -170,12 +186,7 @@ struct FilterChip: View {
                 .foregroundStyle(isSelected ? Color.white : Color.primary)
         }
         .buttonStyle(.plain)
-        .glassEffect(
-            isSelected
-                ? .regular.tint(settings.accent.color.opacity(0.85)).interactive()
-                : .regular.interactive(),
-            in: Capsule()
-        )
+        .modifier(CardSurfaceModifier(shape: Capsule()))
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }

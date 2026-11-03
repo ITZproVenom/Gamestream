@@ -98,6 +98,8 @@ struct GameTile: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(10)
+        .modifier(CardSurfaceModifier(shape: Theme.tileShape))
     }
 }
 
@@ -124,6 +126,8 @@ struct GameCard: View {
                 }
             }
             .frame(width: width)
+            .padding(9)
+            .modifier(CardSurfaceModifier(shape: Theme.tileShape))
         }
         .buttonStyle(.plain)
     }
