@@ -157,26 +157,35 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: 11) {
                 Text("Accent").font(.subheadline.weight(.semibold))
-                HStack(spacing: 13) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 12) {
                     ForEach(AppSettings.Accent.allCases) { accent in
                         Button {
                             withAnimation(.smooth) { settings.accent = accent }
                         } label: {
-                            Circle()
-                                .fill(accent.color)
-                                .frame(width: 32, height: 32)
-                                .overlay {
-                                    if settings.accent == accent {
-                                        Image(systemName: "checkmark")
-                                            .font(.caption.weight(.bold))
-                                            .foregroundStyle(.white)
+                            VStack(spacing: 5) {
+                                Circle()
+                                    .fill(accent.color.gradient)
+                                    .frame(width: 30, height: 30)
+                                    .overlay {
+                                        if settings.accent == accent {
+                                            Image(systemName: "checkmark")
+                                                .font(.caption.weight(.bold))
+                                                .foregroundStyle(.white)
+                                                .shadow(color: .black.opacity(0.35), radius: 2)
+                                        }
                                     }
-                                }
+                                    .overlay { Circle().strokeBorder(.white.opacity(0.22), lineWidth: 1) }
+                                Text(accent.title)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(accent.title)
+                        .accessibilityLabel("\(accent.title) accent")
+                        .accessibilityAddTraits(settings.accent == accent ? [.isSelected] : [])
                     }
-                    Spacer(minLength: 0)
                 }
             }
         }

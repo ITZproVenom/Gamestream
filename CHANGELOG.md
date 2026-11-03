@@ -1,6 +1,9 @@
-# Changelog
+## Unreleased (iOS beta)
 
-All notable changes to GameStream are documented here.
+### Accent colors
+
+- Expanded the accent palette with Cyan, Teal, Gold, and Red alongside Purple, Blue, Green, Orange, and Pink.
+- Reworked accent selection into labeled swatches with clear selected-state feedback.
 
 ## Unreleased (iOS beta)
 

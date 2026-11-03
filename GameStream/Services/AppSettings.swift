@@ -30,7 +30,7 @@ final class AppSettings: ObservableObject {
     }
 
     enum Accent: String, CaseIterable, Identifiable, Sendable {
-        case purple, blue, green, orange, pink
+        case purple, blue, green, orange, pink, cyan, teal, gold, red
         var id: String { rawValue }
         var title: String { rawValue.capitalized }
         /// The same colour as CSS needs it, for styling the in-stream menus.
@@ -43,6 +43,10 @@ final class AppSettings: ObservableObject {
             case .green: return "52,199,89"
             case .orange: return "255,149,0"
             case .pink: return "255,45,85"
+            case .cyan: return "50,210,240"
+            case .teal: return "48,200,170"
+            case .gold: return "245,180,45"
+            case .red: return "255,69,58"
             }
         }
 
@@ -53,6 +57,10 @@ final class AppSettings: ObservableObject {
             case .green: return .green
             case .orange: return .orange
             case .pink: return .pink
+            case .cyan: return .cyan
+            case .teal: return .teal
+            case .gold: return Color(red: 0.96, green: 0.70, blue: 0.16)
+            case .red: return .red
             }
         }
     }
