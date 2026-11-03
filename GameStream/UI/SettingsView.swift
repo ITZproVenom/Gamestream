@@ -287,6 +287,10 @@ struct SettingsView: View {
                         .accessibilityAddTraits(settings.accent == accent ? [.isSelected] : [])
                     }
                 }
+            }
+
+            SettingsDivider()
+
             VStack(alignment: .leading, spacing: 11) {
                 Text("Card surfaces")
                     .font(.subheadline.weight(.semibold))
