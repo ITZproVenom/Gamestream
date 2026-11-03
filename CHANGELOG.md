@@ -1,5 +1,11 @@
 ## Unreleased (iOS beta)
 
+## Unreleased (iOS beta)
+
+### Backdrop palettes
+
+- Added seven selectable visual worlds: Aurora, Midnight, Ocean, Sunset, Forest, Rose Gold, and Monochrome. Palette selection saves immediately and previews on every screen.
+
 ### Accent colors
 
 - Expanded the accent palette with Cyan, Teal, Gold, and Red alongside Purple, Blue, Green, Orange, and Pink.

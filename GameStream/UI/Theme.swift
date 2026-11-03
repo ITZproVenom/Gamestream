@@ -65,13 +65,15 @@ struct AuroraBackground: View {
     }
 
     private var mesh: [Color] {
-        let accent = settings.accent.color
-        let deep = accent.mix(with: .black, by: scheme == .dark ? 0.55 : 0.1)
         let base = Color(uiColor: .systemBackground)
+        let palette = settings.backdrop.previewColors(accent: settings.accent.color)
+        let glow = palette[0]
+        let secondary = palette[1]
+        let deep = palette[2]
         return [
-            deep, accent.opacity(0.7), base,
-            accent.opacity(0.35), base, deep.opacity(0.8),
-            base, accent.opacity(0.5), base
+            deep, secondary.opacity(0.72), base,
+            glow.opacity(0.38), base, deep.opacity(0.82),
+            base, secondary.opacity(0.56), base
         ]
     }
 }

@@ -153,6 +153,47 @@ struct SettingsView: View {
             }
             .pickerStyle(.segmented)
 
+            VStack(alignment: .leading, spacing: 11) {
+                Text("World")
+                    .font(.subheadline.weight(.semibold))
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    ForEach(AppSettings.Backdrop.allCases) { backdrop in
+                        Button {
+                            withAnimation(.smooth(duration: 0.45)) { settings.backdrop = backdrop }
+                        } label: {
+                            ZStack(alignment: .bottomLeading) {
+                                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                                    .fill(LinearGradient(colors: backdrop.previewColors(accent: settings.accent.color),
+                                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    .frame(height: 66)
+                                HStack(spacing: 5) {
+                                    Text(backdrop.title)
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.white)
+                                    Spacer(minLength: 0)
+                                    if settings.backdrop == backdrop {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.caption.weight(.bold))
+                                            .foregroundStyle(.white)
+                                    }
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 8)
+                            }
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                                    .strokeBorder(settings.backdrop == backdrop
+                                                  ? Color.white.opacity(0.9) : Color.white.opacity(0.12),
+                                                  lineWidth: settings.backdrop == backdrop ? 2 : 1)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(backdrop.title) background")
+                        .accessibilityAddTraits(settings.backdrop == backdrop ? [.isSelected] : [])
+                    }
+                }
+            }
+
             SettingsDivider()
 
             VStack(alignment: .leading, spacing: 11) {
