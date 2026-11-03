@@ -153,6 +153,24 @@ struct SettingsView: View {
             }
             .pickerStyle(.segmented)
 
+            SettingsDivider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Card surface")
+                    .font(.subheadline.weight(.semibold))
+                Picker("Card surface", selection: $settings.cardSurface) {
+                    ForEach(AppSettings.CardSurface.allCases) { surface in
+                        Text(surface.title).tag(surface)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text("Choose Glass for translucent cards, Tinted for an accent wash, or Solid for an opaque surface.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsDivider()
+
             VStack(alignment: .leading, spacing: 11) {
                 Text("World")
                     .font(.subheadline.weight(.semibold))

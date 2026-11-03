@@ -99,6 +99,12 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    enum CardSurface: String, CaseIterable, Identifiable, Sendable {
+        case glass, tinted, solid
+        var id: String { rawValue }
+        var title: String { rawValue.capitalized }
+    }
+
     enum Quality: String, CaseIterable, Identifiable, Sendable {
         case auto, p720, p1080, p1080hq
 
@@ -186,6 +192,7 @@ final class AppSettings: ObservableObject {
         static let theme = "settings.theme"
         static let accent = "settings.accent"
         static let backdrop = "settings.backdrop"
+        static let cardSurface = "settings.cardSurface"
         static let keepAwake = "settings.keepAwake"
         static let quality = "settings.quality"
         static let region = "settings.region"
@@ -221,6 +228,7 @@ final class AppSettings: ObservableObject {
     @Published var theme: Theme { didSet { store(theme.rawValue, Key.theme) } }
     @Published var accent: Accent { didSet { store(accent.rawValue, Key.accent) } }
     @Published var backdrop: Backdrop { didSet { store(backdrop.rawValue, Key.backdrop) } }
+    @Published var cardSurface: CardSurface { didSet { store(cardSurface.rawValue, Key.cardSurface) } }
     @Published var keepAwake: Bool { didSet { store(keepAwake, Key.keepAwake) } }
     @Published var quality: Quality { didSet { store(quality.rawValue, Key.quality) } }
     @Published var region: Region { didSet { store(region.rawValue, Key.region) } }
@@ -352,6 +360,7 @@ final class AppSettings: ObservableObject {
         theme = Theme(rawValue: defaults.string(forKey: Key.theme) ?? "") ?? .system
         accent = Accent(rawValue: defaults.string(forKey: Key.accent) ?? "") ?? .purple
         backdrop = Backdrop(rawValue: defaults.string(forKey: Key.backdrop) ?? "") ?? .aurora
+        cardSurface = CardSurface(rawValue: defaults.string(forKey: Key.cardSurface) ?? "") ?? .glass
         keepAwake = defaults.object(forKey: Key.keepAwake) as? Bool ?? true
         quality = Quality(rawValue: defaults.string(forKey: Key.quality) ?? "") ?? .auto
         region = Region(rawValue: defaults.string(forKey: Key.region) ?? "") ?? .auto

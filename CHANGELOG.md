@@ -2,6 +2,11 @@
 
 ## Unreleased (iOS beta)
 
+### Card surface treatments
+
+- Added a saved Glass, Tinted, or Solid card surface preference in Appearance, defaulting to Glass for existing installations.
+- Applied the selected treatment through a shared surface modifier to reusable cards, game tiles, horizontal game cards, stat chips, and filter chips; Tinted follows the current accent color.
+
 ### Backdrop palettes
 
 - Added seven selectable visual worlds: Aurora, Midnight, Ocean, Sunset, Forest, Rose Gold, and Monochrome. Palette selection saves immediately and previews on every screen.
