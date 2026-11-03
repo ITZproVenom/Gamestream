@@ -53,6 +53,7 @@ struct GameTile: View {
     let play: () -> Void
 
     @EnvironmentObject private var library: LibraryStore
+    @EnvironmentObject private var settings: AppSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -98,6 +99,10 @@ struct GameTile: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(9)
+        .gameSurface(style: settings.surfaceStyle,
+                     accent: settings.accent.color,
+                     in: Theme.tileShape)
     }
 }
 
@@ -106,6 +111,8 @@ struct GameCard: View {
     let game: Game
     var width: CGFloat = 128
     var caption: String?
+
+    @EnvironmentObject private var settings: AppSettings
 
     var body: some View {
         NavigationLink(value: game) {
@@ -124,6 +131,10 @@ struct GameCard: View {
                 }
             }
             .frame(width: width)
+                .padding(8)
+                .gameSurface(style: settings.surfaceStyle,
+                             accent: settings.accent.color,
+                             in: Theme.tileShape)
         }
         .buttonStyle(.plain)
     }

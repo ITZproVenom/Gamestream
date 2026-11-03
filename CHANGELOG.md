@@ -1,6 +1,12 @@
-# Changelog
+## Unreleased (iOS beta)
 
-All notable changes to GameStream are documented here.
+### Appearance customization suite
+
+- Added persistent World/backdrop choices (Aurora, Midnight, Ocean, Sunset, Forest, Rose Gold, Monochrome) and expanded accent colors to nine.
+- Added Glass, Tinted, and Solid treatments across reusable cards, game tiles, stat chips, and filter chips.
+- Added Still, Gentle, and Flowing backdrop motion plus Soft, Balanced, and Vivid glow intensity; Reduce Motion always disables animation.
+- Reorganized Settings into a horizontal category navigator so each group can be browsed without one long, dense settings wall.
+- Existing installations keep Aurora, purple, Glass, Flowing, and Balanced defaults.
 
 ## Unreleased (iOS beta)
 

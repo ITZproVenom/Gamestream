@@ -47,31 +47,36 @@ struct AuroraBackground: View {
                 colors: mesh
             )
             .ignoresSafeArea()
-            .blur(radius: 40)
-            .opacity(scheme == .dark ? 0.85 : 0.55)
+            .blur(radius: settings.glowIntensity.blur)
+            .opacity(min(1, (scheme == .dark ? 0.85 : 0.55)
+                         * settings.glowIntensity.opacity / AppSettings.GlowIntensity.balanced.opacity))
         }
         .ignoresSafeArea()
-        .onAppear {
-            // Reduce Motion means no endless drift: the gradient is drawn
-            // once, in its mid position, and left alone.
-            guard !reduceMotion else {
-                drift = 0.5
-                return
-            }
-            withAnimation(.easeInOut(duration: 14).repeatForever(autoreverses: true)) {
-                drift = 1
-            }
+        .onAppear { startDrift() }
+        .onChange(of: settings.backgroundMotion) { _, _ in startDrift() }
+    }
+
+    private func startDrift() {
+        guard !reduceMotion, settings.backgroundMotion.duration > 0 else {
+            withAnimation(.smooth(duration: 0.25)) { drift = 0.5 }
+            return
+        }
+        drift = 0.5
+        withAnimation(.easeInOut(duration: settings.backgroundMotion.duration).repeatForever(autoreverses: true)) {
+            drift = 1
         }
     }
 
     private var mesh: [Color] {
-        let accent = settings.accent.color
-        let deep = accent.mix(with: .black, by: scheme == .dark ? 0.55 : 0.1)
         let base = Color(uiColor: .systemBackground)
+        let palette = settings.backdrop.previewColors(accent: settings.accent.color)
+        let glow = palette[0]
+        let secondary = palette[1]
+        let deep = palette[2]
         return [
-            deep, accent.opacity(0.7), base,
-            accent.opacity(0.35), base, deep.opacity(0.8),
-            base, accent.opacity(0.5), base
+            deep, secondary.opacity(0.72), base,
+            glow.opacity(0.38), base, deep.opacity(0.82),
+            base, secondary.opacity(0.56), base
         ]
     }
 }
@@ -79,7 +84,6 @@ struct AuroraBackground: View {
 /// A raised surface for content that sits above the backdrop.
 struct GlassCard<Content: View>: View {
     var padding: CGFloat = 18
-    var tinted = false
     @ViewBuilder var content: Content
 
     @EnvironmentObject private var settings: AppSettings
@@ -87,12 +91,27 @@ struct GlassCard<Content: View>: View {
     var body: some View {
         content
             .padding(padding)
-            .glassEffect(
-                tinted
-                    ? .regular.tint(settings.accent.color.opacity(0.22))
-                    : .regular,
-                in: Theme.cardShape
-            )
+            .gameSurface(style: settings.surfaceStyle,
+                         accent: settings.accent.color,
+                         in: Theme.cardShape)
+    }
+}
+
+/// Applies the selected card treatment consistently across reusable UI.
+extension View {
+    @ViewBuilder
+    func gameSurface<S: Shape>(style: AppSettings.SurfaceStyle,
+                               accent: Color,
+                               in shape: S) -> some View {
+        switch style {
+        case .glass:
+            self.glassEffect(.regular, in: shape)
+        case .tinted:
+            self.glassEffect(.regular.tint(accent.opacity(0.22)), in: shape)
+        case .solid:
+            self.background(Color(uiColor: .secondarySystemBackground), in: shape)
+                .overlay { shape.strokeBorder(accent.opacity(0.18), lineWidth: 1) }
+        }
     }
 }
 
@@ -131,6 +150,8 @@ struct StatChip: View {
     let caption: String
     var systemImage: String?
 
+    @EnvironmentObject private var settings: AppSettings
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if let systemImage {
@@ -149,7 +170,9 @@ struct StatChip: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .glassEffect(.regular, in: Theme.tileShape)
+        .gameSurface(style: settings.surfaceStyle,
+                     accent: settings.accent.color,
+                     in: Theme.tileShape)
     }
 }
 
@@ -170,12 +193,9 @@ struct FilterChip: View {
                 .foregroundStyle(isSelected ? Color.white : Color.primary)
         }
         .buttonStyle(.plain)
-        .glassEffect(
-            isSelected
-                ? .regular.tint(settings.accent.color.opacity(0.85)).interactive()
-                : .regular.interactive(),
-            in: Capsule()
-        )
+        .gameSurface(style: isSelected ? .tinted : settings.surfaceStyle,
+                     accent: settings.accent.color,
+                     in: Capsule())
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }

@@ -2,6 +2,24 @@ import SwiftUI
 import UIKit
 
 struct SettingsView: View {
+    private enum Category: String, CaseIterable, Identifiable {
+        case account, appearance, streaming, controller, session, clips, storage, about
+        var id: String { rawValue }
+        var title: String { rawValue.capitalized }
+        var icon: String {
+            switch self {
+            case .account: return "person.crop.circle"
+            case .appearance: return "paintbrush"
+            case .streaming: return "cloud"
+            case .controller: return "gamecontroller"
+            case .session: return "timer"
+            case .clips: return "record.circle"
+            case .storage: return "internaldrive"
+            case .about: return "info.circle"
+            }
+        }
+    }
+
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var auth: XboxAuth
     @EnvironmentObject private var library: LibraryStore
@@ -12,6 +30,7 @@ struct SettingsView: View {
     @StateObject private var connectivity = Connectivity.shared
 
     @Binding var showingBrowser: Bool
+    @State private var category: Category = .account
 
     @State private var cacheSize = 0
     @State private var showingDiagnostics = false
@@ -27,14 +46,8 @@ struct SettingsView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
-                    account
-                    appearance
-                    streaming
-                    controller
-                    session
-                    clips
-                    storage
-                    about
+                    categoryPicker
+                    selectedCategory
                 }
                 .padding(.horizontal, Theme.pageInset)
                 .padding(.top, 8)
@@ -78,6 +91,47 @@ struct SettingsView: View {
             } message: {
                 Text("This removes your recently played list. Favorites, lists and activity history stay.")
             }
+        }
+    }
+
+    private var categoryPicker: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                ForEach(Category.allCases) { item in
+                    Button {
+                        withAnimation(.smooth(duration: 0.22)) { category = item }
+                    } label: {
+                        Label(item.title, systemImage: item.icon)
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                            .padding(.horizontal, 13)
+                            .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(category == item ? Color.white : Color.primary)
+                    .gameSurface(style: category == item ? .tinted : settings.surfaceStyle,
+                                 accent: settings.accent.color,
+                                 in: Capsule())
+                    .accessibilityAddTraits(category == item ? [.isSelected] : [])
+                }
+            }
+            .padding(.horizontal, 1)
+        }
+        .scrollIndicators(.hidden)
+        .accessibilityLabel("Settings categories")
+    }
+
+    @ViewBuilder
+    private var selectedCategory: some View {
+        switch category {
+        case .account: account
+        case .appearance: appearance
+        case .streaming: streaming
+        case .controller: controller
+        case .session: session
+        case .clips: clips
+        case .storage: storage
+        case .about: about
         }
     }
 
@@ -156,28 +210,153 @@ struct SettingsView: View {
             SettingsDivider()
 
             VStack(alignment: .leading, spacing: 11) {
-                Text("Accent").font(.subheadline.weight(.semibold))
-                HStack(spacing: 13) {
-                    ForEach(AppSettings.Accent.allCases) { accent in
+                Text("World")
+                    .font(.subheadline.weight(.semibold))
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    ForEach(AppSettings.Backdrop.allCases) { backdrop in
                         Button {
-                            withAnimation(.smooth) { settings.accent = accent }
+                            withAnimation(.smooth(duration: 0.45)) { settings.backdrop = backdrop }
                         } label: {
-                            Circle()
-                                .fill(accent.color)
-                                .frame(width: 32, height: 32)
-                                .overlay {
-                                    if settings.accent == accent {
-                                        Image(systemName: "checkmark")
+                            ZStack(alignment: .bottomLeading) {
+                                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                                    .fill(LinearGradient(colors: backdrop.previewColors(accent: settings.accent.color),
+                                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    .frame(height: 66)
+                                HStack(spacing: 5) {
+                                    Text(backdrop.title)
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.white)
+                                    Spacer(minLength: 0)
+                                    if settings.backdrop == backdrop {
+                                        Image(systemName: "checkmark.circle.fill")
                                             .font(.caption.weight(.bold))
                                             .foregroundStyle(.white)
                                     }
                                 }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 8)
+                            }
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                                    .strokeBorder(settings.backdrop == backdrop
+                                                  ? Color.white.opacity(0.9) : Color.white.opacity(0.12),
+                                                  lineWidth: settings.backdrop == backdrop ? 2 : 1)
+                            }
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(accent.title)
+                        .accessibilityLabel("\(backdrop.title) background")
+                        .accessibilityAddTraits(settings.backdrop == backdrop ? [.isSelected] : [])
                     }
-                    Spacer(minLength: 0)
                 }
+            }
+
+            SettingsDivider()
+
+            VStack(alignment: .leading, spacing: 11) {
+                Text("Accent")
+                    .font(.subheadline.weight(.semibold))
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 12) {
+                    ForEach(AppSettings.Accent.allCases) { accent in
+                        Button {
+                            withAnimation(.smooth) { settings.accent = accent }
+                        } label: {
+                            VStack(spacing: 5) {
+                                Circle()
+                                    .fill(accent.color.gradient)
+                                    .frame(width: 30, height: 30)
+                                    .overlay {
+                                        if settings.accent == accent {
+                                            Image(systemName: "checkmark")
+                                                .font(.caption.weight(.bold))
+                                                .foregroundStyle(.white)
+                                                .shadow(color: .black.opacity(0.35), radius: 2)
+                                        }
+                                    }
+                                    .overlay {
+                                        Circle().strokeBorder(.white.opacity(0.22), lineWidth: 1)
+                                    }
+                                Text(accent.title)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(accent.title) accent")
+                        .accessibilityAddTraits(settings.accent == accent ? [.isSelected] : [])
+                    }
+                }
+            VStack(alignment: .leading, spacing: 11) {
+                Text("Card surfaces")
+                    .font(.subheadline.weight(.semibold))
+                HStack(spacing: 9) {
+                    ForEach(AppSettings.SurfaceStyle.allCases) { style in
+                        Button {
+                            withAnimation(.smooth(duration: 0.25)) { settings.surfaceStyle = style }
+                        } label: {
+                            VStack(spacing: 8) {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color(uiColor: .secondarySystemBackground))
+                                    .frame(height: 48)
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            .fill(settings.accent.color.opacity(0.20))
+                                            .padding(style == .tinted ? 0 : 18)
+                                            .opacity(style == .tinted ? 0.9 : 0.3)
+                                    }
+                                    .gameSurface(style: style, accent: settings.accent.color,
+                                                 in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                Text(style.title)
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(settings.surfaceStyle == style ? .primary : .secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(6)
+                            .background {
+                                if settings.surfaceStyle == style {
+                                    RoundedRectangle(cornerRadius: 17, style: .continuous)
+                                        .fill(settings.accent.color.opacity(0.10))
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(style.title) card surfaces")
+                        .accessibilityAddTraits(settings.surfaceStyle == style ? [.isSelected] : [])
+                    }
+                }
+                Text("Choose how library cards and panels sit above the background.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsDivider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Picker("Background motion", selection: $settings.backgroundMotion) {
+                    ForEach(AppSettings.BackgroundMotion.allCases) { motion in
+                        Text(motion.title).tag(motion)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text("Reduce Motion always takes priority over animation.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsDivider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Picker("Backdrop glow", selection: $settings.glowIntensity) {
+                    ForEach(AppSettings.GlowIntensity.allCases) { intensity in
+                        Text(intensity.title).tag(intensity)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text("Adjust how vivid and soft the ambient colors appear.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }
