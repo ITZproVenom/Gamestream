@@ -1,8 +1,28 @@
-# Changelog
-
-All notable changes to GameStream are documented here.
-
 ## Unreleased (iOS beta)
+
+
+
+### Ambient customization
+
+- Added persistent Still, Gentle, and Flowing backdrop motion controls; iOS Reduce Motion always overrides animation. New installations default to Still to minimize continuous GPU animation.
+- Added Soft, Balanced, and Vivid ambient glow controls for finer background intensity. New installations default to Soft for lower visual-processing load.
+- Pauses the animated blurred background while a stream session is active to avoid drawing covered Home/Library/Settings backdrops underneath the player.
+- Settings now has an eight-category navigator—Account, Appearance, Streaming, Controller, Session, Clips, Storage, About—so groups no longer form one long settings page.
+
+### Card surface treatments
+
+- Added a saved Glass, Tinted, or Solid card surface preference in Appearance, defaulting to Glass for existing installations.
+- Applied the selected treatment through a shared surface modifier to reusable cards, game tiles, horizontal game cards, stat chips, and filter chips; Tinted follows the current accent color.
+
+### Backdrop palettes
+
+- Added seven selectable visual worlds: Aurora, Midnight, Ocean, Sunset, Forest, Rose Gold, and Monochrome. Palette selection saves immediately and previews on every screen.
+
+### Accent colors
+
+- Expanded the accent palette with Cyan, Teal, Gold, and Red alongside Purple, Blue, Green, Orange, and Pink.
+- Reworked accent selection into labeled swatches with clear selected-state feedback.
+
 
 ### Authentication
 

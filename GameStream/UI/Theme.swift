@@ -1,5 +1,16 @@
 import SwiftUI
 
+private struct GameStreamSessionActiveKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var gameStreamSessionActive: Bool {
+        get { self[GameStreamSessionActiveKey.self] }
+        set { self[GameStreamSessionActiveKey.self] = newValue }
+    }
+}
+
 /// The shared look of GameStream 2.0.
 ///
 /// Everything visual lives here so a change of mind is one edit rather than
@@ -28,6 +39,7 @@ enum Theme {
 struct AuroraBackground: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.gameStreamSessionActive) private var gameStreamSessionActive
     @EnvironmentObject private var settings: AppSettings
 
     @State private var drift: CGFloat = 0
@@ -36,43 +48,74 @@ struct AuroraBackground: View {
         ZStack {
             Color(uiColor: .systemBackground)
 
-            MeshGradient(
-                width: 3,
-                height: 3,
-                points: [
-                    .init(0, 0), .init(0.5 + 0.1 * Float(drift), 0), .init(1, 0),
-                    .init(0, 0.5), .init(0.5, 0.5 + 0.08 * Float(drift)), .init(1, 0.5),
-                    .init(0, 1), .init(0.5 - 0.1 * Float(drift), 1), .init(1, 1)
-                ],
-                colors: mesh
-            )
-            .ignoresSafeArea()
-            .blur(radius: 40)
-            .opacity(scheme == .dark ? 0.85 : 0.55)
+            if !gameStreamSessionActive {
+                MeshGradient(
+                    width: 3,
+                    height: 3,
+                    points: [
+                        .init(0, 0), .init(0.5 + 0.1 * Float(drift), 0), .init(1, 0),
+                        .init(0, 0.5), .init(0.5, 0.5 + 0.08 * Float(drift)), .init(1, 0.5),
+                        .init(0, 1), .init(0.5 - 0.1 * Float(drift), 1), .init(1, 1)
+                    ],
+                    colors: mesh
+                )
+                .ignoresSafeArea()
+                .blur(radius: settings.glowIntensity.blur)
+                .opacity(min(1, (scheme == .dark ? 0.85 : 0.55)
+                             * settings.glowIntensity.opacity / AppSettings.GlowIntensity.balanced.opacity))
+            }
         }
         .ignoresSafeArea()
-        .onAppear {
-            // Reduce Motion means no endless drift: the gradient is drawn
-            // once, in its mid position, and left alone.
-            guard !reduceMotion else {
-                drift = 0.5
-                return
-            }
-            withAnimation(.easeInOut(duration: 14).repeatForever(autoreverses: true)) {
-                drift = 1
-            }
+        .onAppear { startDrift() }
+        .onChange(of: settings.backgroundMotion) { _, _ in startDrift() }
+        .onChange(of: reduceMotion) { _, _ in startDrift() }
+        .onChange(of: gameStreamSessionActive) { _, _ in startDrift() }
+    }
+
+    private func startDrift() {
+        guard !gameStreamSessionActive, !reduceMotion,
+              settings.backgroundMotion.duration > 0 else {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { drift = 0.5 }
+            return
+        }
+        drift = 0.5
+        withAnimation(.easeInOut(duration: settings.backgroundMotion.duration).repeatForever(autoreverses: true)) {
+            drift = 1
         }
     }
 
     private var mesh: [Color] {
-        let accent = settings.accent.color
-        let deep = accent.mix(with: .black, by: scheme == .dark ? 0.55 : 0.1)
         let base = Color(uiColor: .systemBackground)
+        let palette = settings.backdrop.previewColors(accent: settings.accent.color)
+        let glow = palette[0]
+        let secondary = palette[1]
+        let deep = palette[2]
         return [
-            deep, accent.opacity(0.7), base,
-            accent.opacity(0.35), base, deep.opacity(0.8),
-            base, accent.opacity(0.5), base
+            deep, secondary.opacity(0.72), base,
+            glow.opacity(0.38), base, deep.opacity(0.82),
+            base, secondary.opacity(0.56), base
         ]
+    }
+}
+
+/// Applies the user's card treatment consistently to reusable content surfaces.
+struct CardSurfaceModifier<S: Shape>: ViewModifier {
+    @EnvironmentObject private var settings: AppSettings
+    let shape: S
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        switch settings.cardSurface {
+        case .glass:
+            content.glassEffect(.regular, in: shape)
+        case .tinted:
+            content.glassEffect(.regular.tint(settings.accent.color.opacity(0.22)), in: shape)
+        case .solid:
+            content.background(Color(uiColor: .secondarySystemBackground), in: shape)
+                .overlay(shape.stroke(Color.primary.opacity(0.08), lineWidth: 1))
+        }
     }
 }
 
@@ -87,12 +130,7 @@ struct GlassCard<Content: View>: View {
     var body: some View {
         content
             .padding(padding)
-            .glassEffect(
-                tinted
-                    ? .regular.tint(settings.accent.color.opacity(0.22))
-                    : .regular,
-                in: Theme.cardShape
-            )
+            .modifier(CardSurfaceModifier(shape: Theme.cardShape))
     }
 }
 
@@ -149,7 +187,7 @@ struct StatChip: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .glassEffect(.regular, in: Theme.tileShape)
+        .modifier(CardSurfaceModifier(shape: Theme.tileShape))
     }
 }
 
@@ -170,12 +208,7 @@ struct FilterChip: View {
                 .foregroundStyle(isSelected ? Color.white : Color.primary)
         }
         .buttonStyle(.plain)
-        .glassEffect(
-            isSelected
-                ? .regular.tint(settings.accent.color.opacity(0.85)).interactive()
-                : .regular.interactive(),
-            in: Capsule()
-        )
+        .modifier(CardSurfaceModifier(shape: Capsule()))
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
