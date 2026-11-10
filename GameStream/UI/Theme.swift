@@ -59,7 +59,9 @@ struct AuroraBackground: View {
 
     private func startDrift() {
         guard !reduceMotion, settings.backgroundMotion.duration > 0 else {
-            withAnimation(.smooth(duration: 0.25)) { drift = 0.5 }
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { drift = 0.5 }
             return
         }
         drift = 0.5

@@ -137,9 +137,9 @@ final class AppSettings: ObservableObject {
         }
         var blur: CGFloat {
             switch self {
-            case .soft: return 58
+            case .soft: return 24
             case .balanced: return 40
-            case .vivid: return 27
+            case .vivid: return 54
             }
         }
     }
@@ -404,8 +404,8 @@ final class AppSettings: ObservableObject {
         accent = Accent(rawValue: defaults.string(forKey: Key.accent) ?? "") ?? .purple
         backdrop = Backdrop(rawValue: defaults.string(forKey: Key.backdrop) ?? "") ?? .aurora
         cardSurface = CardSurface(rawValue: defaults.string(forKey: Key.cardSurface) ?? "") ?? .glass
-        backgroundMotion = BackgroundMotion(rawValue: defaults.string(forKey: Key.backgroundMotion) ?? "") ?? .flowing
-        glowIntensity = GlowIntensity(rawValue: defaults.string(forKey: Key.glowIntensity) ?? "") ?? .balanced
+        backgroundMotion = BackgroundMotion(rawValue: defaults.string(forKey: Key.backgroundMotion) ?? "") ?? .still
+        glowIntensity = GlowIntensity(rawValue: defaults.string(forKey: Key.glowIntensity) ?? "") ?? .soft
         keepAwake = defaults.object(forKey: Key.keepAwake) as? Bool ?? true
         quality = Quality(rawValue: defaults.string(forKey: Key.quality) ?? "") ?? .auto
         region = Region(rawValue: defaults.string(forKey: Key.region) ?? "") ?? .auto

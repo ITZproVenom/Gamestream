@@ -4,8 +4,8 @@
 
 ### Ambient customization
 
-- Added persistent Still, Gentle, and Flowing backdrop motion controls; iOS Reduce Motion always overrides animation.
-- Added Soft, Balanced, and Vivid ambient glow controls for finer background intensity.
+- Added persistent Still, Gentle, and Flowing backdrop motion controls; iOS Reduce Motion always overrides animation. New installations default to Still to minimize continuous GPU animation.
+- Added Soft, Balanced, and Vivid ambient glow controls for finer background intensity. New installations default to Soft for lower visual-processing load.
 - Settings now has an eight-category navigator—Account, Appearance, Streaming, Controller, Session, Clips, Storage, About—so groups no longer form one long settings page.
 
 ### Card surface treatments
