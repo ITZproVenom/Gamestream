@@ -109,7 +109,6 @@ struct SettingsView: View {
 
     private func categoryButton(_ item: Category) -> some View {
         let selected = category == item
-        let surface: AppSettings.CardSurface = selected ? .tinted : settings.cardSurface
         return Button {
             withAnimation(.smooth(duration: 0.22)) { category = item }
         } label: {
@@ -124,8 +123,12 @@ struct SettingsView: View {
             .padding(.vertical, 10)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(selected ? Color.white : Color.primary)
-        .gameSurface(style: surface, accent: settings.accent.color, in: Capsule())
+        .foregroundStyle(selected ? settings.accent.color : Color.primary)
+        .modifier(CardSurfaceModifier(shape: Capsule()))
+        .overlay {
+            Capsule().strokeBorder(selected ? settings.accent.color.opacity(0.75) : .clear,
+                                   lineWidth: selected ? 1.5 : 0)
+        }
         .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
