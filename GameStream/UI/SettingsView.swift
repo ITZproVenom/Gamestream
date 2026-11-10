@@ -2,6 +2,24 @@ import SwiftUI
 import UIKit
 
 struct SettingsView: View {
+    private enum Category: String, CaseIterable, Identifiable {
+        case account, appearance, streaming, controller, session, clips, storage, about
+        var id: String { rawValue }
+        var title: String { rawValue.capitalized }
+        var icon: String {
+            switch self {
+            case .account: return "person.crop.circle"
+            case .appearance: return "paintbrush"
+            case .streaming: return "cloud"
+            case .controller: return "gamecontroller"
+            case .session: return "timer"
+            case .clips: return "record.circle"
+            case .storage: return "internaldrive"
+            case .about: return "info.circle"
+            }
+        }
+    }
+
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var auth: XboxAuth
     @EnvironmentObject private var library: LibraryStore
@@ -12,6 +30,7 @@ struct SettingsView: View {
     @StateObject private var connectivity = Connectivity.shared
 
     @Binding var showingBrowser: Bool
+    @State private var category: Category = .account
 
     @State private var cacheSize = 0
     @State private var showingDiagnostics = false
@@ -27,14 +46,8 @@ struct SettingsView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
-                    account
-                    appearance
-                    streaming
-                    controller
-                    session
-                    clips
-                    storage
-                    about
+                    categoryPicker
+                    selectedCategory
                 }
                 .padding(.horizontal, Theme.pageInset)
                 .padding(.top, 8)
@@ -78,6 +91,47 @@ struct SettingsView: View {
             } message: {
                 Text("This removes your recently played list. Favorites, lists and activity history stay.")
             }
+        }
+    }
+
+    private var categoryPicker: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                ForEach(Category.allCases) { item in
+                    Button {
+                        withAnimation(.smooth(duration: 0.22)) { category = item }
+                    } label: {
+                        Label(item.title, systemImage: item.icon)
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                            .padding(.horizontal, 13)
+                            .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(category == item ? Color.white : Color.primary)
+                    .gameSurface(style: category == item ? .tinted : settings.cardSurface,
+                                 accent: settings.accent.color,
+                                 in: Capsule())
+                    .accessibilityAddTraits(category == item ? [.isSelected] : [])
+                }
+            }
+            .padding(.horizontal, 1)
+        }
+        .scrollIndicators(.hidden)
+        .accessibilityLabel("Settings categories")
+    }
+
+    @ViewBuilder
+    private var selectedCategory: some View {
+        switch category {
+        case .account: account
+        case .appearance: appearance
+        case .streaming: streaming
+        case .controller: controller
+        case .session: session
+        case .clips: clips
+        case .storage: storage
+        case .about: about
         }
     }
 

@@ -6,6 +6,7 @@
 
 - Added persistent Still, Gentle, and Flowing backdrop motion controls; iOS Reduce Motion always overrides animation.
 - Added Soft, Balanced, and Vivid ambient glow controls for finer background intensity.
+- Settings now has an eight-category navigator—Account, Appearance, Streaming, Controller, Session, Clips, Storage, About—so groups no longer form one long settings page.
 
 ### Card surface treatments
 
