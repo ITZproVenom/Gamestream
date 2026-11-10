@@ -123,6 +123,7 @@ struct RootView: View {
                 SettingsView(showingBrowser: $showingBrowser)
             }
         }
+        .environment(\.gameStreamSessionActive, stream.phase.isActive)
         // Liquid Glass: the tab bar shrinks out of the way while reading, and
         // the accessory above it keeps the last game one tap away.
         .tabBarMinimizeBehavior(.onScrollDown)

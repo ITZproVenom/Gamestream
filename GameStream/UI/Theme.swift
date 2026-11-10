@@ -1,5 +1,16 @@
 import SwiftUI
 
+private struct GameStreamSessionActiveKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var gameStreamSessionActive: Bool {
+        get { self[GameStreamSessionActiveKey.self] }
+        set { self[GameStreamSessionActiveKey.self] = newValue }
+    }
+}
+
 /// The shared look of GameStream 2.0.
 ///
 /// Everything visual lives here so a change of mind is one edit rather than
@@ -28,6 +39,7 @@ enum Theme {
 struct AuroraBackground: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.gameStreamSessionActive) private var gameStreamSessionActive
     @EnvironmentObject private var settings: AppSettings
 
     @State private var drift: CGFloat = 0
@@ -36,29 +48,33 @@ struct AuroraBackground: View {
         ZStack {
             Color(uiColor: .systemBackground)
 
-            MeshGradient(
-                width: 3,
-                height: 3,
-                points: [
-                    .init(0, 0), .init(0.5 + 0.1 * Float(drift), 0), .init(1, 0),
-                    .init(0, 0.5), .init(0.5, 0.5 + 0.08 * Float(drift)), .init(1, 0.5),
-                    .init(0, 1), .init(0.5 - 0.1 * Float(drift), 1), .init(1, 1)
-                ],
-                colors: mesh
-            )
-            .ignoresSafeArea()
-            .blur(radius: settings.glowIntensity.blur)
-            .opacity(min(1, (scheme == .dark ? 0.85 : 0.55)
-                         * settings.glowIntensity.opacity / AppSettings.GlowIntensity.balanced.opacity))
+            if !gameStreamSessionActive {
+                MeshGradient(
+                    width: 3,
+                    height: 3,
+                    points: [
+                        .init(0, 0), .init(0.5 + 0.1 * Float(drift), 0), .init(1, 0),
+                        .init(0, 0.5), .init(0.5, 0.5 + 0.08 * Float(drift)), .init(1, 0.5),
+                        .init(0, 1), .init(0.5 - 0.1 * Float(drift), 1), .init(1, 1)
+                    ],
+                    colors: mesh
+                )
+                .ignoresSafeArea()
+                .blur(radius: settings.glowIntensity.blur)
+                .opacity(min(1, (scheme == .dark ? 0.85 : 0.55)
+                             * settings.glowIntensity.opacity / AppSettings.GlowIntensity.balanced.opacity))
+            }
         }
         .ignoresSafeArea()
         .onAppear { startDrift() }
         .onChange(of: settings.backgroundMotion) { _, _ in startDrift() }
         .onChange(of: reduceMotion) { _, _ in startDrift() }
+        .onChange(of: gameStreamSessionActive) { _, _ in startDrift() }
     }
 
     private func startDrift() {
-        guard !reduceMotion, settings.backgroundMotion.duration > 0 else {
+        guard !gameStreamSessionActive, !reduceMotion,
+              settings.backgroundMotion.duration > 0 else {
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) { drift = 0.5 }

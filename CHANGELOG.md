@@ -6,6 +6,7 @@
 
 - Added persistent Still, Gentle, and Flowing backdrop motion controls; iOS Reduce Motion always overrides animation. New installations default to Still to minimize continuous GPU animation.
 - Added Soft, Balanced, and Vivid ambient glow controls for finer background intensity. New installations default to Soft for lower visual-processing load.
+- Pauses the animated blurred background while a stream session is active to avoid drawing covered Home/Library/Settings backdrops underneath the player.
 - Settings now has an eight-category navigator—Account, Appearance, Streaming, Controller, Session, Clips, Storage, About—so groups no longer form one long settings page.
 
 ### Card surface treatments
