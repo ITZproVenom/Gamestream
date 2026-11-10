@@ -101,11 +101,15 @@ struct SettingsView: View {
                     Button {
                         withAnimation(.smooth(duration: 0.22)) { category = item }
                     } label: {
-                        Label(item.title, systemImage: item.icon)
-                            .font(.caption.weight(.semibold))
-                            .lineLimit(1)
-                            .padding(.horizontal, 13)
-                            .padding(.vertical, 10)
+                        HStack(spacing: 6) {
+                            Image(systemName: item.icon)
+                                .font(.caption.weight(.semibold))
+                            Text(item.title)
+                                .font(.caption.weight(.semibold))
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 13)
+                        .padding(.vertical, 10)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(category == item ? Color.white : Color.primary)
