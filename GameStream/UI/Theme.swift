@@ -92,7 +92,7 @@ struct CardSurfaceModifier<S: Shape>: ViewModifier {
             content.glassEffect(.regular.tint(settings.accent.color.opacity(0.22)), in: shape)
         case .solid:
             content.background(Color(uiColor: .secondarySystemBackground), in: shape)
-                .overlay(shape.strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
+                .overlay(shape.stroke(Color.primary.opacity(0.08), lineWidth: 1))
         }
     }
 }
