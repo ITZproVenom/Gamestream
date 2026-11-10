@@ -1,6 +1,11 @@
 ## Unreleased (iOS beta)
 
-## Unreleased (iOS beta)
+
+
+### Ambient customization
+
+- Added persistent Still, Gentle, and Flowing backdrop motion controls; iOS Reduce Motion always overrides animation.
+- Added Soft, Balanced, and Vivid ambient glow controls for finer background intensity.
 
 ### Card surface treatments
 
@@ -16,7 +21,6 @@
 - Expanded the accent palette with Cyan, Teal, Gold, and Red alongside Purple, Blue, Green, Orange, and Pink.
 - Reworked accent selection into labeled swatches with clear selected-state feedback.
 
-## Unreleased (iOS beta)
 
 ### Authentication
 

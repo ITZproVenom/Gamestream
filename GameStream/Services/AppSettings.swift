@@ -105,6 +105,45 @@ final class AppSettings: ObservableObject {
         var title: String { rawValue.capitalized }
     }
 
+    enum BackgroundMotion: String, CaseIterable, Identifiable, Sendable {
+        case still, gentle, flowing
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .still: return "Still"
+            case .gentle: return "Gentle"
+            case .flowing: return "Flowing"
+            }
+        }
+        var duration: Double {
+            switch self {
+            case .still: return 0
+            case .gentle: return 28
+            case .flowing: return 14
+            }
+        }
+    }
+
+    enum GlowIntensity: String, CaseIterable, Identifiable, Sendable {
+        case soft, balanced, vivid
+        var id: String { rawValue }
+        var title: String { rawValue.capitalized }
+        var opacity: Double {
+            switch self {
+            case .soft: return 0.28
+            case .balanced: return 0.55
+            case .vivid: return 0.82
+            }
+        }
+        var blur: CGFloat {
+            switch self {
+            case .soft: return 58
+            case .balanced: return 40
+            case .vivid: return 27
+            }
+        }
+    }
+
     enum Quality: String, CaseIterable, Identifiable, Sendable {
         case auto, p720, p1080, p1080hq
 
@@ -193,6 +232,8 @@ final class AppSettings: ObservableObject {
         static let accent = "settings.accent"
         static let backdrop = "settings.backdrop"
         static let cardSurface = "settings.cardSurface"
+        static let backgroundMotion = "settings.backgroundMotion"
+        static let glowIntensity = "settings.glowIntensity"
         static let keepAwake = "settings.keepAwake"
         static let quality = "settings.quality"
         static let region = "settings.region"
@@ -229,6 +270,8 @@ final class AppSettings: ObservableObject {
     @Published var accent: Accent { didSet { store(accent.rawValue, Key.accent) } }
     @Published var backdrop: Backdrop { didSet { store(backdrop.rawValue, Key.backdrop) } }
     @Published var cardSurface: CardSurface { didSet { store(cardSurface.rawValue, Key.cardSurface) } }
+    @Published var backgroundMotion: BackgroundMotion { didSet { store(backgroundMotion.rawValue, Key.backgroundMotion) } }
+    @Published var glowIntensity: GlowIntensity { didSet { store(glowIntensity.rawValue, Key.glowIntensity) } }
     @Published var keepAwake: Bool { didSet { store(keepAwake, Key.keepAwake) } }
     @Published var quality: Quality { didSet { store(quality.rawValue, Key.quality) } }
     @Published var region: Region { didSet { store(region.rawValue, Key.region) } }
@@ -361,6 +404,8 @@ final class AppSettings: ObservableObject {
         accent = Accent(rawValue: defaults.string(forKey: Key.accent) ?? "") ?? .purple
         backdrop = Backdrop(rawValue: defaults.string(forKey: Key.backdrop) ?? "") ?? .aurora
         cardSurface = CardSurface(rawValue: defaults.string(forKey: Key.cardSurface) ?? "") ?? .glass
+        backgroundMotion = BackgroundMotion(rawValue: defaults.string(forKey: Key.backgroundMotion) ?? "") ?? .flowing
+        glowIntensity = GlowIntensity(rawValue: defaults.string(forKey: Key.glowIntensity) ?? "") ?? .balanced
         keepAwake = defaults.object(forKey: Key.keepAwake) as? Bool ?? true
         quality = Quality(rawValue: defaults.string(forKey: Key.quality) ?? "") ?? .auto
         region = Region(rawValue: defaults.string(forKey: Key.region) ?? "") ?? .auto

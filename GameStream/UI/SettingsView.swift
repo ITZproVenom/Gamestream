@@ -214,6 +214,34 @@ struct SettingsView: View {
 
             SettingsDivider()
 
+            VStack(alignment: .leading, spacing: 8) {
+                Picker("Background motion", selection: $settings.backgroundMotion) {
+                    ForEach(AppSettings.BackgroundMotion.allCases) { motion in
+                        Text(motion.title).tag(motion)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text("Reduce Motion always takes priority over animation.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsDivider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Picker("Backdrop glow", selection: $settings.glowIntensity) {
+                    ForEach(AppSettings.GlowIntensity.allCases) { intensity in
+                        Text(intensity.title).tag(intensity)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text("Adjust how vivid and soft the ambient colors appear.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsDivider()
+
             VStack(alignment: .leading, spacing: 11) {
                 Text("Accent").font(.subheadline.weight(.semibold))
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 12) {

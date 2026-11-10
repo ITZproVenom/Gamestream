@@ -47,20 +47,24 @@ struct AuroraBackground: View {
                 colors: mesh
             )
             .ignoresSafeArea()
-            .blur(radius: 40)
-            .opacity(scheme == .dark ? 0.85 : 0.55)
+            .blur(radius: settings.glowIntensity.blur)
+            .opacity(min(1, (scheme == .dark ? 0.85 : 0.55)
+                         * settings.glowIntensity.opacity / AppSettings.GlowIntensity.balanced.opacity))
         }
         .ignoresSafeArea()
-        .onAppear {
-            // Reduce Motion means no endless drift: the gradient is drawn
-            // once, in its mid position, and left alone.
-            guard !reduceMotion else {
-                drift = 0.5
-                return
-            }
-            withAnimation(.easeInOut(duration: 14).repeatForever(autoreverses: true)) {
-                drift = 1
-            }
+        .onAppear { startDrift() }
+        .onChange(of: settings.backgroundMotion) { _, _ in startDrift() }
+        .onChange(of: reduceMotion) { _, _ in startDrift() }
+    }
+
+    private func startDrift() {
+        guard !reduceMotion, settings.backgroundMotion.duration > 0 else {
+            withAnimation(.smooth(duration: 0.25)) { drift = 0.5 }
+            return
+        }
+        drift = 0.5
+        withAnimation(.easeInOut(duration: settings.backgroundMotion.duration).repeatForever(autoreverses: true)) {
+            drift = 1
         }
     }
 
