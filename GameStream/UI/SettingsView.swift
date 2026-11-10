@@ -98,31 +98,35 @@ struct SettingsView: View {
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
                 ForEach(Category.allCases) { item in
-                    Button {
-                        withAnimation(.smooth(duration: 0.22)) { category = item }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: item.icon)
-                                .font(.caption.weight(.semibold))
-                            Text(item.title)
-                                .font(.caption.weight(.semibold))
-                                .lineLimit(1)
-                        }
-                        .padding(.horizontal, 13)
-                        .padding(.vertical, 10)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(category == item ? Color.white : Color.primary)
-                    .gameSurface(style: category == item ? .tinted : settings.cardSurface,
-                                 accent: settings.accent.color,
-                                 in: Capsule())
-                    .accessibilityAddTraits(category == item ? [.isSelected] : [])
+                    categoryButton(item)
                 }
             }
             .padding(.horizontal, 1)
         }
         .scrollIndicators(.hidden)
         .accessibilityLabel("Settings categories")
+    }
+
+    private func categoryButton(_ item: Category) -> some View {
+        let selected = category == item
+        let surface: AppSettings.CardSurface = selected ? .tinted : settings.cardSurface
+        return Button {
+            withAnimation(.smooth(duration: 0.22)) { category = item }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: item.icon)
+                    .font(.caption.weight(.semibold))
+                Text(item.title)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 13)
+            .padding(.vertical, 10)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(selected ? Color.white : Color.primary)
+        .gameSurface(style: surface, accent: settings.accent.color, in: Capsule())
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
     @ViewBuilder
