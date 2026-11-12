@@ -45,3 +45,6 @@ docs/gamestream-icon.png
 android/keystore/*.jks
 android/keystore/*.jks.b64
 android/keystore/keystore.properties
+
+# never commit a nested clone
+Gamestream/
