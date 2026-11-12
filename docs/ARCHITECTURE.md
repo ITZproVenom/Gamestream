@@ -56,6 +56,10 @@ The WebView is intentionally retained for the pieces that depend on the Xbox web
 
 This boundary keeps the native UI independent from the cloud site's catalog UI while preserving the actual streaming stack.
 
+### Passkeys
+
+Microsoft sign-in can use passkeys (WebAuthn). iOS only lets a WKWebView create or use a passkey when the relying-party ID is listed in the app's associated-domains entitlement (`GameStream/GameStream.entitlements`, wired through `CODE_SIGN_ENTITLEMENTS` in `project.yml`). Sign-in `target=_blank` popups are kept as separate top-level webviews sharing the default website data store, so the WebAuthn context and the resulting session both survive. CI ad-hoc-signs the unsigned archive with the same entitlements file before packaging the beta IPA, because sideloading tools preserve an existing signature's entitlements.
+
 ## Controller rumble
 
 The rumble pipeline is separate from phone haptics:
