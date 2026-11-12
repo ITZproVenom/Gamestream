@@ -218,6 +218,11 @@ struct XboxWebView: UIViewRepresentable {
         controller.addUserScript(WKUserScript(source: WebScripts.pwaStandaloneJS,
                                               injectionTime: .atDocumentStart,
                                               forMainFrameOnly: true))
+        // Also align platform/vendor/userAgentData with the desktop UA and
+        // report what the page sees, in every frame, before page scripts run.
+        controller.addUserScript(WKUserScript(source: WebIdentity.script,
+                                              injectionTime: .atDocumentStart,
+                                              forMainFrameOnly: false))
         // The rumble bridge must wrap createDataChannel before the page opens
         // its WebRTC session, so it has to run at document start.
         let settings = AppSettings.shared
@@ -407,6 +412,8 @@ struct XboxWebView: UIViewRepresentable {
                 RumbleBridge.handle(payload: body)
             case "rumbleCaps":
                 RumbleBridge.handleCapabilities(payload: body)
+            case "identity":
+                log.info("stream", "page identity: \(body["detail"] as? String ?? "")")
             default:
                 break
             }
