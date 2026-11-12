@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Passkey (WebAuthn) support in WKWebView: iOS only offers and creates
+	     passkeys for a relying-party ID that is listed in the app's associated
+	     domains. Microsoft's sign-in runs on login.microsoftonline.com (with
+	     login.live.com and account.microsoft.com in the redirect chain); Xbox
+	     itself is www.xbox.com. Without this entitlement the site's "Use a
+	     passkey" button fails with NotAllowedError and nothing happens. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:login.microsoftonline.com</string>
+		<string>applinks:login.live.com</string>
+		<string>applinks:account.microsoft.com</string>
+		<string>applinks:www.xbox.com</string>
+		<string>applinks:xbox.com</string>
+	</array>
+</dict>
+</plist>
