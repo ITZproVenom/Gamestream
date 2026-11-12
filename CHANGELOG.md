@@ -28,7 +28,7 @@
 
 - If the lightweight Xbox storage probe returns no token or cannot be read, retry against the full Xbox Cloud Gaming page before showing the signed-out screen. A probe failure alone no longer forces a login prompt.
 - Microsoft sign-in `target=_blank` windows now remain separate WKWebViews, preserving the top-level browsing context used by passkey flows while retaining the shared Xbox data store.
-- Passkeys (WebAuthn) now work in Microsoft sign-in: the app declares Microsoft's and Xbox's sign-in domains as associated domains (`login.microsoftonline.com`, `login.live.com`, `account.microsoft.com`, `www.xbox.com`, `xbox.com`), which iOS requires before WKWebView will create or use a passkey. CI embeds the entitlement in the beta IPA with an ad-hoc signature so sideloaded installs keep it.
+- Passkeys (WebAuthn) now work in Microsoft sign-in: the app declares Microsoft's and Xbox's sign-in domains as associated domains with the **`webcredentials:`** service type (`login.live.com`, `login.microsoftonline.com`, `account.microsoft.com`, `www.xbox.com`, `xbox.com`, `play.xbox.com`), which Apple requires before a WKWebView will create or use a passkey — `applinks:` alone does not enable WebAuthn. CI ad-hoc-signs the unsigned archive with the entitlement before packaging the beta IPA and verifies the packaged binary carries it, so sideloaded installs keep it.
 
 ### Search
 
@@ -49,6 +49,7 @@
 
 ### Streaming and recovery
 
+- A launch that Xbox redirects to the store page (`/play/games`) or the `/play` home while connecting now fails fast with a clear message and re-checks the session, instead of sitting on "Connecting" until the 75-second watchdog fired. This is what a stale web session looks like when Play is tapped.
 - Better xCloud's dimming overlay cleanup now checks actual dialog visibility, reducing stale blur after a menu closes.
 - Persistent Xbox error screens are reported once per visible message, avoiding duplicate callbacks that could abort automatic reconnect.
 - Pending reconnects recheck Auto Reconnect after backoff; switching it off prevents the scheduled retry.

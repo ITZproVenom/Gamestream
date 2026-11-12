@@ -201,6 +201,19 @@ jobs:
           print("version", info.get("CFBundleShortVersionString"), "build", info.get("CFBundleVersion"))
           if not info.get("CFBundleShortVersionString", "").startswith("2."):
               sys.exit("unexpected version in the packaged app")
+          # Passkeys need the webcredentials associated-domains entitlement
+          # embedded in the binary's signature; an IPA without it cannot use
+          # passkeys no matter what the sign-in page does.
+          binary = [n for n in names if n.endswith("GameStream.app/GameStream")]
+          if not binary:
+              sys.exit("IPA has no app binary")
+          blob = archive.read(binary[0])
+          for needle in (b"webcredentials:login.live.com",
+                         b"webcredentials:login.microsoftonline.com",
+                         b"com.apple.developer.associated-domains"):
+              if needle not in blob:
+                  sys.exit(f"IPA binary is missing {needle!r} - passkeys would not work")
+          print("entitlements verified in packaged binary")
           PY
 
       - name: Release notes
