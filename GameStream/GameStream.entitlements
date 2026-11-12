@@ -2,19 +2,30 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Passkey (WebAuthn) support in WKWebView: iOS only offers and creates
-	     passkeys for a relying-party ID that is listed in the app's associated
-	     domains. Microsoft's sign-in runs on login.microsoftonline.com (with
-	     login.live.com and account.microsoft.com in the redirect chain); Xbox
-	     itself is www.xbox.com. Without this entitlement the site's "Use a
-	     passkey" button fails with NotAllowedError and nothing happens. -->
+	<!-- Passkey (WebAuthn) support in WKWebView.
+
+	     Apple requires the relying-party ID as an associated domain with the
+	     WEBCREDENTIALS service type before a WKWebView will create or use a
+	     passkey; applinks: alone does not enable WebAuthn, and without it the
+	     site's passkey button fails with NotAllowedError and Microsoft's page
+	     just reloads. Microsoft's consumer sign-in runs on login.live.com
+	     (work/school on login.microsoftonline.com, with account.microsoft.com
+	     in the redirect chain); Xbox itself is www.xbox.com / play.xbox.com.
+	     applinks: entries are kept alongside for universal-link behaviour. -->
 	<key>com.apple.developer.associated-domains</key>
 	<array>
-		<string>applinks:login.microsoftonline.com</string>
+		<string>webcredentials:login.live.com</string>
+		<string>webcredentials:login.microsoftonline.com</string>
+		<string>webcredentials:account.microsoft.com</string>
+		<string>webcredentials:www.xbox.com</string>
+		<string>webcredentials:xbox.com</string>
+		<string>webcredentials:play.xbox.com</string>
 		<string>applinks:login.live.com</string>
+		<string>applinks:login.microsoftonline.com</string>
 		<string>applinks:account.microsoft.com</string>
 		<string>applinks:www.xbox.com</string>
 		<string>applinks:xbox.com</string>
+		<string>applinks:play.xbox.com</string>
 	</array>
 </dict>
 </plist>

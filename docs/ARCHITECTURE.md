@@ -58,7 +58,7 @@ This boundary keeps the native UI independent from the cloud site's catalog UI w
 
 ### Passkeys
 
-Microsoft sign-in can use passkeys (WebAuthn). iOS only lets a WKWebView create or use a passkey when the relying-party ID is listed in the app's associated-domains entitlement (`GameStream/GameStream.entitlements`, wired through `CODE_SIGN_ENTITLEMENTS` in `project.yml`). Sign-in `target=_blank` popups are kept as separate top-level webviews sharing the default website data store, so the WebAuthn context and the resulting session both survive. CI ad-hoc-signs the unsigned archive with the same entitlements file before packaging the beta IPA, because sideloading tools preserve an existing signature's entitlements.
+Microsoft sign-in can use passkeys (WebAuthn). iOS only lets a WKWebView create or use a passkey when the relying-party ID is listed in the app's associated-domains entitlement **with the `webcredentials:` service type** (`GameStream/GameStream.entitlements`, wired through `CODE_SIGN_ENTITLEMENTS` in `project.yml`) — `applinks:` alone does not enable WebAuthn. Sign-in `target=_blank` popups are kept as separate top-level webviews sharing the default website data store, so the WebAuthn context and the resulting session both survive. CI ad-hoc-signs the unsigned archive with the same entitlements file before packaging the beta IPA and verifies the packaged binary carries it, because sideloading tools preserve an existing signature's entitlements.
 
 ## Controller rumble
 
