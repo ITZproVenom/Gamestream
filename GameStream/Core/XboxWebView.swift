@@ -466,10 +466,7 @@ struct XboxWebView: UIViewRepresentable {
                 // Redirecting target=_blank into the current page can discard
                 // the popup's user-activation/WebAuthn context used by passkeys.
                 // WebKit supplies the popup configuration, which retains the
-                // shared persistent Xbox website data store; set it explicitly
-                // so a passkey sign-in in the popup lands in the same session
-                // the rest of the app reads.
-                configuration.websiteDataStore = .default()
+                // shared persistent Xbox website data store.
                 let popup = WKWebView(frame: webView.bounds, configuration: configuration)
                 popup.customUserAgent = XboxAuth.userAgent
                 popup.navigationDelegate = self

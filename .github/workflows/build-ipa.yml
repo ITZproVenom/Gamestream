@@ -150,25 +150,6 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             COMPILER_INDEX_STORE_ENABLE=NO
 
-      - name: Embed entitlements (ad-hoc sign)
-        run: |
-          set -euo pipefail
-          # The archive is built unsigned for sideloading, which means nothing
-          # embeds the entitlements into the binary. Without the associated-
-          # domains entry the app cannot use passkeys at all, so sign ad-hoc
-          # with the entitlements file here; sideloading tools (AltStore,
-          # Sideloadly, TrollStore) preserve an existing signature's
-          # entitlements when they re-sign or install.
-          APP="build/GameStream.xcarchive/Products/Applications/GameStream.app"
-          codesign --remove-signature "$APP" 2>/dev/null || true
-          codesign --sign - --force --deep \
-            --identifier com.gamestream.app \
-            --entitlements GameStream/GameStream.entitlements \
-            "$APP"
-          echo "Embedded entitlements:"
-          codesign --display --entitlements - "$APP" | sed -n '1,20p'
-          codesign --verify --verbose "$APP"
-
       - name: Package IPA
         run: |
           set -euo pipefail

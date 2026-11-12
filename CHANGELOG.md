@@ -28,7 +28,6 @@
 
 - If the lightweight Xbox storage probe returns no token or cannot be read, retry against the full Xbox Cloud Gaming page before showing the signed-out screen. A probe failure alone no longer forces a login prompt.
 - Microsoft sign-in `target=_blank` windows now remain separate WKWebViews, preserving the top-level browsing context used by passkey flows while retaining the shared Xbox data store.
-- Passkeys (WebAuthn) now work in Microsoft sign-in: the app declares Microsoft's and Xbox's sign-in domains as associated domains (`login.microsoftonline.com`, `login.live.com`, `account.microsoft.com`, `www.xbox.com`, `xbox.com`), which iOS requires before WKWebView will create or use a passkey. CI embeds the entitlement in the beta IPA with an ad-hoc signature so sideloaded installs keep it.
 
 ### Search
 
