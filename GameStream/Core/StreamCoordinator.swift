@@ -376,16 +376,6 @@ final class StreamCoordinator: ObservableObject {
             phase = .failed("Xbox asked for a sign-in. Your session may have expired.")
             Task { await XboxAuth.shared.refresh(reason: "stream bounced to login") }
         }
-        // A launch URL that settles on the store page (/play/games) or the
-        // /play home never starts a stream: the auto-start script only acts on
-        // /play/launch, so without this the player sat on "Connecting" until
-        // the 75 s watchdog fired. Fail fast and re-check the session.
-        if (kind == "store" || kind == "play"), case .connecting = phase {
-            phase = .failed("Xbox redirected to the store instead of starting the game. "
-                           + "Sign in again if this keeps happening.")
-            log.warn("stream", "launch bounced to \(kind) page; not starting")
-            Task { await XboxAuth.shared.refresh(reason: "stream bounced to \(kind)") }
-        }
 
         // Quitting from the Xbox guide, or Better xCloud's "back to home",
         // navigates the page away from the launch URL. The player was still
