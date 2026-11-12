@@ -213,6 +213,11 @@ struct XboxWebView: UIViewRepresentable {
         }
         guard role == .stream else { return }
 
+        // The PWA spoof must land before any page script reads
+        // navigator.standalone, so it goes in first, at document start.
+        controller.addUserScript(WKUserScript(source: WebScripts.pwaStandaloneJS,
+                                              injectionTime: .atDocumentStart,
+                                              forMainFrameOnly: true))
         // The rumble bridge must wrap createDataChannel before the page opens
         // its WebRTC session, so it has to run at document start.
         let settings = AppSettings.shared

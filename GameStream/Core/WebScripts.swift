@@ -9,6 +9,44 @@ import Foundation
 /// why the Xbox site could not be scrolled and looked broken.
 enum WebScripts {
 
+    // MARK: - Home-screen (PWA) spoof
+
+    /// Makes the page believe it is running as an iOS home-screen web app.
+    ///
+    /// Xbox gates cloud play on iOS behind the PWA: its `isPwaRequired` check
+    /// fires for iOS user agents when `navigator.standalone` is false, and the
+    /// launch then bounces to the store page with the "Add to Home Screen"
+    /// gate. The site reads `navigator.standalone` (and the
+    /// `display-mode: standalone` media query) at document start, so the
+    /// override has to run before any page script. Injected only into the
+    /// stream player, at document start.
+    static let pwaStandaloneJS = #"""
+    (function() {
+        if (window.__gsPwaStandalone) return;
+        window.__gsPwaStandalone = true;
+        try {
+            Object.defineProperty(navigator, "standalone", {
+                get: function() { return true; },
+                configurable: true
+            });
+        } catch (e) {}
+        try {
+            var original = window.matchMedia.bind(window);
+            window.matchMedia = function(query) {
+                if (typeof query === "string"
+                    && query.indexOf("display-mode") !== -1
+                    && query.indexOf("standalone") !== -1) {
+                    return { matches: true, media: query, onchange: null,
+                             addListener: function() {}, removeListener: function() {},
+                             addEventListener: function() {}, removeEventListener: function() {},
+                             dispatchEvent: function() { return false; } };
+                }
+                return original(query);
+            };
+        } catch (e) {}
+    })();
+    """#
+
     // MARK: - Authentication
 
     /// Reads the real streaming credential out of the page's own storage.
