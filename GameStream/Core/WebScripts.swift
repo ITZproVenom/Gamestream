@@ -1378,8 +1378,10 @@ enum WebScripts {
                 attempts++;
                 if (attempts > maxAttempts) { clearInterval(timer); return; }
 
-                if ((location.href || "").toLowerCase().indexOf("/play/launch") === -1
-                    && (location.href || "").toLowerCase().indexOf("/stream/") === -1) return;
+                var href = (location.href || "").toLowerCase();
+                if (href.indexOf("/play/launch") === -1
+                    && href.indexOf("/stream/") === -1
+                    && href.indexOf("/products/") === -1) return;
 
                 var videos = document.querySelectorAll("video");
                 for (var i = 0; i < videos.length; i++) {

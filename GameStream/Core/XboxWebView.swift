@@ -132,7 +132,11 @@ struct XboxWebView: UIViewRepresentable {
         install(scripts: context.coordinator, into: configuration.userContentController)
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
-        webView.customUserAgent = XboxAuth.userAgent
+        // The stream player must look like a desktop PC browser: on an iOS
+        // UA the site demands the home-screen PWA (navigator.standalone) and
+        // bounces the launch to the store page. Every other role keeps the
+        // mobile Safari UA.
+        webView.customUserAgent = role == .stream ? XboxAuth.desktopUserAgent : XboxAuth.userAgent
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = role != .stream

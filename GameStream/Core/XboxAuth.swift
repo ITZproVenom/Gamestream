@@ -64,6 +64,20 @@ final class XboxAuth: NSObject, ObservableObject {
     static let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) "
         + "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1"
 
+    /// A desktop Windows browser UA, used only for the stream player.
+    ///
+    /// On iOS, Xbox gates cloud play behind the home-screen PWA: the site's
+    /// `isPwaRequired` check fires for iOS user agents when
+    /// `navigator.standalone` is false, so a plain WKWebView gets the "Add to
+    /// Home Screen" gate instead of the player and the launch bounces to the
+    /// store page. Presenting a desktop UA makes the site treat the session
+    /// as a PC browser, where cloud play is allowed directly in the page.
+    /// Sign-in and the auth probe keep the mobile UA above; touch input is
+    /// handled by the page scripts and Better xCloud's own option.
+    static let desktopUserAgent =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        + "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+
     private var probeView: WKWebView?
     private var probeLoaded = false
     private var probeIndex = 0
