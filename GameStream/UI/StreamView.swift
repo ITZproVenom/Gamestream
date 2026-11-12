@@ -2,6 +2,7 @@ import SwiftUI
 
 /// The player: the Xbox launch page plus an overlay that reports the truth.
 struct StreamView: View {
+    @Environment(\.colorScheme) private var scheme
     @EnvironmentObject private var stream: StreamCoordinator
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var rumble: ControllerRumble
