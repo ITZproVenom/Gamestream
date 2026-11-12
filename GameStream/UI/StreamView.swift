@@ -587,14 +587,11 @@ struct MangaBackdrop: View {
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
                 let maxR = hypot(size.width, size.height) / 2
 
-                // speed lines
-                ctx.saveState()
-                ctx.translateBy(x: center.x, y: center.y)
-                ctx.rotate(by: .degrees(angle))
-                ctx.translateBy(x: -center.x, y: -center.y)
+                // speed lines (rotation applied in the angle math itself)
                 let rays = 56
+                let rot = angle * .pi / 180
                 for i in 0..<rays {
-                    let a = Double(i) / Double(rays) * .pi * 2
+                    let a = Double(i) / Double(rays) * .pi * 2 + rot
                     let r0 = maxR * 0.32
                     let r1 = maxR * 1.25
                     var p = Path()
@@ -603,7 +600,6 @@ struct MangaBackdrop: View {
                     ctx.stroke(p, with: .color(accent.opacity(i % 2 == 0 ? 0.35 : 0.18)),
                                lineWidth: i % 2 == 0 ? 5 : 2)
                 }
-                ctx.restoreState()
 
                 // halftone screentone
                 let step: CGFloat = 15
