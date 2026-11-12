@@ -63,6 +63,22 @@ final class StreamCoordinator: ObservableObject {
         var isActive: Bool { self != .idle }
     }
 
+    /// Where in the launch sequence the player currently is, so the loading
+    /// screen can show real progress instead of one spinner for everything.
+    enum ConnectStage: Equatable {
+        case launching, connecting, startingSession
+
+        var index: Int {
+            switch self {
+            case .launching: return 0
+            case .connecting: return 1
+            case .startingSession: return 2
+            }
+        }
+    }
+
+    @Published private(set) var connectStage: ConnectStage = .launching
+
     @Published private(set) var game: Game?
     @Published private(set) var phase: Phase = .idle
     /// The result of the last HUD command, shown briefly over the stream.
@@ -114,6 +130,7 @@ final class StreamCoordinator: ObservableObject {
         resolution = ""
         startedAt = Date()
         phase = .connecting("Starting \(game.title)")
+        connectStage = .launching
         LibraryStore.shared.noteLaunch(game)
         UIApplication.shared.isIdleTimerDisabled = true
         // A new session deserves a clean attempt at every rumble route, even
@@ -153,6 +170,7 @@ final class StreamCoordinator: ObservableObject {
         reducedQuality = false
         poorSince = nil
         phase = .connecting("Reconnecting to \(game.title)")
+        connectStage = .launching
         reloadToken &+= 1
         startWatchdog()
     }
@@ -324,6 +342,7 @@ final class StreamCoordinator: ObservableObject {
         LibraryStore.shared.noteLaunch(next)
         // The guard measures one sitting, not one game, so it keeps running.
         phase = .connecting("Starting \(next.title)")
+        connectStage = .launching
         startWatchdog()
     }
 

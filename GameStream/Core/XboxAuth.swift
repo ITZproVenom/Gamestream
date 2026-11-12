@@ -48,7 +48,7 @@ final class XboxAuth: NSObject, ObservableObject {
     @Published private(set) var lastCheck: Date?
     @Published private(set) var lastError: String?
 
-    /// A document on the xbox.com origin is required to read the site's
+    /// A document on the play.xbox.com origin is required to read the site's
     /// localStorage. robots.txt is a real same-origin document and costs a
     /// fraction of what loading the full single-page app would, but a
     /// `text/plain` document is not guaranteed to expose storage, so the full

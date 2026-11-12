@@ -146,23 +146,52 @@ struct StreamView: View {
 
     // MARK: - States
 
+    /// The launch sequence: an animated, cinematic loading screen that shows
+    /// what is actually happening — the game's art drifting behind a moving
+    /// mesh, an orbiting energy ring around the poster, and real progress
+    /// steps fed by the stream coordinator.
     private func connecting(_ detail: String) -> some View {
-        VStack(spacing: 20) {
-            ProgressView().controlSize(.large).tint(.white)
-            Text(detail)
-                .font(.headline)
-                .foregroundStyle(.white)
-                .multilineTextAlignment(.center)
-            Text("Connecting to Xbox Cloud Gaming")
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.65))
-            Button("Cancel") { stream.exit() }
-                .buttonStyle(.glass)
-                .buttonBorderShape(.capsule)
-                .tint(.white)
-                .padding(.top, 4)
+        ZStack {
+            LaunchBackdrop(game: stream.game)
+
+            VStack(spacing: 24) {
+                LaunchEmblem(game: stream.game)
+
+                VStack(spacing: 6) {
+                    Text(detail)
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                    Text(stageMessage)
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.72))
+                        .multilineTextAlignment(.center)
+                        .animation(.smooth(duration: 0.3), value: stageMessage)
+                }
+
+                LaunchSteps(stage: stream.connectStage,
+                            title: stream.game?.title ?? "the game")
+
+                HStack(spacing: 14) {
+                    Text(Format.clock(elapsed))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.6))
+                    Button("Cancel") { stream.exit() }
+                        .buttonStyle(.glass)
+                        .buttonBorderShape(.capsule)
+                        .tint(.white)
+                }
+            }
+            .padding(34)
         }
-        .padding(34)
+    }
+
+    private var stageMessage: String {
+        switch stream.connectStage {
+        case .launching: return "Preparing your session…"
+        case .connecting: return "Connecting to Xbox Cloud Gaming…"
+        case .startingSession: return "Xbox is starting \(stream.game?.title ?? "the game")…"
+        }
     }
 
     private func failure(_ message: String) -> some View {
@@ -484,6 +513,194 @@ struct StreamView: View {
             try? await Task.sleep(for: .seconds(4))
             guard !Task.isCancelled else { return }
             withAnimation(.smooth(duration: 0.3)) { showingControls = false }
+        }
+    }
+}
+
+// MARK: - Launch sequence
+
+/// The animated backdrop behind the launch screen: the game's hero art,
+/// blurred and slowly breathing, under a mesh gradient whose points drift
+/// over time in the accent colour. Reduce Motion freezes both.
+struct LaunchBackdrop: View {
+    let game: Game?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @EnvironmentObject private var settings: AppSettings
+
+    var body: some View {
+        ZStack {
+            Color.black
+
+            if let art = game?.heroURL ?? game?.posterURL {
+                if reduceMotion {
+                    GameArtwork(url: art, cornerRadius: 0)
+                        .blur(radius: 64)
+                        .scaleEffect(1.15)
+                        .overlay(Color.black.opacity(0.2))
+                } else {
+                    TimelineView(.animation(minimumInterval: 1 / 30)) { context in
+                        let t = context.date.timeIntervalSince1970
+                        let s = 1.12 + 0.05 * CGFloat(sin(t * 0.45))
+                        GameArtwork(url: art, cornerRadius: 0)
+                            .blur(radius: 64)
+                            .scaleEffect(s)
+                            .offset(x: 14 * CGFloat(sin(t * 0.3)), y: 10 * CGFloat(cos(t * 0.23)))
+                            .overlay(Color.black.opacity(0.2))
+                    }
+                }
+            }
+
+            if reduceMotion {
+                MeshGradient(width: 3, height: 3, points: Self.midPoints, colors: mesh)
+                    .opacity(0.5)
+            } else {
+                TimelineView(.animation(minimumInterval: 1 / 30)) { context in
+                    MeshGradient(width: 3, height: 3,
+                                 points: Self.driftingPoints(context.date.timeIntervalSince1970),
+                                 colors: mesh)
+                }
+                .opacity(0.5)
+            }
+
+            LinearGradient(colors: [.black.opacity(0.6), .black.opacity(0.25), .black.opacity(0.7)],
+                           startPoint: .top, endPoint: .bottom)
+        }
+        .ignoresSafeArea()
+    }
+
+    private var mesh: [Color] {
+        let accent = settings.accent.color
+        return [
+            accent.opacity(0.6), accent.opacity(0.25), Color.black,
+            accent.opacity(0.35), Color.black.opacity(0.75), accent.opacity(0.45),
+            Color.black, accent.opacity(0.22), Color.black.opacity(0.9)
+        ]
+    }
+
+    private static func driftingPoints(_ t: TimeInterval) -> [SIMD2<Float>] {
+        let a = Float(sin(t * 0.7)), b = Float(cos(t * 0.5)), c = Float(sin(t * 0.9 + 1.7))
+        return [
+            .init(0, 0), .init(0.5 + 0.12 * a, 0), .init(1, 0),
+            .init(0, 0.5), .init(0.5 + 0.10 * b, 0.5 + 0.06 * c), .init(1, 0.5),
+            .init(0, 1), .init(0.5 - 0.12 * c, 1), .init(1, 1)
+        ]
+    }
+
+    private static let midPoints: [SIMD2<Float>] = [
+        .init(0, 0), .init(0.55, 0), .init(1, 0),
+        .init(0, 0.5), .init(0.5, 0.55), .init(1, 0.5),
+        .init(0, 1), .init(0.45, 1), .init(1, 1)
+    ]
+}
+
+/// The poster at the centre of the launch screen, wrapped in an orbiting
+/// energy ring with a pulsing glow behind it.
+struct LaunchEmblem: View {
+    let game: Game?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @EnvironmentObject private var settings: AppSettings
+
+    var body: some View {
+        ZStack {
+            if reduceMotion {
+                Circle()
+                    .fill(settings.accent.color.opacity(0.32))
+                    .blur(radius: 46)
+                    .frame(width: 190, height: 190)
+            } else {
+                TimelineView(.animation(minimumInterval: 1 / 30)) { context in
+                    let s = 1 + 0.07 * sin(context.date.timeIntervalSince1970 * 2.2)
+                    Circle()
+                        .fill(settings.accent.color.opacity(0.32))
+                        .blur(radius: 46)
+                        .frame(width: 190 * CGFloat(s), height: 190 * CGFloat(s))
+                }
+            }
+
+            ZStack {
+                if reduceMotion {
+                    Circle()
+                        .stroke(settings.accent.color.opacity(0.85), lineWidth: 3)
+                        .frame(width: 178, height: 178)
+                } else {
+                    TimelineView(.animation(minimumInterval: 1 / 60)) { context in
+                        let angle = context.date.timeIntervalSince1970 * 100
+                        Circle()
+                            .trim(from: 0, to: 0.72)
+                            .stroke(
+                                AngularGradient(
+                                    colors: [settings.accent.color, .clear,
+                                             settings.accent.color.opacity(0.5), .clear],
+                                    center: .center,
+                                    startAngle: .degrees(angle),
+                                    endAngle: .degrees(angle + 300)),
+                                style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                            .frame(width: 178, height: 178)
+                    }
+                }
+
+                GameArtwork(url: game?.posterURL ?? game?.heroURL, cornerRadius: 22)
+                    .frame(width: 118, height: 158)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(.white.opacity(0.25), lineWidth: 1))
+                    .shadow(color: settings.accent.color.opacity(0.5), radius: 24, y: 8)
+            }
+        }
+    }
+}
+
+/// Real launch progress as a checklist: each row ticks over as the stream
+/// coordinator advances, and the current row pulses.
+struct LaunchSteps: View {
+    let stage: StreamCoordinator.ConnectStage
+    let title: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var rows: [(String, Int)] {
+        [("Launch \(title)", 0),
+         ("Connect to Xbox Cloud Gaming", 1),
+         ("Start the stream session", 2)]
+    }
+
+    private var current: Int { min(stage.index, 2) }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                HStack(spacing: 10) {
+                    stepIcon(row.1)
+                        .frame(width: 18)
+                    Text(row.0)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(row.1 < current ? .white.opacity(0.5) : .white)
+                        .animation(.smooth(duration: 0.25), value: current)
+                }
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func stepIcon(_ index: Int) -> some View {
+        if index < current {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+        } else if index == current {
+            if reduceMotion {
+                Circle().fill(.white).frame(width: 10, height: 10)
+            } else {
+                TimelineView(.animation(minimumInterval: 1 / 20)) { context in
+                    let s = 1 + 0.35 * (0.5 + 0.5 * sin(context.date.timeIntervalSince1970 * 4))
+                    Circle().fill(.white)
+                        .frame(width: 10 * CGFloat(s), height: 10 * CGFloat(s))
+                }
+            }
+        } else {
+            Circle().stroke(.white.opacity(0.35), lineWidth: 2)
+                .frame(width: 10, height: 10)
         }
     }
 }
