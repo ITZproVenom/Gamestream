@@ -146,8 +146,11 @@ enum WebScripts {
             if (value.indexOf("login.live.com") !== -1) return "login";
             if (value.indexOf("login.microsoftonline.com") !== -1) return "login";
             // A launch URL is the request to stream; /play/games is only the
-            // store page for a title and must not count as streaming.
+            // store page for a title and must not count as streaming. The
+            // player itself now lives at /stream/<id>/<slug> on play.xbox.com
+            // (reached via /play/launch), so both count as streaming.
             if (value.indexOf("/play/launch") !== -1) return "launch";
+            if (value.indexOf("/stream/") !== -1) return "launch";
             if (value.indexOf("/play/games") !== -1) return "store";
             if (value.indexOf("/play") !== -1) return "play";
             return "other";
@@ -1375,7 +1378,8 @@ enum WebScripts {
                 attempts++;
                 if (attempts > maxAttempts) { clearInterval(timer); return; }
 
-                if ((location.href || "").toLowerCase().indexOf("/play/launch") === -1) return;
+                if ((location.href || "").toLowerCase().indexOf("/play/launch") === -1
+                    && (location.href || "").toLowerCase().indexOf("/stream/") === -1) return;
 
                 var videos = document.querySelectorAll("video");
                 for (var i = 0; i < videos.length; i++) {

@@ -409,7 +409,7 @@ final class StreamCoordinator: ObservableObject {
                 Task { @MainActor in
                     self.leaveCheck = nil
                     guard self.phase == .playing else { return }
-                    guard !href.contains("/play/launch") else {
+                    guard !href.contains("/play/launch"), !href.contains("/stream/") else {
                         self.log.debug("stream", "the page came back to the game")
                         return
                     }

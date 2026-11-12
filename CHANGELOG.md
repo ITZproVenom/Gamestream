@@ -49,6 +49,7 @@
 
 ### Streaming and recovery
 
+- Streams launch from `play.xbox.com/play/launch/...` instead of `www.xbox.com/play/launch/...`: www now redirects that route to the store page (`/play/games`), so the auto-start script never fired and the stream never started. The player itself is at `play.xbox.com/stream/<id>/<slug>`; the app's page classification, chrome-hiding and leave-detection now treat both `/play/launch` and `/stream/` as the stream page, and auto-start also clicks "Play with cloud (with ads)".
 - A launch that Xbox redirects to the store page (`/play/games`) or the `/play` home while connecting now fails fast with a clear message and re-checks the session, instead of sitting on "Connecting" until the 75-second watchdog fired. This is what a stale web session looks like when Play is tapped.
 - Better xCloud's dimming overlay cleanup now checks actual dialog visibility, reducing stale blur after a menu closes.
 - Persistent Xbox error screens are reported once per visible message, avoiding duplicate callbacks that could abort automatic reconnect.

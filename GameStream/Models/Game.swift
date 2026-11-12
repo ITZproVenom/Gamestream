@@ -28,9 +28,14 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
     }
 
     /// The page that starts the stream. Xbox redirects to the right locale.
+    ///
+    /// The stream player lives on play.xbox.com now: www.xbox.com/play/launch
+    /// redirects to the store page (/play/games), which never starts a stream,
+    /// while play.xbox.com/play/launch routes to the /stream/<id>/<slug>
+    /// player. Verified against the live site on 2026-11-12.
     var launchURL: URL? {
         let safeSlug = slug.isEmpty ? id.lowercased() : slug
-        return URL(string: "https://www.xbox.com/play/launch/\(safeSlug)/\(id)")
+        return URL(string: "https://play.xbox.com/play/launch/\(safeSlug)/\(id)")
     }
 
     var storeURL: URL? {
