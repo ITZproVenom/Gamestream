@@ -274,7 +274,33 @@ enum WebScripts {
                     });
                 }
             }
+
+            // A video element existing is not the same as the game arriving:
+            // the product page also carries a trailer. Report what each one
+            // is doing, so "the player never started" can be told apart from
+            // "a promotional clip was playing instead".
+            var parts = [];
+            for (var v = 0; v < videos.length && v < 4; v++) {
+                var video = videos[v];
+                var tracks = 0;
+                try {
+                    var stream = video.srcObject;
+                    if (stream && stream.getVideoTracks) tracks = stream.getVideoTracks().length;
+                } catch (e) {}
+                parts.push(video.videoWidth + "x" + video.videoHeight
+                    + " ready=" + video.readyState
+                    + " paused=" + video.paused
+                    + " time=" + Math.round(video.currentTime * 10) / 10
+                    + " tracks=" + tracks);
+            }
+            var signature = parts.join(" ; ");
+            if (signature !== lastVideoSignature) {
+                lastVideoSignature = signature;
+                post("videoState", { detail: signature.length ? signature : "no video element" });
+            }
         }
+
+        var lastVideoSignature = "";
 
         scan();
         setInterval(scan, 700);
@@ -1425,6 +1451,9 @@ enum WebScripts {
         // and a second press can cancel what the first one began.
         var clickedAt = 0;
         var clickCooldown = 4000;
+        // The labels that were on the page when nothing matched, so the same
+        // set is not reported on every poll.
+        var lastMiss = "";
 
         function matches(text, onProductPage) {
             if (!text) return false;
@@ -1477,12 +1506,120 @@ enum WebScripts {
                     } catch (e) {}
                     return;
                 }
+
+                // No button matched. Say what was actually on the page, or
+                // "nothing matched" looks exactly like "nothing was there".
+                var seen = [];
+                for (var k = 0; k < nodes.length && seen.length < 12; k++) {
+                    var label = (nodes[k].innerText || nodes[k].textContent ||
+                                 nodes[k].getAttribute("aria-label") || "").trim();
+                    if (!label || label.length > 60) continue;
+                    var rect = nodes[k].getBoundingClientRect();
+                    if (rect.width <= 0 || rect.height <= 0) continue;
+                    seen.push(label);
+                }
+                if (seen.length > 0) {
+                    var signature = seen.join("|");
+                    if (signature !== lastMiss) {
+                        lastMiss = signature;
+                        try {
+                            window.webkit.messageHandlers.gamestream.postMessage({
+                                type: "autoStartMiss", labels: seen.join(" | ")
+                            });
+                        } catch (e) {}
+                    }
+                }
             } catch (e) {}
         }, 750);
     })();
     """#
 
     // MARK: - Touch input
+
+    /// Reports what the page believes about itself and what it is offering.
+    ///
+    /// The cloud-play gate is decided by the site's own JavaScript, and it
+    /// looks at things a log of navigation kinds cannot show: whether the
+    /// page thinks it is a standalone installed app, what user agent and
+    /// touch capabilities it sees, and which buttons it has actually
+    /// rendered. Without those, a launch that stops on the product page is
+    /// indistinguishable from a launch that is merely slow.
+    static let pageSignalsJS = #"""
+    (function() {
+        if (window.__gsPageSignals) return;
+        window.__gsPageSignals = true;
+
+        var lastSignature = "";
+
+        function text(node) {
+            return ((node.innerText || node.textContent || "") + "").trim();
+        }
+
+        function buttons() {
+            var out = [];
+            var nodes = document.querySelectorAll('button, [role="button"], a[href*="/play/"], a[href*="/stream/"]');
+            for (var i = 0; i < nodes.length && out.length < 12; i++) {
+                var label = text(nodes[i]);
+                if (!label || label.length > 60) continue;
+                var rect = nodes[i].getBoundingClientRect();
+                var visible = rect.width > 0 && rect.height > 0;
+                if (!visible) continue;
+                out.push(label);
+            }
+            return out;
+        }
+
+        function dialogs() {
+            var out = [];
+            var nodes = document.querySelectorAll('[role="dialog"], [role="alert"], [class*="ErrorScreen"], [class*="error-screen"]');
+            for (var i = 0; i < nodes.length && out.length < 4; i++) {
+                var label = text(nodes[i]);
+                if (!label || label.length < 4 || label.length > 240) continue;
+                out.push(label);
+            }
+            return out;
+        }
+
+        function report() {
+            try {
+                var href = location.href || "";
+                var labels = buttons();
+                var dialog = dialogs();
+                var standalone = false;
+                try { standalone = navigator.standalone === true; } catch (e) {}
+                var displayMode = false;
+                try { displayMode = matchMedia("(display-mode: standalone)").matches; } catch (e) {}
+                var serviceWorker = false;
+                try { serviceWorker = !!navigator.serviceWorker; } catch (e) {}
+                var touchPoints = 0;
+                try { touchPoints = navigator.maxTouchPoints || 0; } catch (e) {}
+                var platform = "";
+                try { platform = navigator.platform || ""; } catch (e) {}
+                var ua = "";
+                try { ua = navigator.userAgent || ""; } catch (e) {}
+                var signature = href + "|" + labels.join("|") + "|" + dialog.join("|")
+                    + "|" + standalone + displayMode + serviceWorker;
+                if (signature === lastSignature) return;
+                lastSignature = signature;
+                window.webkit.messageHandlers.gamestream.postMessage({
+                    type: "pageSignals",
+                    href: href,
+                    standalone: standalone,
+                    displayMode: displayMode,
+                    serviceWorker: serviceWorker,
+                    touchPoints: touchPoints,
+                    platform: platform,
+                    userAgent: ua,
+                    buttons: labels,
+                    dialogs: dialog
+                });
+            } catch (e) {}
+        }
+
+        report();
+        setInterval(report, 2000);
+    })();
+    """#
 
     /// Makes Xbox Cloud offer its on-screen controls for every game.
     ///

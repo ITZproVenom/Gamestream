@@ -387,7 +387,7 @@ final class StreamCoordinator: ObservableObject {
             return
         }
         guard role == .stream else { return }
-        log.debug("stream", "page is now \(kind)")
+        log.debug("stream", "page is now \(kind) (\(href))")
 
         // Being bounced back to the store or sign-in page means the launch did
         // not take. Saying so beats leaving a spinner on screen.
