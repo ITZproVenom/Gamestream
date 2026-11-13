@@ -240,6 +240,7 @@ final class AppSettings: ObservableObject {
         static let rumbleEnabled = "settings.rumbleEnabled"
         static let rumbleIntensity = "settings.rumbleIntensity"
         static let autoStart = "settings.autoStart"
+        static let showSiteWhileConnecting = "settings.showSiteWhileConnecting"
         static let showStats = "settings.showStats"
         static let matchStreamStyle = "settings.matchStreamStyle"
         static let phoneRumbleFallback = "settings.phoneRumbleFallback"
@@ -285,6 +286,17 @@ final class AppSettings: ObservableObject {
         }
     }
     @Published var autoStart: Bool { didSet { store(autoStart, Key.autoStart) } }
+
+    /// Show Xbox's own page while the session is starting, instead of the
+    /// app's loading screen.
+    ///
+    /// The loading screen covers the page, so a launch that stops on
+    /// something - a dialog, a button that has to be pressed, an error - is
+    /// invisible and has to be diagnosed from the log alone. With this on,
+    /// the site is right there and can be used directly.
+    @Published var showSiteWhileConnecting: Bool {
+        didSet { store(showSiteWhileConnecting, Key.showSiteWhileConnecting) }
+    }
     @Published var showStreamStats: Bool { didSet { store(showStreamStats, Key.showStats) } }
     /// Vibrate the phone when no controller route can rumble.
     @Published var phoneRumbleFallback: Bool {
@@ -412,6 +424,7 @@ final class AppSettings: ObservableObject {
         rumbleEnabled = defaults.object(forKey: Key.rumbleEnabled) as? Bool ?? true
         rumbleIntensity = Float(defaults.object(forKey: Key.rumbleIntensity) as? Double ?? 1.6)
         autoStart = defaults.object(forKey: Key.autoStart) as? Bool ?? true
+        showSiteWhileConnecting = defaults.object(forKey: Key.showSiteWhileConnecting) as? Bool ?? true
         showStreamStats = defaults.object(forKey: Key.showStats) as? Bool ?? false
         matchStreamStyle = defaults.object(forKey: Key.matchStreamStyle) as? Bool ?? true
         // Off by default. It is a consolation prize for hardware iOS cannot

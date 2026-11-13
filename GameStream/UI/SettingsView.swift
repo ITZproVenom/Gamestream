@@ -443,6 +443,17 @@ struct SettingsView: View {
             Toggle("Start the game automatically", isOn: $settings.autoStart)
             SettingsDivider()
             VStack(alignment: .leading, spacing: 5) {
+                Toggle("Show Xbox's page while the game starts",
+                       isOn: $settings.showSiteWhileConnecting)
+                Text("Replaces the app's loading screen with Xbox's own page, so a "
+                     + "dialog that needs answering - a controller prompt, a sign-in, "
+                     + "an error - can be seen and dealt with directly. The page is "
+                     + "live and can be tapped while it is showing.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            SettingsDivider()
+            VStack(alignment: .leading, spacing: 5) {
                 Toggle("Open the statistics panel with the stream",
                        isOn: $settings.showStreamStats)
                 Text("Frame rate, bitrate, latency, jitter, decode time and dropped "
