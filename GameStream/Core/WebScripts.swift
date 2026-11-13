@@ -855,6 +855,14 @@ enum WebScripts {
                 }
             } catch (e) {}
 
+            // Better xCloud's dialog writes to window.BX_EXPOSED as it opens.
+            // When the script is injected at document start that export is
+            // not always there yet, and the write threw "undefined is not an
+            // object" - which stopped the menu from opening at all.
+            try {
+                if (!window.BX_EXPOSED) window.BX_EXPOSED = {};
+            } catch (e) {}
+
             try {
                 if (typeof SettingsDialog !== "undefined"
                     && SettingsDialog.getInstance) {
@@ -862,7 +870,20 @@ enum WebScripts {
                     return "SettingsDialog.show(), " + reveal();
                 }
             } catch (e) {
-                return "SettingsDialog threw: " + e;
+                // The dialog object exists but refused to open. The script's
+                // own settings button opens the same thing, so that is tried
+                // next rather than giving up.
+            }
+
+            // The site's own Better xCloud button.
+            var target = match([
+                "[title=\"Better xCloud\"]",
+                "button[title*=\"Better xCloud\" i]",
+                ".bx-header-settings-button"
+            ], /better\s*xcloud/);
+            if (target) {
+                enable(target);
+                return "the site's Better xCloud button";
             }
             return null;
         }
@@ -1495,6 +1516,32 @@ enum WebScripts {
                 || text.indexOf("without controller") !== -1;
         }
 
+        /// Better xCloud asks whether the game should launch fullscreen and
+        /// puts a "Continue anyway" button on its dialog. Left alone it sits
+        /// over the game with the question still open.
+        function dismissFullscreenPrompt() {
+            var dialogs = document.querySelectorAll('[role="dialog"], [class*="Dialog"], [class*="dialog"]');
+            for (var i = 0; i < dialogs.length; i++) {
+                var dialog = dialogs[i];
+                var text = (dialog.innerText || "").toLowerCase();
+                if (text.indexOf("fullscreen") === -1) continue;
+                var buttons = dialog.querySelectorAll('button, [role="button"]');
+                for (var j = 0; j < buttons.length; j++) {
+                    var label = (buttons[j].innerText || buttons[j].textContent ||
+                                 buttons[j].getAttribute("aria-label") || "").trim().toLowerCase();
+                    if (label !== "continue anyway") continue;
+                    buttons[j].click();
+                    try {
+                        window.webkit.messageHandlers.gamestream.postMessage({
+                            type: "autoStart", label: label
+                        });
+                    } catch (e) {}
+                    return true;
+                }
+            }
+            return false;
+        }
+
         var timer = setInterval(function() {
             try {
                 var href = (location.href || "").toLowerCase();
@@ -1517,6 +1564,10 @@ enum WebScripts {
                 }
 
                 var nodes = document.querySelectorAll('button, [role="button"]');
+
+                // A dialog that is only asking a question is dealt with
+                // before anything else, so it does not sit over the game.
+                if (dismissFullscreenPrompt()) return;
 
                 // The controller gate comes first: while it is up, the page
                 // is waiting for an answer and not for another Play press.
@@ -1587,6 +1638,115 @@ enum WebScripts {
     """#
 
     // MARK: - Touch input
+
+    /// Gives the page a gamepad it can see.
+    ///
+    /// WKWebView never exposes an attached controller to a web page:
+    /// `navigator.getGamepads()` is empty no matter what is paired. Xbox's
+    /// cloud client asks the page for a controller before it starts a
+    /// session and keeps asking while one is missing - the "Let's get ready"
+    /// dialog, then a "Controller not detected" chip for the whole session.
+    ///
+    /// The page is given one gamepad, and it mirrors the real controller: it
+    /// appears when a controller is attached and disappears when it is not,
+    /// so the page is never told about a controller the player does not have,
+    /// and the game receives the buttons and sticks they press. The pad's
+    /// vibration actuator is part of the same object, which is how the
+    /// game's rumble requests reach the controller.
+    static let gamepadBridgeJS = #"""
+    (function() {
+        if (window.__gsGamepadBridge) return;
+        window.__gsGamepadBridge = true;
+
+        var state = { connected: false, axes: [0, 0, 0, 0], buttons: [] };
+
+        function post(payload) {
+            try {
+                window.webkit.messageHandlers.gamestream.postMessage(payload);
+            } catch (e) {}
+        }
+
+        function makeButton(pressed) {
+            return { pressed: pressed, touched: pressed, value: pressed ? 1 : 0 };
+        }
+
+        function makePad() {
+            var buttons = [];
+            for (var i = 0; i < 17; i++) {
+                buttons.push(makeButton(!!state.buttons[i]));
+            }
+            return {
+                id: "Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 02fd)",
+                index: 0,
+                connected: !!state.connected,
+                mapping: "standard",
+                timestamp: performance.now(),
+                axes: state.axes.slice(0, 4),
+                buttons: buttons,
+                vibrationActuator: {
+                    type: "dual-rumble",
+                    playEffect: function(type, params) {
+                        var p = params || {};
+                        post({
+                            type: "rumble",
+                            left: Number(p.strongMagnitude) || 0,
+                            right: Number(p.weakMagnitude) || 0,
+                            leftTrigger: 0,
+                            rightTrigger: 0,
+                            durationMs: Number(p.duration) || 0
+                        });
+                        return Promise.resolve("complete");
+                    },
+                    reset: function() {
+                        post({ type: "rumble", left: 0, right: 0,
+                               leftTrigger: 0, rightTrigger: 0, durationMs: 0 });
+                        return Promise.resolve("complete");
+                    }
+                }
+            };
+        }
+
+        function pads() {
+            // The real API returns a fixed-length array with nulls where
+            // there is no pad, and the site's own code indexes into it.
+            return [state.connected ? makePad() : null];
+        }
+
+        try {
+            Object.defineProperty(navigator, "getGamepads", {
+                get: function() { return pads; },
+                configurable: true
+            });
+        } catch (e) {
+            navigator.getGamepads = pads;
+        }
+
+        window.__gsGamepad = function(next) {
+            try {
+                var was = state.connected;
+                if (next && typeof next.connected === "boolean") state.connected = next.connected;
+                if (next && next.axes) state.axes = next.axes;
+                if (next && next.buttons) state.buttons = next.buttons;
+                if (state.connected && !was) {
+                    var event = null;
+                    try {
+                        if (typeof GamepadEvent === "function") {
+                            event = new GamepadEvent("gamepadconnected", { gamepad: makePad() });
+                        } else {
+                            event = new Event("gamepadconnected");
+                            event.gamepad = makePad();
+                        }
+                    } catch (e) { event = null; }
+                    if (event) window.dispatchEvent(event);
+                }
+                if (!state.connected && was) {
+                    try { window.dispatchEvent(new Event("gamepaddisconnected")); } catch (e) {}
+                }
+            } catch (e) {}
+            return true;
+        };
+    })();
+    """#
 
     /// Reports what the page believes about itself and what it is offering.
     ///

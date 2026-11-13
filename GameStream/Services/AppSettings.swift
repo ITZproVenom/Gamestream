@@ -424,7 +424,7 @@ final class AppSettings: ObservableObject {
         rumbleEnabled = defaults.object(forKey: Key.rumbleEnabled) as? Bool ?? true
         rumbleIntensity = Float(defaults.object(forKey: Key.rumbleIntensity) as? Double ?? 1.6)
         autoStart = defaults.object(forKey: Key.autoStart) as? Bool ?? true
-        showSiteWhileConnecting = defaults.object(forKey: Key.showSiteWhileConnecting) as? Bool ?? true
+        showSiteWhileConnecting = defaults.object(forKey: Key.showSiteWhileConnecting) as? Bool ?? false
         showStreamStats = defaults.object(forKey: Key.showStats) as? Bool ?? false
         matchStreamStyle = defaults.object(forKey: Key.matchStreamStyle) as? Bool ?? true
         // Off by default. It is a consolation prize for hardware iOS cannot

@@ -148,6 +148,9 @@ struct XboxWebView: UIViewRepresentable {
             webView.scrollView.bounces = false
             webView.scrollView.contentInsetAdjustmentBehavior = .never
             Registry.shared.streamView = webView
+            // The page needs to hear about the controller as it is used, so
+            // the mirroring starts with the page and stops with it.
+            GamepadBridge.shared.attach()
 
             // A SwiftUI tap gesture on the view behind this one never fires:
             // the web view consumes the touch, and with touch controls drawn
@@ -221,6 +224,12 @@ struct XboxWebView: UIViewRepresentable {
         // The rumble bridge must wrap createDataChannel before the page opens
         // its WebRTC session, so it has to run at document start.
         let settings = AppSettings.shared
+        // The page has to be able to find a gamepad, and WKWebView cannot
+        // show it the real one, so the bridge goes in before anything else
+        // looks for a pad.
+        controller.addUserScript(WKUserScript(source: WebScripts.gamepadBridgeJS,
+                                              injectionTime: .atDocumentStart,
+                                              forMainFrameOnly: true))
         controller.addUserScript(WKUserScript(
             source: "window.__gsRumbleMode = \"\(settings.rumbleEnabled ? "page" : "off")\";"
                 + "window.__gsRumbleScale = \(settings.rumbleIntensity);",

@@ -51,6 +51,9 @@ final class ControllerShortcuts {
     /// Settings so the on-screen controls can get out of the way.
     func presenceChanged() {
         install()
+        // The page cannot see the controller on its own, so it has to be told
+        // that there is one - and told again when it goes away.
+        GamepadBridge.shared.controllerChanged()
         AppLog.shared.info("controller", hasController
                            ? "a controller is attached"
                            : "no controller is attached")

@@ -137,6 +137,7 @@ struct GameStreamApp: App {
         rumble.start()
         Connectivity.shared.start()
         ControllerShortcuts.shared.start()
+        GamepadBridge.shared.start()
 
         async let session = auth.refresh(reason: "launch")
         async let script: Void = BetterXCloud.shared.refreshIfNeeded()
