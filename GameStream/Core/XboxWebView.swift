@@ -275,6 +275,7 @@ struct XboxWebView: UIViewRepresentable {
         for source in [WebScripts.streamStateJS, WebScripts.streamChromeJS,
                        WebScripts.streamStatsJS, WebScripts.streamCommandsJS,
                        WebScripts.captureJS, WebScripts.clipJS,
+                       WebScripts.pageSignalsJS,
                        WebScripts.autoStartJS] {
             controller.addUserScript(WKUserScript(source: source,
                                                   injectionTime: .atDocumentEnd,
@@ -381,6 +382,28 @@ struct XboxWebView: UIViewRepresentable {
                 StreamCoordinator.shared.streamFailed(message: body["message"] as? String ?? "")
             case "autoStart":
                 log.info("stream", "pressed the site's \"\(body["label"] as? String ?? "")\" button")
+            case "autoStartMiss":
+                log.info("stream", "no cloud-play button matched; on the page: "
+                        + (body["labels"] as? String ?? "nothing"))
+            case "pageSignals":
+                let href = body["href"] as? String ?? ""
+                let standalone = body["standalone"] as? Bool ?? false
+                let displayMode = body["displayMode"] as? Bool ?? false
+                let serviceWorker = body["serviceWorker"] as? Bool ?? false
+                let touchPoints = body["touchPoints"] as? Int ?? 0
+                let platform = body["platform"] as? String ?? ""
+                let userAgent = body["userAgent"] as? String ?? ""
+                let buttons = (body["buttons"] as? [String] ?? []).joined(separator: " | ")
+                let dialogs = (body["dialogs"] as? [String] ?? []).joined(separator: " | ")
+                log.info("stream", "page signals: standalone=\(standalone) "
+                        + "displayMode=\(displayMode) serviceWorker=\(serviceWorker) "
+                        + "touch=\(touchPoints) platform=\(platform)")
+                log.info("stream", "page url: \(href)")
+                if !userAgent.isEmpty { log.debug("stream", "page sees user agent: \(userAgent)") }
+                if !buttons.isEmpty { log.info("stream", "buttons: \(buttons)") }
+                if !dialogs.isEmpty { log.info("stream", "dialog: \(dialogs)") }
+            case "videoState":
+                log.debug("stream", "video: \(body["detail"] as? String ?? "")")
             case "stats":
                 StreamCoordinator.shared.statsUpdated(StreamStats(payload: body))
             case "command":
