@@ -107,6 +107,9 @@ final class StreamCoordinator: ObservableObject {
 
     private var startedAt: Date?
     private var watchdog: Task<Void, Never>?
+    /// The last page written to the log, so a page that reports itself every
+    /// two seconds does not fill the log with the same line.
+    private var lastLoggedPage = ""
     private let log = AppLog.shared
 
     private init() {}
@@ -387,6 +390,12 @@ final class StreamCoordinator: ObservableObject {
             return
         }
         guard role == .stream else { return }
+        // The page reports itself every two seconds, so the same page was
+        // written to the log over and over for the length of a session. Only
+        // a page that actually changed is worth a line.
+        let page = "\(kind)|\(href)"
+        if page == lastLoggedPage { return }
+        lastLoggedPage = page
         log.debug("stream", "page is now \(kind) (\(href))")
 
         // Being bounced back to the store or sign-in page means the launch did

@@ -73,7 +73,15 @@ final class AppLog: ObservableObject {
         if entries.count > limit {
             entries.removeFirst(entries.count - limit)
         }
-        append(entry.line)
+        // The detail lines are worth having on screen and worth having in
+        // the file, but a stream produces them by the dozen - a video
+        // reading every 700 ms, a page report every two seconds - and
+        // writing all of them to disk during a stream is work the phone
+        // does not need to do. The file keeps what matters; the screen
+        // keeps everything.
+        if level != .debug {
+            append(entry.line)
+        }
         switch level {
         case .debug: logger.debug("\(category, privacy: .public): \(entry.message, privacy: .public)")
         case .info: logger.info("\(category, privacy: .public): \(entry.message, privacy: .public)")

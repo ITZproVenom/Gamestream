@@ -266,8 +266,15 @@ struct XboxWebView: UIViewRepresentable {
             AppLog.shared.info("betterxcloud", "the next page load starts from clean storage")
         }
         if let script = BetterXCloud.shared.cachedScript {
+            // Better xCloud builds its own interface against the page it
+            // finds, and publishes what it exposes on window.BX_EXPOSED at
+            // the end of that work. Injected at document start it ran
+            // against a page that did not exist yet: its dialog was there
+            // but its exports never were, so opening the menu threw
+            // "window.BX_EXPOSED is undefined" and the menu did nothing.
+            // It is given the finished page instead.
             controller.addUserScript(WKUserScript(source: script,
-                                                  injectionTime: .atDocumentStart,
+                                                  injectionTime: .atDocumentEnd,
                                                   forMainFrameOnly: true))
         }
         // The skin has to land after Better xCloud's own stylesheet, so it
@@ -297,6 +304,11 @@ struct XboxWebView: UIViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler,
                              UIGestureRecognizerDelegate {
+
+        /// The last page signals written to the log. The page reports itself
+        /// every two seconds, and a stream that runs for an hour would
+        /// otherwise write the same five lines over and over.
+        private var lastPageSignals = ""
 
         /// Two fingers-free taps toggle the app's overlay. It runs alongside
         /// the page's own handling rather than instead of it, so touch
@@ -402,13 +414,20 @@ struct XboxWebView: UIViewRepresentable {
                 let touchPoints = body["touchPoints"] as? Int ?? 0
                 let platform = body["platform"] as? String ?? ""
                 let userAgent = body["userAgent"] as? String ?? ""
+                let better = body["bx"] as? String ?? ""
                 let buttons = (body["buttons"] as? [String] ?? []).joined(separator: " | ")
                 let dialogs = (body["dialogs"] as? [String] ?? []).joined(separator: " | ")
+                // The page reports itself every two seconds. Only a change is
+                // worth five lines of log.
+                let signature = "\(href)|\(standalone)|\(displayMode)|\(serviceWorker)|\(touchPoints)|\(platform)|\(better)|\(buttons)|\(dialogs)"
+                guard signature != lastPageSignals else { return }
+                lastPageSignals = signature
                 log.info("stream", "page signals: standalone=\(standalone) "
                         + "displayMode=\(displayMode) serviceWorker=\(serviceWorker) "
                         + "touch=\(touchPoints) platform=\(platform)")
                 log.info("stream", "page url: \(href)")
                 if !userAgent.isEmpty { log.debug("stream", "page sees user agent: \(userAgent)") }
+                if !better.isEmpty { log.info("stream", "better xcloud: \(better)") }
                 if !buttons.isEmpty { log.info("stream", "buttons: \(buttons)") }
                 if !dialogs.isEmpty { log.info("stream", "dialog: \(dialogs)") }
             case "videoState":

@@ -279,6 +279,10 @@ enum WebScripts {
             // the product page also carries a trailer. Report what each one
             // is doing, so "the player never started" can be told apart from
             // "a promotional clip was playing instead".
+            //
+            // The playback position is deliberately left out of the report.
+            // It changes every tick, so a signature that included it turned
+            // a two-minute stream into hundreds of log lines.
             var parts = [];
             for (var v = 0; v < videos.length && v < 4; v++) {
                 var video = videos[v];
@@ -290,7 +294,6 @@ enum WebScripts {
                 parts.push(video.videoWidth + "x" + video.videoHeight
                     + " ready=" + video.readyState
                     + " paused=" + video.paused
-                    + " time=" + Math.round(video.currentTime * 10) / 10
                     + " tracks=" + tracks);
             }
             var signature = parts.join(" ; ");
@@ -1809,8 +1812,16 @@ enum WebScripts {
                 try { platform = navigator.platform || ""; } catch (e) {}
                 var ua = "";
                 try { ua = navigator.userAgent || ""; } catch (e) {}
+                // Whether Better xCloud managed to set itself up. Its menu
+                // depends on the export it publishes, and when that was
+                // missing the menu simply did nothing.
+                var bx = "no";
+                try {
+                    if (typeof window.BX_EXPOSED !== "undefined") bx = "exported";
+                    else if (typeof SettingsDialog !== "undefined") bx = "dialog only";
+                } catch (e) {}
                 var signature = href + "|" + labels.join("|") + "|" + dialog.join("|")
-                    + "|" + standalone + displayMode + serviceWorker;
+                    + "|" + standalone + displayMode + serviceWorker + bx;
                 if (signature === lastSignature) return;
                 lastSignature = signature;
                 window.webkit.messageHandlers.gamestream.postMessage({
@@ -1822,6 +1833,7 @@ enum WebScripts {
                     touchPoints: touchPoints,
                     platform: platform,
                     userAgent: ua,
+                    bx: bx,
                     buttons: labels,
                     dialogs: dialog
                 });
@@ -1901,13 +1913,18 @@ enum WebScripts {
         /// Rewrites a request body, or returns null when there is nothing in
         /// it that concerns touch input.
         function rewrite(body) {
-            if (typeof body !== "string" || body.length === 0) return null;
+            if (!body || typeof body !== "string" || body.length === 0) return null;
             if (body.indexOf("enableTouchInput") === -1) return null;
             var parsed;
             try {
                 parsed = JSON.parse(body);
             } catch (e) {
-                post("unreadable", "the configuration was not JSON");
+                // The session configuration has been arriving in shapes this
+                // build does not know: saying "not JSON" and stopping told
+                // nobody what the body actually was. Show it instead, with
+                // the length, so the next log can say what has to be parsed.
+                post("not json", "the body was " + body.length + " characters and began "
+                     + JSON.stringify(body.slice(0, 120)));
                 return null;
             }
             if (!force(parsed, 0)) {
