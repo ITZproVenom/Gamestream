@@ -26,6 +26,7 @@
 
 ### Authentication
 
+- Sign-in and the session probe now run on **`play.xbox.com`** instead of `www.xbox.com`. The XSTS token lives in the origin's `localStorage`, and the stream player runs on `play.xbox.com` — so a token minted on `www.xbox.com` left the player sessionless and every launch bounced back to the home/product page without ever starting a stream. The earlier release announced this fix but only changed a comment; the URLs were never moved.
 - If the lightweight Xbox storage probe returns no token or cannot be read, retry against the full Xbox Cloud Gaming page before showing the signed-out screen. A probe failure alone no longer forces a login prompt.
 - Microsoft sign-in `target=_blank` windows now remain separate WKWebViews, preserving the top-level browsing context used by passkey flows while retaining the shared Xbox data store.
 - Passkeys (WebAuthn) now work in Microsoft sign-in: the app declares Microsoft's and Xbox's sign-in domains as associated domains with the **`webcredentials:`** service type (`login.live.com`, `login.microsoftonline.com`, `account.microsoft.com`, `www.xbox.com`, `xbox.com`, `play.xbox.com`), which Apple requires before a WKWebView will create or use a passkey — `applinks:` alone does not enable WebAuthn. CI ad-hoc-signs the unsigned archive with the entitlement before packaging the beta IPA and verifies the packaged binary carries it, so sideloaded installs keep it.
