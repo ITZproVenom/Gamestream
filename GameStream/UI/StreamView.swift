@@ -2,7 +2,6 @@ import SwiftUI
 
 /// The player: the Xbox launch page plus an overlay that reports the truth.
 struct StreamView: View {
-    @Environment(\.colorScheme) private var scheme
     @EnvironmentObject private var stream: StreamCoordinator
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var rumble: ControllerRumble
@@ -148,22 +147,24 @@ struct StreamView: View {
     // MARK: - States
 
     /// The launch sequence: an animated, cinematic loading screen that shows
-    /// The launch sequence, drawn as a manga splash page: halftone paper with
-    /// speed lines behind a giant outlined title, the poster in a thick
-    /// ink-bordered panel with a hard offset shadow and a rotating starburst
-    /// badge, and real progress steps in a speech bubble.
+    /// what is actually happening — the game's art drifting behind a moving
+    /// mesh, an orbiting energy ring around the poster, and real progress
+    /// steps fed by the stream coordinator.
     private func connecting(_ detail: String) -> some View {
         ZStack {
-            MangaBackdrop(game: stream.game)
+            LaunchBackdrop(game: stream.game)
 
-            VStack(spacing: 22) {
+            VStack(spacing: 24) {
                 LaunchEmblem(game: stream.game)
 
                 VStack(spacing: 6) {
-                    MangaTitle(detail)
+                    Text(detail)
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
                     Text(stageMessage)
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(MangaTheme.ink(scheme).opacity(0.75))
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.72))
                         .multilineTextAlignment(.center)
                         .animation(.smooth(duration: 0.3), value: stageMessage)
                 }
@@ -171,11 +172,14 @@ struct StreamView: View {
                 LaunchSteps(stage: stream.connectStage,
                             title: stream.game?.title ?? "the game")
 
-                HStack(spacing: 16) {
+                HStack(spacing: 14) {
                     Text(Format.clock(elapsed))
-                        .font(.caption.monospacedDigit().weight(.bold))
-                        .foregroundStyle(MangaTheme.ink(scheme).opacity(0.6))
-                    MangaButton("CANCEL") { stream.exit() }
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.6))
+                    Button("Cancel") { stream.exit() }
+                        .buttonStyle(.glass)
+                        .buttonBorderShape(.capsule)
+                        .tint(.white)
                 }
             }
             .padding(34)
@@ -513,328 +517,190 @@ struct StreamView: View {
     }
 }
 
+// MARK: - Launch sequence
 
-// MARK: - Launch sequence (manga splash page)
-
-/// Ink-and-paper palette for the manga theme: black ink on white paper in
-/// light mode, inverted in dark mode.
-enum MangaTheme {
-    static func ink(_ scheme: ColorScheme) -> Color { scheme == .dark ? .white : .black }
-    static func paper(_ scheme: ColorScheme) -> Color { scheme == .dark ? .black : .white }
-}
-
-/// Halftone paper with radiating speed lines and a giant outlined title —
-/// the classic manga splash-page backdrop. The whole field rotates slowly;
-/// Reduce Motion freezes it.
-struct MangaBackdrop: View {
+/// The animated backdrop behind the launch screen: the game's hero art,
+/// blurred and slowly breathing, under a mesh gradient whose points drift
+/// over time in the accent colour. Reduce Motion freezes both.
+struct LaunchBackdrop: View {
     let game: Game?
-    @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var settings: AppSettings
 
-    private var ink: Color { MangaTheme.ink(scheme) }
-    private var paper: Color { MangaTheme.paper(scheme) }
-
     var body: some View {
         ZStack {
-            paper
+            Color.black
 
             if let art = game?.heroURL ?? game?.posterURL {
-                GameArtwork(url: art, cornerRadius: 0)
-                    .blur(radius: 26)
-                    .grayscale(0.7)
-                    .opacity(0.22)
+                if reduceMotion {
+                    GameArtwork(url: art, cornerRadius: 0)
+                        .blur(radius: 64)
+                        .scaleEffect(1.15)
+                        .overlay(Color.black.opacity(0.2))
+                } else {
+                    TimelineView(.animation(minimumInterval: 1 / 30)) { context in
+                        let t = context.date.timeIntervalSince1970
+                        let s = 1.12 + 0.05 * CGFloat(sin(t * 0.45))
+                        GameArtwork(url: art, cornerRadius: 0)
+                            .blur(radius: 64)
+                            .scaleEffect(s)
+                            .offset(x: 14 * CGFloat(sin(t * 0.3)), y: 10 * CGFloat(cos(t * 0.23)))
+                            .overlay(Color.black.opacity(0.2))
+                    }
+                }
             }
 
             if reduceMotion {
-                SpeedField(angle: 0)
-                    .opacity(0.9)
+                MeshGradient(width: 3, height: 3, points: Self.midPoints, colors: mesh)
+                    .opacity(0.5)
             } else {
                 TimelineView(.animation(minimumInterval: 1 / 30)) { context in
-                    SpeedField(angle: context.date.timeIntervalSince1970 * 6)
+                    MeshGradient(width: 3, height: 3,
+                                 points: Self.driftingPoints(context.date.timeIntervalSince1970),
+                                 colors: mesh)
                 }
-                .opacity(0.9)
+                .opacity(0.5)
             }
 
-            Text("PLAY!")
-                .font(.system(size: 104, weight: .black, design: .rounded))
-                .rotationEffect(.degrees(-8))
-                .opacity(0.14)
-                .overlay(
-                    Text("PLAY!")
-                        .font(.system(size: 104, weight: .black, design: .rounded))
-                        .foregroundStyle(ink)
-                        .rotationEffect(.degrees(-8))
-                        .offset(x: 4, y: 4)
-                        .opacity(0.14))
-                .foregroundStyle(settings.accent.color)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .padding(.top, 70)
+            LinearGradient(colors: [.black.opacity(0.6), .black.opacity(0.25), .black.opacity(0.7)],
+                           startPoint: .top, endPoint: .bottom)
         }
         .ignoresSafeArea()
     }
 
-    /// Halftone dots (bigger away from the centre) plus speed lines fanning
-    /// out from the middle, drawn in one Canvas and rotated by `angle`.
-    private struct SpeedField: View {
-        let angle: Double
-        @Environment(\.colorScheme) private var scheme
-        @EnvironmentObject private var settings: AppSettings
-
-        var body: some View {
-            Canvas { ctx, size in
-                let ink = MangaTheme.ink(scheme)
-                let accent = settings.accent.color
-                let center = CGPoint(x: size.width / 2, y: size.height / 2)
-                let maxR = hypot(size.width, size.height) / 2
-
-                // speed lines (rotation applied in the angle math itself)
-                let rays = 56
-                let rot = angle * .pi / 180
-                for i in 0..<rays {
-                    let a = Double(i) / Double(rays) * .pi * 2 + rot
-                    let r0 = maxR * 0.32
-                    let r1 = maxR * 1.25
-                    var p = Path()
-                    p.move(to: CGPoint(x: center.x + cos(a) * r0, y: center.y + sin(a) * r0))
-                    p.addLine(to: CGPoint(x: center.x + cos(a) * r1, y: center.y + sin(a) * r1))
-                    ctx.stroke(p, with: .color(accent.opacity(i % 2 == 0 ? 0.35 : 0.18)),
-                               lineWidth: i % 2 == 0 ? 5 : 2)
-                }
-
-                // halftone screentone
-                let step: CGFloat = 15
-                for gy in stride(from: step / 2, to: size.height, by: step) {
-                    for gx in stride(from: step / 2, to: size.width, by: step) {
-                        let d = hypot(gx - center.x, gy - center.y) / maxR
-                        let r = 0.8 + 4.2 * min(d, 1)
-                        let dot = Path(ellipseIn: CGRect(x: gx - r, y: gy - r, width: r * 2, height: r * 2))
-                        ctx.fill(dot, with: .color(ink.opacity(0.10)))
-                    }
-                }
-            }
-        }
+    private var mesh: [Color] {
+        let accent = settings.accent.color
+        return [
+            accent.opacity(0.6), accent.opacity(0.25), Color.black,
+            accent.opacity(0.35), Color.black.opacity(0.75), accent.opacity(0.45),
+            Color.black, accent.opacity(0.22), Color.black.opacity(0.9)
+        ]
     }
+
+    private static func driftingPoints(_ t: TimeInterval) -> [SIMD2<Float>] {
+        let a = Float(sin(t * 0.7)), b = Float(cos(t * 0.5)), c = Float(sin(t * 0.9 + 1.7))
+        return [
+            .init(0, 0), .init(0.5 + 0.12 * a, 0), .init(1, 0),
+            .init(0, 0.5), .init(0.5 + 0.10 * b, 0.5 + 0.06 * c), .init(1, 0.5),
+            .init(0, 1), .init(0.5 - 0.12 * c, 1), .init(1, 1)
+        ]
+    }
+
+    private static let midPoints: [SIMD2<Float>] = [
+        .init(0, 0), .init(0.55, 0), .init(1, 0),
+        .init(0, 0.5), .init(0.5, 0.55), .init(1, 0.5),
+        .init(0, 1), .init(0.45, 1), .init(1, 1)
+    ]
 }
 
-/// Big bold title with a hard ink outline, manga display style.
-struct MangaTitle: View {
-    let text: String
-    @Environment(\.colorScheme) private var scheme
+/// The poster at the centre of the launch screen, wrapped in an orbiting
+/// energy ring with a pulsing glow behind it.
+struct LaunchEmblem: View {
+    let game: Game?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var settings: AppSettings
-
-    init(_ text: String) { self.text = text }
 
     var body: some View {
         ZStack {
-            Text(text)
-                .font(.title2.weight(.black).monospaced())
-                .foregroundStyle(MangaTheme.ink(scheme))
-                .offset(x: 2.5, y: 2.5)
-            Text(text)
-                .font(.title2.weight(.black).monospaced())
-                .foregroundStyle(settings.accent.color)
-        }
-    }
-}
-/// The poster in a thick ink-bordered panel with a hard offset shadow
-/// (cel-shaded, no blur), slightly tilted, with a rotating starburst badge.
-struct LaunchEmblem: View {
-    let game: Game?
-    @Environment(\.colorScheme) private var scheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @EnvironmentObject private var settings: AppSettings
-
-    private var ink: Color { MangaTheme.ink(scheme) }
-    private var paper: Color { MangaTheme.paper(scheme) }
-
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            ZStack {
-                // hard offset shadow behind the panel
-                Rectangle()
-                    .fill(ink)
-                    .frame(width: 158, height: 208)
-                    .offset(x: 8, y: 8)
-                Rectangle()
-                    .fill(paper)
-                    .frame(width: 158, height: 208)
-                    .overlay(Rectangle().stroke(ink, lineWidth: 5))
-                GameArtwork(url: game?.posterURL ?? game?.heroURL, cornerRadius: 0)
-                    .frame(width: 148, height: 198)
+            if reduceMotion {
+                Circle()
+                    .fill(settings.accent.color.opacity(0.32))
+                    .blur(radius: 46)
+                    .frame(width: 190, height: 190)
+            } else {
+                TimelineView(.animation(minimumInterval: 1 / 30)) { context in
+                    let s = 1 + 0.07 * sin(context.date.timeIntervalSince1970 * 2.2)
+                    Circle()
+                        .fill(settings.accent.color.opacity(0.32))
+                        .blur(radius: 46)
+                        .frame(width: 190 * CGFloat(s), height: 190 * CGFloat(s))
+                }
             }
-            .rotationEffect(.degrees(-3))
 
-            // rotating starburst badge
             ZStack {
                 if reduceMotion {
-                    Starburst(spikes: 14)
-                        .fill(settings.accent.color)
-                        .stroke(ink, lineWidth: 3)
-                        .frame(width: 86, height: 86)
+                    Circle()
+                        .stroke(settings.accent.color.opacity(0.85), lineWidth: 3)
+                        .frame(width: 178, height: 178)
                 } else {
-                    TimelineView(.animation(minimumInterval: 1 / 30)) { context in
-                        Starburst(spikes: 14)
-                            .fill(settings.accent.color)
-                            .stroke(ink, lineWidth: 3)
-                            .frame(width: 86, height: 86)
-                            .rotationEffect(.degrees(context.date.timeIntervalSince1970 * 18))
+                    TimelineView(.animation(minimumInterval: 1 / 60)) { context in
+                        let angle = context.date.timeIntervalSince1970 * 100
+                        Circle()
+                            .trim(from: 0, to: 0.72)
+                            .stroke(
+                                AngularGradient(
+                                    colors: [settings.accent.color, .clear,
+                                             settings.accent.color.opacity(0.5), .clear],
+                                    center: .center,
+                                    startAngle: .degrees(angle),
+                                    endAngle: .degrees(angle + 300)),
+                                style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                            .frame(width: 178, height: 178)
                     }
                 }
-                Text("GO!")
-                    .font(.headline.weight(.black))
-                    .foregroundStyle(ink)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(paper, in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(ink, lineWidth: 3))
+
+                GameArtwork(url: game?.posterURL ?? game?.heroURL, cornerRadius: 22)
+                    .frame(width: 118, height: 158)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(.white.opacity(0.25), lineWidth: 1))
+                    .shadow(color: settings.accent.color.opacity(0.5), radius: 24, y: 8)
             }
-            .offset(x: 26, y: -20)
         }
     }
 }
 
-/// A manga impact star, drawn as a two-radius polygon.
-struct Starburst: Shape {
-    let spikes: Int
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        let outer = min(rect.width, rect.height) / 2
-        let inner = outer * 0.62
-        let step = .pi / Double(spikes)
-        var angle = -Double.pi / 2
-        path.move(to: CGPoint(x: center.x + cos(angle) * outer, y: center.y + sin(angle) * outer))
-        for i in 0..<(spikes * 2) {
-            angle += step
-            let radius = i % 2 == 0 ? outer : inner
-            path.addLine(to: CGPoint(x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius))
-        }
-        path.closeSubpath()
-        return path
-    }
-}
-
-/// Launch progress drawn as a speech bubble: thick ink border, hard shadow,
-/// tail pointing down, bold uppercase rows that tick over as the stream
-/// coordinator advances.
+/// Real launch progress as a checklist: each row ticks over as the stream
+/// coordinator advances, and the current row pulses.
 struct LaunchSteps: View {
     let stage: StreamCoordinator.ConnectStage
     let title: String
-    @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @EnvironmentObject private var settings: AppSettings
-
-    private var ink: Color { MangaTheme.ink(scheme) }
-    private var paper: Color { MangaTheme.paper(scheme) }
 
     private var rows: [(String, Int)] {
-        [("LAUNCH \(title.uppercased())", 0),
-         ("CONNECT TO XBOX CLOUD", 1),
-         ("START THE SESSION", 2)]
+        [("Launch \(title)", 0),
+         ("Connect to Xbox Cloud Gaming", 1),
+         ("Start the stream session", 2)]
     }
 
     private var current: Int { min(stage.index, 2) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(spacing: 10) {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 HStack(spacing: 10) {
                     stepIcon(row.1)
-                        .frame(width: 20)
+                        .frame(width: 18)
                     Text(row.0)
-                        .font(.subheadline.weight(.black))
-                        .foregroundStyle(row.1 < current ? ink.opacity(0.45) : ink)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(row.1 < current ? .white.opacity(0.5) : .white)
                         .animation(.smooth(duration: 0.25), value: current)
                 }
             }
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
-        .padding(.bottom, 8)
-        .background(
-            ZStack {
-                SpeechBubbleShape()
-                    .fill(ink)
-                    .offset(x: 5, y: 5)
-                SpeechBubbleShape()
-                    .fill(paper)
-                    .stroke(ink, lineWidth: 4)
-            })
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     @ViewBuilder
     private func stepIcon(_ index: Int) -> some View {
         if index < current {
-            ZStack {
-                Circle().fill(settings.accent.color).stroke(ink, lineWidth: 3)
-                Image(systemName: "checkmark")
-                    .font(.caption.weight(.black))
-                    .foregroundStyle(ink)
-            }
-            .frame(width: 20, height: 20)
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
         } else if index == current {
             if reduceMotion {
-                Circle().fill(ink).frame(width: 12, height: 12)
+                Circle().fill(.white).frame(width: 10, height: 10)
             } else {
                 TimelineView(.animation(minimumInterval: 1 / 20)) { context in
-                    let s = 1 + 0.4 * (0.5 + 0.5 * sin(context.date.timeIntervalSince1970 * 4))
-                    Circle().fill(ink)
-                        .frame(width: 12 * CGFloat(s), height: 12 * CGFloat(s))
-                        .overlay(Circle().stroke(ink, lineWidth: 2))
+                    let s = 1 + 0.35 * (0.5 + 0.5 * sin(context.date.timeIntervalSince1970 * 4))
+                    Circle().fill(.white)
+                        .frame(width: 10 * CGFloat(s), height: 10 * CGFloat(s))
                 }
             }
         } else {
-            Circle().stroke(ink.opacity(0.4), lineWidth: 3)
-                .frame(width: 12, height: 12)
+            Circle().stroke(.white.opacity(0.35), lineWidth: 2)
+                .frame(width: 10, height: 10)
         }
-    }
-}
-
-/// Rounded rectangle with a little tail at the bottom-left, like a manga
-/// speech bubble.
-struct SpeechBubbleShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let tailH: CGFloat = 14
-        let body = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height - tailH)
-        path.addPath(Path(roundedRect: body, cornerRadius: 14))
-        path.move(to: CGPoint(x: body.minX + 22, y: body.maxY - 1))
-        path.addLine(to: CGPoint(x: body.minX + 40, y: body.maxY - 1))
-        path.addLine(to: CGPoint(x: body.minX + 18, y: rect.maxY))
-        path.closeSubpath()
-        return path
-    }
-}
-
-/// A chunky manga button: paper fill, thick ink border, hard offset shadow.
-struct MangaButton: View {
-    let title: String
-    let action: () -> Void
-    @Environment(\.colorScheme) private var scheme
-
-    init(_ title: String, action: @escaping () -> Void) {
-        self.title = title
-        self.action = action
-    }
-
-    var body: some View {
-        Button(action: action) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(MangaTheme.ink(scheme))
-                    .offset(x: 4, y: 4)
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(MangaTheme.paper(scheme))
-                    .stroke(MangaTheme.ink(scheme), lineWidth: 3)
-                Text(title)
-                    .font(.headline.weight(.black))
-                    .foregroundStyle(MangaTheme.ink(scheme))
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 9)
-            }
-        }
-        .buttonStyle(.plain)
     }
 }
