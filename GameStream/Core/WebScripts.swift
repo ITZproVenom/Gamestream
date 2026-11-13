@@ -1440,6 +1440,17 @@ enum WebScripts {
         // own purchase call to action, so there the cloud wording is
         // required.
         var PREFIX = ["play with cloud", "start streaming", "play for free"];
+        // After the cloud-play button is pressed, Xbox asks for a controller
+        // before it will start the session: "Let's get ready - You'll need a
+        // controller to play - Controller not detected - Connect controller |
+        // Connect later". On a phone that has no controller paired, that
+        // dialog is where the launch stops: the app kept pressing Play every
+        // few seconds and nothing ever began. "Connect later" is the way past
+        // it, and the session that follows is where the app's touch-control
+        // bridge adds the on-screen controls.
+        var GATE = ["connect later", "play without controller",
+                    "continue without controller", "play without a controller",
+                    "not now", "skip", "continue anyway", "remind me later"];
         var attempts = 0;
         var maxAttempts = 100;     // ~75 seconds at 750 ms
         // The route can change while the script waits (launch -> products),
@@ -1451,6 +1462,14 @@ enum WebScripts {
         // and a second press can cancel what the first one began.
         var clickedAt = 0;
         var clickCooldown = 4000;
+        // Once the cloud-play button has been pressed the page is busy
+        // starting a session; pressing it again every few seconds did
+        // nothing but spam the log and occasionally cancel the session that
+        // the first press had begun.
+        var playPressedAt = 0;
+        var playCooldown = 30000;
+        var gatePressedAt = 0;
+        var gateCooldown = 6000;
         // The labels that were on the page when nothing matched, so the same
         // set is not reported on every poll.
         var lastMiss = "";
@@ -1464,6 +1483,16 @@ enum WebScripts {
                 if (text.indexOf(PREFIX[i]) === 0) return true;
             }
             return false;
+        }
+
+        function isGate(text) {
+            if (!text) return false;
+            text = text.toLowerCase();
+            if (GATE.indexOf(text) !== -1) return true;
+            // "Connect later" can arrive with a longer sentence around it.
+            return text.indexOf("connect later") !== -1
+                || text.indexOf("without a controller") !== -1
+                || text.indexOf("without controller") !== -1;
         }
 
         var timer = setInterval(function() {
@@ -1487,9 +1516,31 @@ enum WebScripts {
                     }
                 }
 
-                if (Date.now() - clickedAt < clickCooldown) return;
-
                 var nodes = document.querySelectorAll('button, [role="button"]');
+
+                // The controller gate comes first: while it is up, the page
+                // is waiting for an answer and not for another Play press.
+                if (Date.now() - gatePressedAt >= gateCooldown) {
+                    for (var g = 0; g < nodes.length; g++) {
+                        var gateNode = nodes[g];
+                        if (gateNode.disabled) continue;
+                        var gateText = (gateNode.innerText || gateNode.textContent ||
+                                        gateNode.getAttribute("aria-label") || "").trim().toLowerCase();
+                        if (!isGate(gateText)) continue;
+                        gateNode.click();
+                        gatePressedAt = Date.now();
+                        try {
+                            window.webkit.messageHandlers.gamestream.postMessage({
+                                type: "autoStart", label: gateText
+                            });
+                        } catch (e) {}
+                        return;
+                    }
+                }
+
+                if (Date.now() - clickedAt < clickCooldown) return;
+                if (Date.now() - playPressedAt < playCooldown) return;
+
                 for (var j = 0; j < nodes.length; j++) {
                     var node = nodes[j];
                     if (node.disabled) continue;
@@ -1499,6 +1550,7 @@ enum WebScripts {
                     if (!matches(text, onProductPage)) continue;
                     node.click();
                     clickedAt = Date.now();
+                    playPressedAt = Date.now();
                     try {
                         window.webkit.messageHandlers.gamestream.postMessage({
                             type: "autoStart", label: text
