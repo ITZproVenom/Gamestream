@@ -415,6 +415,12 @@ struct XboxWebView: UIViewRepresentable {
                 let platform = body["platform"] as? String ?? ""
                 let userAgent = body["userAgent"] as? String ?? ""
                 let better = body["bx"] as? String ?? ""
+                // The host that will carry the stream, so the connection
+                // check measures the machine the game will run on rather
+                // than the website's CDN.
+                if let region = body["region"] as? String, !region.isEmpty {
+                    NetworkCheck.shared.rememberRegion(baseURI: region)
+                }
                 let buttons = (body["buttons"] as? [String] ?? []).joined(separator: " | ")
                 let dialogs = (body["dialogs"] as? [String] ?? []).joined(separator: " | ")
                 // The page reports itself every two seconds. Only a change is

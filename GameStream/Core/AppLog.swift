@@ -65,6 +65,10 @@ final class AppLog: ObservableObject {
     }
 
     func record(_ level: Level = .info, _ category: String, _ message: String) {
+        // The log can be turned off in Settings. Someone who never wants to
+        // read it should not pay for it: no line is kept, none is written,
+        // and none is handed to the system log.
+        guard AppSettings.shared.loggingEnabled else { return }
         // Scrubbed on the way in rather than on the way out, so a token
         // cannot reach the screen, the file or the system log either.
         let entry = Entry(date: Date(), level: level, category: category,

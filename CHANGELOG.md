@@ -48,6 +48,12 @@
 - Removed the extra genre-filter row from Home to reduce visual clutter; browsing and filtering remain in Library.
 - Added US market/language metadata when the catalog falls back to Microsoft's US feed.
 
+### Diagnostics
+
+- The connection check now measures the machine that will actually carry the stream. It was timing `www.xbox.com/play` - a web page on the website's CDN - and nothing ever told it where the account's cloud region was, so the "connection is poor" verdict was about the wrong host entirely. The page now reports the region it is talking to and the check times that.
+- The check takes five samples instead of three and reports the middle half of them rather than the whole range, so one slow packet no longer reads as a bad connection, and the reading says which host it was taken against.
+- New setting, **Keep a log**: the diagnostic record can be turned off. Nothing is then kept, written or handed to the system log, and the record that was there is cleared.
+
 ### Streaming and recovery
 
 - A stream no longer fills the log with the same lines. The page reports itself every two seconds and the video reading every 700 ms, and both were written out every time - a two-minute session produced several hundred lines and a pile of disk writes. Pages, page signals and video states are now written only when they change, and the detail lines stay on screen instead of going to the file.

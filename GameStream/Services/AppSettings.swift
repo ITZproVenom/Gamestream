@@ -249,6 +249,7 @@ final class AppSettings: ObservableObject {
         static let batteryGuard = "settings.batteryGuard"
         static let adaptiveQuality = "settings.adaptiveQuality"
         static let preflightCheck = "settings.preflightCheck"
+        static let loggingEnabled = "settings.loggingEnabled"
         static let maxBitrate = "settings.maxBitrateMbps"
         static let recordingBitrate = "settings.recordingBitrate"
         static let recordMicrophone = "settings.recordMicrophone"
@@ -317,6 +318,19 @@ final class AppSettings: ObservableObject {
     @Published var adaptiveQuality: Bool { didSet { store(adaptiveQuality, Key.adaptiveQuality) } }
     /// Measure the connection before a game starts.
     @Published var preflightCheck: Bool { didSet { store(preflightCheck, Key.preflightCheck) } }
+
+    /// Keep a record of what the app did.
+    ///
+    /// The log is worth having when something goes wrong, and it is also
+    /// work the phone does: every line is written to a file. Someone who
+    /// never wants to look at it can turn it off, which also clears what has
+    /// been written so far.
+    @Published var loggingEnabled: Bool {
+        didSet {
+            store(loggingEnabled, Key.loggingEnabled)
+            if !loggingEnabled { AppLog.shared.clear() }
+        }
+    }
     /// Ceiling in megabits per second. Zero means no cap, which is Xbox's own
     /// maximum of 15 Mbps — there is nothing above that to ask for.
     @Published var maxBitrateMbps: Int {
@@ -435,6 +449,7 @@ final class AppSettings: ObservableObject {
         batteryGuard = defaults.object(forKey: Key.batteryGuard) as? Bool ?? true
         adaptiveQuality = defaults.object(forKey: Key.adaptiveQuality) as? Bool ?? true
         preflightCheck = defaults.object(forKey: Key.preflightCheck) as? Bool ?? true
+        loggingEnabled = defaults.object(forKey: Key.loggingEnabled) as? Bool ?? true
         maxBitrateMbps = defaults.object(forKey: Key.maxBitrate) as? Int ?? 0
         recordingBitrateMbps = defaults.object(forKey: Key.recordingBitrate) as? Int ?? 12
         recordMicrophone = defaults.object(forKey: Key.recordMicrophone) as? Bool ?? false

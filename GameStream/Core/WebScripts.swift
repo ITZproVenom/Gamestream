@@ -1820,8 +1820,23 @@ enum WebScripts {
                     if (typeof window.BX_EXPOSED !== "undefined") bx = "exported";
                     else if (typeof SettingsDialog !== "undefined") bx = "dialog only";
                 } catch (e) {}
+                // The cloud region is the machine that will carry the stream.
+                // The app times the connection before a game starts, and a
+                // check against the website's CDN says nothing about it.
+                var region = "";
+                try {
+                    for (var i = 0; i < localStorage.length && !region; i++) {
+                        var key = localStorage.key(i);
+                        if (!key) continue;
+                        if (key.indexOf("session") === -1 && key.indexOf("Auth") === -1
+                            && key.indexOf("xbl") === -1 && key.indexOf("cloud") === -1) continue;
+                        var value = localStorage.getItem(key) || "";
+                        var found = /https:\/\/[a-z0-9.\-]*(?:xboxlive|xcloud|cloudgaming)[a-z0-9.\-]*\.[a-z]{2,}(?::\d+)?\/[^\s"']*/i.exec(value);
+                        if (found) region = found[0];
+                    }
+                } catch (e) {}
                 var signature = href + "|" + labels.join("|") + "|" + dialog.join("|")
-                    + "|" + standalone + displayMode + serviceWorker + bx;
+                    + "|" + standalone + displayMode + serviceWorker + bx + region;
                 if (signature === lastSignature) return;
                 lastSignature = signature;
                 window.webkit.messageHandlers.gamestream.postMessage({
@@ -1834,6 +1849,7 @@ enum WebScripts {
                     platform: platform,
                     userAgent: ua,
                     bx: bx,
+                    region: region,
                     buttons: labels,
                     dialogs: dialog
                 });

@@ -42,7 +42,11 @@ final class NetworkCheck: ObservableObject {
     @Published private(set) var latest: Reading?
     @Published private(set) var isChecking = false
 
-    private static let fallbackProbe = URL(string: "https://www.xbox.com/play")!
+    /// A small, cheap document on the play origin. The old probe was the
+    /// website's own /play page, so the reading was the time to fetch a web
+    /// page from a CDN - which says nothing about the machine that will
+    /// carry the stream.
+    private static let fallbackProbe = URL(string: "https://play.xbox.com/robots.txt")!
     /// The account's own cloud region, once anything has signed in to the
     /// cloud service. This is the host that serves the stream, so it is the
     /// one worth timing.
@@ -60,7 +64,12 @@ final class NetworkCheck: ObservableObject {
     /// the website's CDN.
     func rememberRegion(baseURI: String) {
         guard let url = URL(string: baseURI), url.host != nil else { return }
-        regionProbe = url.appendingPathComponent("v2/login/user")
+        // The base URI is the service root; a path under it answers quickly
+        // and is enough to time the route to the machine that runs the game.
+        regionProbe = url
+        if latest?.host != url.host {
+            AppLog.shared.info("network", "the stream will be served by \(url.host ?? baseURI)")
+        }
     }
 
     /// Three HEAD requests, reported as the median and the spread.
@@ -87,10 +96,13 @@ final class NetworkCheck: ObservableObject {
         request.timeoutInterval = 5
         request.cachePolicy = .reloadIgnoringLocalCacheData
 
-        // Four attempts, first discarded: the opening request pays for DNS
+        // Five attempts, first discarded: the opening request pays for DNS
         // and the TLS handshake, which is setup cost rather than latency and
-        // makes a good connection read as a mediocre one.
-        for attempt in 0..<4 {
+        // makes a good connection read as a mediocre one. Three samples were
+        // not enough - one hiccup moved the median, and the spread came out
+        // wider than the median itself, which is how a working connection
+        // was reported as poor.
+        for attempt in 0..<5 {
             let start = Date()
             do {
                 _ = try await URLSession.shared.data(for: request)
@@ -108,8 +120,12 @@ final class NetworkCheck: ObservableObject {
                               measuredAt: Date(), host: host)
         } else {
             let sorted = samples.sorted()
+            // The middle half of the samples, not the whole range: one slow
+            // packet is a hiccup, not the shape of the connection.
+            let lower = sorted[(sorted.count - 1) / 4]
+            let upper = sorted[(sorted.count * 3) / 4]
             reading = Reading(latencyMs: sorted[sorted.count / 2],
-                              spreadMs: (sorted.last ?? 0) - (sorted.first ?? 0),
+                              spreadMs: max(0, upper - lower),
                               reachable: true,
                               measuredAt: Date(), host: host)
         }

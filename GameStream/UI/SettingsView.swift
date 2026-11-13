@@ -749,7 +749,7 @@ struct SettingsView: View {
             Toggle("Check the connection before starting", isOn: $settings.preflightCheck)
             if let reading = network.latest {
                 Text(reading.reachable
-                     ? "Last check: \(reading.latencyMs) ms, ±\(reading.spreadMs) ms. \(reading.verdict)"
+                     ? "Last check: \(reading.latencyMs) ms, ±\(reading.spreadMs) ms against \(reading.host). \(reading.verdict)"
                      : reading.verdict)
                     .font(.caption)
                     .foregroundStyle(reading.isPoor ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
@@ -765,6 +765,17 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
             .disabled(network.isChecking)
+
+            SettingsDivider()
+
+            VStack(alignment: .leading, spacing: 5) {
+                Toggle("Keep a log", isOn: $settings.loggingEnabled)
+                Text("Records what the app did, so a problem can be read back afterwards. "
+                     + "Turn it off and nothing is kept or written; the record that "
+                     + "was there is cleared as well.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             SettingsDivider()
 
