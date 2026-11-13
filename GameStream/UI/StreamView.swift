@@ -5,6 +5,7 @@ struct StreamView: View {
     @EnvironmentObject private var stream: StreamCoordinator
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var rumble: ControllerRumble
+    @EnvironmentObject private var settings: AppSettings
 
     @State private var showingControls = true
     @StateObject private var guardian = SessionGuard.shared
@@ -17,22 +18,28 @@ struct StreamView: View {
     @Namespace private var glass
 
     var body: some View {
+        // While the session is starting the page can be shown as it is, with
+        // the app's own loading screen out of the way. Xbox puts dialogs up
+        // during a launch - the controller gate, for one - and a loading
+        // screen on top of them hides the only thing that can be answered.
+        let showSite = settings.showSiteWhileConnecting && stream.phase != .playing
+
         ZStack {
             Color.black.ignoresSafeArea()
 
             XboxWebView(role: .stream, url: stream.launchURL,
                         reloadToken: stream.reloadToken)
                 .ignoresSafeArea()
-                .opacity(stream.phase == .playing ? 1 : 0.001)
+                .opacity(stream.phase == .playing || showSite ? 1 : 0.001)
                 // Invisible is not the same as inert. While connecting, the
                 // page is still there at one thousandth opacity and was
                 // still taking touches, so a stray tap pressed something
                 // nobody could see.
-                .allowsHitTesting(stream.phase == .playing)
+                .allowsHitTesting(stream.phase == .playing || showSite)
 
             switch stream.phase {
             case .connecting(let detail):
-                connecting(detail)
+                if !showSite { connecting(detail) }
             case .failed(let message):
                 failure(message)
             case .playing, .idle:
