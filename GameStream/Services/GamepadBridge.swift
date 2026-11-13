@@ -90,30 +90,29 @@ final class GamepadBridge {
     private func snapshot() -> (axes: [Double], buttons: [Bool]) {
         var buttons = [Bool](repeating: false, count: 17)
         var axes = [Double](repeating: 0, count: 4)
-        guard let profile = (GCController.current ?? GCController.controllers().first)?.extendedProfile else {
-            return (axes, buttons)
-        }
-        buttons[0] = profile.buttonA.pressed
-        buttons[1] = profile.buttonB.pressed
-        buttons[2] = profile.buttonX.pressed
-        buttons[3] = profile.buttonY.pressed
-        buttons[4] = profile.leftShoulder.pressed
-        buttons[5] = profile.rightShoulder.pressed
-        buttons[6] = profile.leftTrigger.value > 0.1
-        buttons[7] = profile.rightTrigger.value > 0.1
-        buttons[8] = profile.buttonMenu.pressed
-        buttons[9] = profile.buttonOptions.pressed
-        buttons[10] = profile.leftThumbstickButton.pressed
-        buttons[11] = profile.rightThumbstickButton.pressed
-        buttons[12] = profile.dpad.up.pressed
-        buttons[13] = profile.dpad.down.pressed
-        buttons[14] = profile.dpad.left.pressed
-        buttons[15] = profile.dpad.right.pressed
-        buttons[16] = profile.buttonHome.pressed
-        axes[0] = Double(profile.leftThumbstick.xAxis.value)
-        axes[1] = Double(profile.leftThumbstick.yAxis.value)
-        axes[2] = Double(profile.rightThumbstick.xAxis.value)
-        axes[3] = Double(profile.rightThumbstick.yAxis.value)
+        let controller = GCController.current ?? GCController.controllers().first
+        guard let pad = controller?.extendedGamepad else { return (axes, buttons) }
+        buttons[0] = pad.buttonA.pressed
+        buttons[1] = pad.buttonB.pressed
+        buttons[2] = pad.buttonX.pressed
+        buttons[3] = pad.buttonY.pressed
+        buttons[4] = pad.leftShoulder.pressed
+        buttons[5] = pad.rightShoulder.pressed
+        buttons[6] = pad.leftTrigger.value > 0.1
+        buttons[7] = pad.rightTrigger.value > 0.1
+        buttons[8] = pad.buttonMenu?.pressed ?? false
+        buttons[9] = pad.buttonOptions?.pressed ?? false
+        buttons[10] = pad.leftThumbstickButton.pressed
+        buttons[11] = pad.rightThumbstickButton.pressed
+        buttons[12] = pad.dpad.up.pressed
+        buttons[13] = pad.dpad.down.pressed
+        buttons[14] = pad.dpad.left.pressed
+        buttons[15] = pad.dpad.right.pressed
+        buttons[16] = pad.buttonHome?.pressed ?? false
+        axes[0] = Double(pad.leftThumbstick.xAxis.value)
+        axes[1] = Double(pad.leftThumbstick.yAxis.value)
+        axes[2] = Double(pad.rightThumbstick.xAxis.value)
+        axes[3] = Double(pad.rightThumbstick.yAxis.value)
         return (axes, buttons)
     }
 
