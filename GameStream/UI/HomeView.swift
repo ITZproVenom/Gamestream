@@ -40,7 +40,7 @@ struct HomeView: View {
                     }
 
                     if !library.queue.isEmpty {
-                        section("Up next", subtitle: "\(library.queue.count) queued") {
+                        section("Up next", subtitle: queueSummary) {
                             GameShelf(games: library.queue)
                         }
                     }
@@ -94,6 +94,17 @@ struct HomeView: View {
     }
 
     // MARK: - Hero
+
+    /// How long the queue is likely to take, from how long this player
+    /// usually plays.
+    private var queueSummary: String {
+        let count = library.queue.count
+        guard count > 0 else { return "" }
+        let noun = count == 1 ? "game" : "games"
+        let estimate = library.queueEstimatedLength
+        guard estimate > 0 else { return "\(count) \(noun) queued" }
+        return "\(count) \(noun) queued · about \(Format.duration(estimate)) left"
+    }
 
     private var heroCarousel: some View {
         ScrollView(.horizontal) {

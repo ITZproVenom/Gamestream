@@ -41,6 +41,10 @@
 
 ### Library, search, and home
 
+- The Library opens on something. It used to open on Favourites, which is empty for almost everyone, so the first thing on the screen was a notice saying there was nothing in it. It now opens on the first shelf that has something in it, and the things the player actually has - what they were playing, what is queued, what they marked - are shown above the shelves.
+- **How long the queue is likely to take** is now shown on Home and in the Library ("3 games queued · about 42m left"), worked out from how long this player actually plays: the average of their own sessions with that game, or their average session overall, or Microsoft's own 30-minute cloud session when there is no history yet.
+- The Library no longer stutters under the thumb. Every tile asked "is this a favourite?" and "how long has this been played?" by walking a list, and the playtime question walked the entire activity log - which the "most played" sort then asked thousands of times for a single frame. Those answers now come from lookup tables, and the filtered and sorted list is worked out when something changes rather than on every redraw.
+
 - Added an **All games** Library shelf using a lazy grid, so the full catalog is available without increasing Home's 24-game shelf cap (kept for performance).
 - Added Fortnite as a curated cloud-game fallback when Microsoft's Game Pass catalog feed omits it; deduplicated by product ID.
 - Recent searches remain available locally for convenience; typed game searches always use Xbox's live results.

@@ -16,6 +16,21 @@ final class LibraryStore: ObservableObject {
     @Published private(set) var lists: [GameList] = []
     @Published private(set) var activity: [PlayRecord] = []
 
+    /// Lookup tables, so a tile asking "is this a favourite?" or "how long
+    /// has this been played?" does not walk a list.
+    ///
+    /// The library grid asks those questions for every visible tile on every
+    /// redraw, and the answers used to come from a scan: favourites were
+    /// compared one by one, and the playtime of a game was summed by
+    /// comparing every session in the activity log - which is then sorted
+    /// with, so the whole log was walked thousands of times for one frame.
+    private var favoriteIndex: Set<String> = []
+    private var queuedIndex: Set<String> = []
+    private var playtimeIndex: [String: TimeInterval] = [:]
+    /// The sessions behind each game, for an estimate of how long a queued
+    /// game is likely to take.
+    private var sessionsByGame: [String: [TimeInterval]] = [:]
+
     private enum Key {
         static let favorites = "library.favorites.v1"
         static let recents = "library.recents.v1"
@@ -36,6 +51,24 @@ final class LibraryStore: ObservableObject {
         lists = Self.load([GameList].self, Key.lists) ?? []
         activity = Self.load([PlayRecord].self, Key.activity) ?? []
         known = Self.load([String: Game].self, Key.known) ?? [:]
+        rebuildIndexes()
+    }
+
+    /// Rebuilds the lookup tables. Cheap enough to do whenever one of the
+    /// lists changes, and it turns every per-tile question into a dictionary
+    /// lookup.
+    private func rebuildIndexes() {
+        favoriteIndex = Set(favorites.map { $0.id.lowercased() })
+        queuedIndex = Set(queue.map { $0.id.lowercased() })
+        var totals: [String: TimeInterval] = [:]
+        var sessions: [String: [TimeInterval]] = [:]
+        for record in activity {
+            let key = record.gameID.lowercased()
+            totals[key, default: 0] += record.seconds
+            sessions[key, default: []].append(record.seconds)
+        }
+        playtimeIndex = totals
+        sessionsByGame = sessions
     }
 
     /// Every game the library has ever held, kept so a list can still show a
@@ -68,7 +101,7 @@ final class LibraryStore: ObservableObject {
     // MARK: - Favourites
 
     func isFavorite(_ game: Game) -> Bool {
-        favorites.contains { $0.matches(id: game.id) }
+        favoriteIndex.contains(game.id.lowercased())
     }
 
     func toggleFavorite(_ game: Game) {
@@ -79,11 +112,13 @@ final class LibraryStore: ObservableObject {
         }
         remember(game)
         save(favorites, Key.favorites)
+        rebuildIndexes()
     }
 
     func clearFavorites() {
         favorites.removeAll()
         save(favorites, Key.favorites)
+        rebuildIndexes()
     }
 
     // MARK: - Recents
@@ -106,7 +141,7 @@ final class LibraryStore: ObservableObject {
     // MARK: - Up next
 
     func isQueued(_ game: Game) -> Bool {
-        queue.contains { $0.matches(id: game.id) }
+        queuedIndex.contains(game.id.lowercased())
     }
 
     func toggleQueue(_ game: Game) {
@@ -117,11 +152,13 @@ final class LibraryStore: ObservableObject {
         }
         remember(game)
         save(queue, Key.queue)
+        rebuildIndexes()
     }
 
     func removeFromQueue(_ game: Game) {
         queue.removeAll { $0.matches(id: game.id) }
         save(queue, Key.queue)
+        rebuildIndexes()
     }
 
     @discardableResult
@@ -198,6 +235,7 @@ final class LibraryStore: ObservableObject {
             activity.removeLast(activity.count - Self.activityLimit)
         }
         save(activity, Key.activity)
+        rebuildIndexes()
     }
 
     /// Removes a single session. Clearing everything was the only way to
@@ -205,11 +243,13 @@ final class LibraryStore: ObservableObject {
     func deleteActivity(_ record: PlayRecord) {
         activity.removeAll { $0.id == record.id }
         save(activity, Key.activity)
+        rebuildIndexes()
     }
 
     func clearActivity() {
         activity.removeAll()
         save(activity, Key.activity)
+        rebuildIndexes()
     }
 
     var totalPlaytime: TimeInterval {
@@ -217,8 +257,31 @@ final class LibraryStore: ObservableObject {
     }
 
     func playtime(forGameID id: String) -> TimeInterval {
-        activity.filter { $0.gameID.caseInsensitiveCompare(id) == .orderedSame }
-            .reduce(0) { $0 + $1.seconds }
+        playtimeIndex[id.lowercased()] ?? 0
+    }
+
+    /// How long a session usually lasts for this player.
+    ///
+    /// With no history there is nothing to go on, so Microsoft's own cloud
+    /// session length is used: a queue of games would otherwise be reported
+    /// as taking no time at all.
+    var averageSessionLength: TimeInterval {
+        guard !activity.isEmpty else { return 30 * 60 }
+        let total = activity.reduce(0) { $0 + $1.seconds }
+        return total / Double(activity.count)
+    }
+
+    /// How long one game is likely to take, from this player's own sessions
+    /// with it, and otherwise from how long they usually play.
+    func estimatedSessionLength(for game: Game) -> TimeInterval {
+        let sessions = sessionsByGame[game.id.lowercased()] ?? []
+        guard !sessions.isEmpty else { return averageSessionLength }
+        return sessions.reduce(0, +) / Double(sessions.count)
+    }
+
+    /// How long the queued games are likely to take in total.
+    var queueEstimatedLength: TimeInterval {
+        queue.reduce(0) { $0 + estimatedSessionLength(for: $1) }
     }
 
     // MARK: - Storage

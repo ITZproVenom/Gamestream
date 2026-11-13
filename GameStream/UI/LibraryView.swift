@@ -50,6 +50,10 @@ struct LibraryView: View {
     @State private var genre: String?
     @State private var newListName = ""
     @State private var showingNewList = false
+    /// The filtered and sorted games, worked out when something changes
+    /// rather than on every redraw.
+    @State private var visibleGames: [Game] = []
+    @State private var genres: [String] = []
 
     private let columns = [GridItem(.adaptive(minimum: 116, maximum: 190), spacing: 16)]
 
@@ -57,12 +61,14 @@ struct LibraryView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    dashboard
+
                     shelfPicker
 
                     if shelf == .lists {
                         ListsSection(showingNewList: $showingNewList)
                     } else {
-                        if !availableGenres.isEmpty {
+                        if !genres.isEmpty {
                             genreFilter
                         }
                         gamesGrid
@@ -80,9 +86,20 @@ struct LibraryView: View {
             // Unfavouriting the last racing game used to leave "Racing"
             // selected and invisible, so the shelf looked empty and said
             // there were no favourites at all.
-            .onChange(of: availableGenres) { _, names in
+            .onChange(of: genres) { _, names in
                 if let genre, !names.contains(genre) { self.genre = nil }
             }
+            // The library opened on Favourites, which is empty for almost
+            // everyone: the first thing on the screen was an empty state
+            // with nothing else on it. It now opens on the first shelf that
+            // has something in it.
+            .task {
+                if library.favorites.isEmpty {
+                    shelf = library.recents.isEmpty ? .allGames : .recents
+                }
+                await refresh()
+            }
+            .task(id: refreshKey) { await refresh() }
             .navigationTitle("Library")
             .toolbar {
                 if shelf == .lists {
@@ -229,6 +246,62 @@ struct LibraryView: View {
         }
     }
 
+    // MARK: - Dashboard
+
+    /// The Library opened on an empty shelf, which is why it looked empty:
+    /// Favourites is empty for almost everyone, so the first thing on the
+    /// screen was a notice saying there was nothing in it. The things the
+    /// player actually has - what they were playing, what is queued, what
+    /// they marked - are now on the screen before the shelves.
+    @ViewBuilder
+    private var dashboard: some View {
+        if !library.recents.isEmpty, shelf != .recents {
+            VStack(alignment: .leading, spacing: 10) {
+                header("Jump back in", detail: "Where you left off")
+                GameShelf(games: Array(library.recents.prefix(12))) { game in
+                    let played = library.playtime(forGameID: game.id)
+                    return played > 0 ? Format.duration(played) : nil
+                }
+            }
+        }
+
+        if !library.queue.isEmpty, shelf != .queue {
+            VStack(alignment: .leading, spacing: 10) {
+                header("Up next", detail: queueDetail)
+                GameShelf(games: library.queue)
+            }
+        }
+
+        if !library.favorites.isEmpty, shelf != .favorites {
+            VStack(alignment: .leading, spacing: 10) {
+                header("Favorites", detail: "\(library.favorites.count) saved")
+                GameShelf(games: Array(library.favorites.prefix(12)))
+            }
+        }
+    }
+
+    private func header(_ title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.title3.weight(.bold))
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, Theme.pageInset)
+    }
+
+    /// How long the queue is likely to take, from how long this player
+    /// usually plays.
+    private var queueDetail: String {
+        guard !library.queue.isEmpty else { return "" }
+        let count = library.queue.count
+        let estimate = library.queueEstimatedLength
+        let noun = count == 1 ? "game" : "games"
+        guard estimate > 0 else { return "\(count) \(noun)" }
+        return "\(count) \(noun) · about \(Format.duration(estimate)) left"
+    }
+
     // MARK: - Data
 
     private var source: [Game] {
@@ -241,24 +314,49 @@ struct LibraryView: View {
         }
     }
 
-    private var availableGenres: [String] {
-        Array(Set(source.map(\.genre))).sorted()
+    /// Everything the filtered list depends on, as one value.
+    ///
+    /// The grid used to filter and sort the whole catalogue on every
+    /// redraw - and the sort asked the library for the playtime of two
+    /// games at a time, which walked the entire activity log. On a
+    /// catalogue of five hundred games that was thousands of string
+    /// comparisons a frame, and the grid stuttered under the thumb.
+    private var refreshKey: String {
+        "\(shelf.rawValue)|\(sort.rawValue)|\(genre ?? "")|"
+            + "\(library.favorites.count)|\(library.recents.count)|\(library.queue.count)|"
+            + "\(catalog.games.count)|\(library.activity.count)"
     }
 
-    private var games: [Game] {
-        var result = source
+    private func refresh() async {
+        let all = source
+        let names = Array(Set(all.map(\.genre))).sorted()
+        var result = all
         if let genre {
             result = result.filter { $0.genre == genre }
         }
         switch sort {
         case .custom:
-            return result
+            break
         case .title:
-            return result.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+            result = result.sorted {
+                $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+            }
         case .playtime:
-            return result.sorted { library.playtime(forGameID: $0.id) > library.playtime(forGameID: $1.id) }
+            // One lookup per game, rather than one per comparison.
+            var played: [String: TimeInterval] = [:]
+            for game in result {
+                played[game.id.lowercased()] = library.playtime(forGameID: game.id)
+            }
+            result = result.sorted {
+                (played[$0.id.lowercased()] ?? 0) > (played[$1.id.lowercased()] ?? 0)
+            }
         }
+        genres = names
+        visibleGames = result
     }
+
+    private var games: [Game] { visibleGames }
+    private var availableGenres: [String] { genres }
 }
 
 /// The Lists shelf: user-made collections.
