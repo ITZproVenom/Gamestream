@@ -1402,24 +1402,53 @@ enum WebScripts {
         if (window.__gsAutoStart) return;
         window.__gsAutoStart = true;
 
-        var LABELS = ["play", "play now", "play with ads", "resume", "continue playing"];
+        // Xbox does not label its cloud-play button "Play". On the product
+        // page it renders "Play with cloud (with ads)" (and "Play with
+        // cloud" when there are no ads), and on the player route the button
+        // is plain "Play". Matching a fixed list of exact strings meant the
+        // product page's button was never pressed at all, so the launch sat
+        // on the product page until the watchdog gave up.
+        var EXACT = ["play", "play now", "play with ads", "resume",
+                     "continue playing"];
+        // Only on a product page does a bare "Play" risk being the store's
+        // own purchase call to action, so there the cloud wording is
+        // required.
+        var PREFIX = ["play with cloud", "start streaming", "play for free"];
         var attempts = 0;
-        var maxAttempts = 40;      // ~30 seconds at 750 ms
+        var maxAttempts = 100;     // ~75 seconds at 750 ms
+        // The route can change while the script waits (launch -> products),
+        // and the budget used to be spent on the first route even when the
+        // button only appeared on the second one.
+        var lastHref = "";
         // A click is given time to have an effect. Without this the same
         // Play button was pressed again every 750 ms until the video started,
         // and a second press can cancel what the first one began.
         var clickedAt = 0;
         var clickCooldown = 4000;
 
+        function matches(text, onProductPage) {
+            if (!text) return false;
+            if (EXACT.indexOf(text) !== -1) {
+                if (!onProductPage || text !== "play") return true;
+            }
+            for (var i = 0; i < PREFIX.length; i++) {
+                if (text.indexOf(PREFIX[i]) === 0) return true;
+            }
+            return false;
+        }
+
         var timer = setInterval(function() {
             try {
-                attempts++;
-                if (attempts > maxAttempts) { clearInterval(timer); return; }
-
                 var href = (location.href || "").toLowerCase();
+                var onProductPage = href.indexOf("/products/") !== -1
+                    || href.indexOf("/play/games") !== -1;
                 if (href.indexOf("/play/launch") === -1
                     && href.indexOf("/stream/") === -1
-                    && href.indexOf("/products/") === -1) return;
+                    && !onProductPage) return;
+
+                if (href !== lastHref) { lastHref = href; attempts = 0; }
+                attempts++;
+                if (attempts > maxAttempts) { clearInterval(timer); return; }
 
                 var videos = document.querySelectorAll("video");
                 for (var i = 0; i < videos.length; i++) {
@@ -1438,7 +1467,7 @@ enum WebScripts {
                     var text = (node.innerText || node.textContent ||
                                 node.getAttribute("aria-label") || "").trim().toLowerCase();
                     if (!text) continue;
-                    if (LABELS.indexOf(text) === -1) continue;
+                    if (!matches(text, onProductPage)) continue;
                     node.click();
                     clickedAt = Date.now();
                     try {
