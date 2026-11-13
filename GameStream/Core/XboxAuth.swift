@@ -54,10 +54,10 @@ final class XboxAuth: NSObject, ObservableObject {
     /// `text/plain` document is not guaranteed to expose storage, so the full
     /// page is kept as a fallback rather than assumed unnecessary.
     private static let probeCandidates: [URL] = [
-        URL(string: "https://www.xbox.com/robots.txt")!,
-        URL(string: "https://www.xbox.com/play")!
+        URL(string: "https://play.xbox.com/robots.txt")!,
+        URL(string: "https://play.xbox.com/play")!
     ]
-    static let playURL = URL(string: "https://www.xbox.com/play")!
+    static let playURL = URL(string: "https://play.xbox.com/play")!
 
     /// Matches mobile Safari, because Xbox's edge rejects the stock WebView
     /// user agent and serves an access-denied page instead of the site.
