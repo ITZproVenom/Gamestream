@@ -203,6 +203,13 @@ final class Catalog: ObservableObject {
             }
             log.info("catalog", "loaded \(merged.count) games")
         } catch is CancellationError {
+            // A refresh that was replaced by a newer one. Not a failure.
+        } catch let error as URLError where error.code == .cancelled {
+            // The same thing, reported by the network stack: the app asks
+            // for the catalogue again as soon as it comes to the front, so
+            // this happens on every launch and was being logged as a
+            // warning about a failure that never happened.
+            log.debug("catalog", "the refresh was replaced by a newer one")
         } catch {
             // Keep whatever is already on screen; an error banner beats
             // replacing a usable catalog with nothing.

@@ -220,7 +220,10 @@ enum WebScripts {
 
         window.addEventListener("popstate", function() { setTimeout(report, 60); });
         window.addEventListener("hashchange", function() { setTimeout(report, 60); });
-        setInterval(report, 2000);
+        // Every report walks the page for its buttons and its dialogs, which
+        // costs a layout read. Four times a second is enough to notice a
+        // dialog that needs answering, and a quarter of the work.
+        setInterval(report, 4000);
     })();
     """#
 
@@ -306,7 +309,17 @@ enum WebScripts {
         var lastVideoSignature = "";
 
         scan();
-        setInterval(scan, 700);
+        // The scan exists to catch a stream that began before this script
+        // was injected. Once a video with a remote track is playing there is
+        // nothing left to find, and the scan stops rather than walking the
+        // page every seven hundred milliseconds for the rest of the session.
+        var videoTimer = setInterval(function() {
+            scan();
+            if (announced) {
+                clearInterval(videoTimer);
+                videoTimer = null;
+            }
+        }, 700);
 
         // Surface the site's own error dialogs instead of leaving a black screen.
         // Error screens can remain mounted during a reconnect; emit only once
