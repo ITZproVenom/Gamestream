@@ -6,17 +6,6 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
-    <!-- Prismal's shaders are compiled once at start-up. -->
-    <provider
-        android:name="androidx.startup.InitializationProvider"
-        android:authorities="${applicationId}.androidx-startup"
-        android:exported="false"
-        tools:node="merge">
-        <meta-data
-            android:name="com.styropyr0.prismal.internal.PrismalAgslInitializer"
-            android:value="androidx.startup" />
-    </provider>
-
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -25,6 +14,18 @@
         android:theme="@style/Theme.GameStream"
         android:usesCleartextTraffic="false"
         android:hardwareAccelerated="true">
+
+        <!-- Prismal compiles its shaders once at start-up. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="com.styropyr0.prismal.internal.PrismalAgslInitializer"
+                android:value="androidx.startup" />
+        </provider>
+
 
         <activity
             android:name=".MainActivity"
