@@ -99,6 +99,10 @@ struct StreamView: View {
                             .frame(width: 46, height: 5)
                             .padding(.horizontal, 26)
                             .padding(.vertical, 12)
+                            // The handle is only five points tall; the
+                            // touch area around it is what a thumb has to
+                            // find, so it is given the full height.
+                            .frame(minHeight: 44)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -174,35 +178,50 @@ struct StreamView: View {
         ZStack {
             LaunchBackdrop(game: stream.game)
 
-            VStack(spacing: 24) {
-                LaunchEmblem(game: stream.game)
+            GeometryReader { geometry in
+                // A phone held sideways has about 390 points of height. The
+                // emblem, the title, the steps and the timer together are
+                // more than that, and the Cancel button - the only way out
+                // of a launch that never starts - was pushed off the
+                // bottom. The emblem shrinks to what is left, and the rest
+                // scrolls if it still does not fit.
+                let scale = min(1, max(0.52, geometry.size.height / 540))
 
-                VStack(spacing: 6) {
-                    Text(detail)
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(.white)
-                        .multilineTextAlignment(.center)
-                    Text(stageMessage)
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.72))
-                        .multilineTextAlignment(.center)
-                        .animation(.smooth(duration: 0.3), value: stageMessage)
+                ScrollView {
+                    VStack(spacing: max(12, 24 * scale)) {
+                        LaunchEmblem(game: stream.game, scale: scale)
+
+                        VStack(spacing: 6) {
+                            Text(detail)
+                                .font(.title3.weight(.bold))
+                                .foregroundStyle(.white)
+                                .multilineTextAlignment(.center)
+                            Text(stageMessage)
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.72))
+                                .multilineTextAlignment(.center)
+                                .animation(.smooth(duration: 0.3), value: stageMessage)
+                        }
+
+                        LaunchSteps(stage: stream.connectStage,
+                                    title: stream.game?.title ?? "the game")
+
+                        HStack(spacing: 14) {
+                            Text(Format.clock(elapsed))
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.white.opacity(0.6))
+                            Button("Cancel") { stream.exit() }
+                                .buttonStyle(.glass)
+                                .buttonBorderShape(.capsule)
+                                .tint(.white)
+                        }
+                    }
+                    .padding(max(16, 34 * scale))
+                    .frame(maxWidth: 520)
+                    .frame(maxWidth: .infinity, minHeight: geometry.size.height, alignment: .center)
                 }
-
-                LaunchSteps(stage: stream.connectStage,
-                            title: stream.game?.title ?? "the game")
-
-                HStack(spacing: 14) {
-                    Text(Format.clock(elapsed))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.6))
-                    Button("Cancel") { stream.exit() }
-                        .buttonStyle(.glass)
-                        .buttonBorderShape(.capsule)
-                        .tint(.white)
-                }
+                .scrollIndicators(.visible)
             }
-            .padding(34)
         }
     }
 
@@ -221,6 +240,7 @@ struct StreamView: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 38))
                         .foregroundStyle(.orange)
+                        .accessibilityHidden(true)
                     Text("The stream stopped")
                         .font(.title3.weight(.bold))
                         .foregroundStyle(.white)
@@ -418,6 +438,10 @@ struct StreamView: View {
             Label(title, systemImage: icon)
                 .font(.footnote.weight(.semibold))
                 .padding(.horizontal, 4)
+                // A control that is pressed one-handed, while a game is
+                // running, should not be smaller than Apple's minimum.
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.glass)
         .buttonBorderShape(.capsule)
@@ -430,7 +454,11 @@ struct StreamView: View {
         Button { action(); scheduleHide() } label: {
             Image(systemName: icon)
                 .font(.footnote.weight(.semibold))
-                .frame(width: 20, height: 20)
+                // The glyph is small, but the target is not: a twenty point
+                // button is well under Apple's forty-four point minimum,
+                // and these are pressed one-handed while a game is running.
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.glass)
         .buttonBorderShape(.circle)
@@ -640,6 +668,9 @@ struct LaunchBackdrop: View {
 /// energy ring with a pulsing glow behind it.
 struct LaunchEmblem: View {
     let game: Game?
+    /// Shrinks the emblem when there is not the height for it, which is what
+    /// a phone held sideways gives.
+    var scale: CGFloat = 1
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var settings: AppSettings
 
@@ -648,15 +679,16 @@ struct LaunchEmblem: View {
             if reduceMotion {
                 Circle()
                     .fill(settings.accent.color.opacity(0.32))
-                    .blur(radius: 46)
-                    .frame(width: 190, height: 190)
+                    .blur(radius: 46 * scale)
+                    .frame(width: 190 * scale, height: 190 * scale)
             } else {
                 TimelineView(.animation(minimumInterval: 1 / 30)) { context in
                     let s = 1 + 0.07 * sin(context.date.timeIntervalSince1970 * 2.2)
                     Circle()
                         .fill(settings.accent.color.opacity(0.32))
-                        .blur(radius: 46)
-                        .frame(width: 190 * CGFloat(s), height: 190 * CGFloat(s))
+                        .blur(radius: 46 * scale)
+                        .frame(width: 190 * scale * CGFloat(s),
+                               height: 190 * scale * CGFloat(s))
                 }
             }
 
@@ -664,7 +696,7 @@ struct LaunchEmblem: View {
                 if reduceMotion {
                     Circle()
                         .stroke(settings.accent.color.opacity(0.85), lineWidth: 3)
-                        .frame(width: 178, height: 178)
+                        .frame(width: 178 * scale, height: 178 * scale)
                 } else {
                     TimelineView(.animation(minimumInterval: 1 / 60)) { context in
                         let angle = context.date.timeIntervalSince1970 * 100
@@ -678,18 +710,20 @@ struct LaunchEmblem: View {
                                     startAngle: .degrees(angle),
                                     endAngle: .degrees(angle + 300)),
                                 style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                            .frame(width: 178, height: 178)
+                            .frame(width: 178 * scale, height: 178 * scale)
                     }
                 }
 
                 GameArtwork(url: game?.posterURL ?? game?.heroURL, cornerRadius: 22)
-                    .frame(width: 118, height: 158)
+                    .frame(width: 118 * scale, height: 158 * scale)
                     .overlay(
                         RoundedRectangle(cornerRadius: 22, style: .continuous)
                             .stroke(.white.opacity(0.25), lineWidth: 1))
                     .shadow(color: settings.accent.color.opacity(0.5), radius: 24, y: 8)
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(game?.title ?? "the game")
     }
 }
 
