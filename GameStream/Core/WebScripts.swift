@@ -487,12 +487,25 @@ enum WebScripts {
             // overlay outlives the dialog the game is left permanently
             // frosted, which only a reconnect used to clear. The blur is
             // removed outright so a stale overlay is at worst invisible.
-            ".bx-dialog-overlay { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgba(0,0,0,0.4) !important; }"
+            // The overlay is what the menu is shown in. It has to cover the
+            // screen and centre what is inside it: the menu itself came up
+            // 844 by 2266 pixels, starting 390 pixels down the page, which
+            // on a phone is entirely below the fold - the menu was open and
+            // invisible.
+            ".bx-dialog-overlay { position: fixed !important; inset: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; z-index: 2147483000 !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgba(0,0,0,0.4) !important; }",
+            // And the menu inside it has to fit the screen and scroll.
+            ".bx-navigation-dialog, .bx-settings-dialog, .bx-centered-dialog, .bx-key-binding-dialog { max-height: 86vh !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; touch-action: pan-y !important; position: relative !important; }"
         ].join("\n");
 
         function onLaunchPage() {
             var href = (location.href || "").toLowerCase();
-            return href.indexOf("/play/launch") !== -1;
+            // The player lives at /stream/<id>/<slug>. Only the launch URL
+            // was recognised, so on the page where the game actually runs -
+            // and where the enhancement menu opens - none of the styling
+            // that makes the menu usable was applied: it came up with no
+            // z-index, taller than the screen, and below the fold.
+            return href.indexOf("/play/launch") !== -1
+                || href.indexOf("/stream/") !== -1;
         }
 
         function apply() {
@@ -1831,23 +1844,17 @@ enum WebScripts {
                     if (typeof window.BX_EXPOSED !== "undefined") bx = "exported";
                     else if (typeof SettingsDialog !== "undefined") bx = "dialog only";
                 } catch (e) {}
-                // The cloud region is the machine that will carry the stream.
-                // The app times the connection before a game starts, and a
-                // check against the website's CDN says nothing about it.
+                // The cloud region is deliberately NOT looked for here.
+                // The page's storage holds no streaming host: the only
+                // xboxlive.com addresses in it are the artwork CDN and the
+                // account-enrolment service, and timing either of them says
+                // nothing about the stream. The media itself comes over a
+                // relay that cannot be timed with an HTTP request at all.
+                // What can be timed is the origin the session is negotiated
+                // over, which is play.xbox.com.
                 var region = "";
-                try {
-                    for (var i = 0; i < localStorage.length && !region; i++) {
-                        var key = localStorage.key(i);
-                        if (!key) continue;
-                        if (key.indexOf("session") === -1 && key.indexOf("Auth") === -1
-                            && key.indexOf("xbl") === -1 && key.indexOf("cloud") === -1) continue;
-                        var value = localStorage.getItem(key) || "";
-                        var found = /https:\/\/[a-z0-9.\-]*(?:xboxlive|xcloud|cloudgaming)[a-z0-9.\-]*\.[a-z]{2,}(?::\d+)?\/[^\s"']*/i.exec(value);
-                        if (found) region = found[0];
-                    }
-                } catch (e) {}
                 var signature = href + "|" + labels.join("|") + "|" + dialog.join("|")
-                    + "|" + standalone + displayMode + serviceWorker + bx + region;
+                    + "|" + standalone + displayMode + serviceWorker + bx;
                 if (signature === lastSignature) return;
                 lastSignature = signature;
                 window.webkit.messageHandlers.gamestream.postMessage({
@@ -1942,30 +1949,45 @@ enum WebScripts {
         function rewrite(body) {
             if (!body || typeof body !== "string" || body.length === 0) return null;
             if (body.indexOf("enableTouchInput") === -1) return null;
-            var parsed;
-            try {
-                parsed = JSON.parse(body);
-            } catch (e) {
-                // The session configuration has been arriving in shapes this
-                // build does not know: saying "not JSON" and stopping told
-                // nobody what the body actually was. Show it instead, with
-                // the length, so the next log can say what has to be parsed.
-                post("not json", "the body was " + body.length + " characters and began "
-                     + JSON.stringify(body.slice(0, 120)));
-                return null;
+
+            // The body is often a stream of JSON events, one after another,
+            // which JSON.parse refuses because of what follows the first
+            // object. Each line is tried on its own, and if that fails the
+            // text is patched where it lies: the point is to change the one
+            // field, and the field is written out in full.
+            var lines = body.split("\n");
+            var changed = 0;
+            var rebuilt = [];
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i];
+                if (line.indexOf("enableTouchInput") === -1) {
+                    rebuilt.push(line);
+                    continue;
+                }
+                var parsed = null;
+                try { parsed = JSON.parse(line); } catch (e) { parsed = null; }
+                if (parsed && force(parsed, 0)) {
+                    rebuilt.push(JSON.stringify(parsed));
+                    changed++;
+                    continue;
+                }
+                var patched = line
+                    .replace(/("enableTouchInput"\s*:\s*)false/g, "$1true")
+                    .replace(/("enableTouchInput"\s*:\s*)0/g, "$1true")
+                    .replace(/("maxTouchPoints"\s*:\s*)\d+/g, "$1" + MAX_TOUCH_POINTS);
+                if (patched !== line) changed++;
+                rebuilt.push(patched);
             }
-            if (!force(parsed, 0)) {
-                post("already on", "the session already asked for touch input");
-                return null;
-            }
-            try {
-                var next = JSON.stringify(parsed);
+            if (changed > 0) {
                 post("forced", "touch input was added to the session configuration");
-                return next;
-            } catch (e) {
-                post("unreadable", "the configuration could not be rewritten");
-                return null;
+                return rebuilt.join("\n");
             }
+
+            // Nothing was changed, so say what was actually seen.
+            var at = body.indexOf("enableTouchInput");
+            post("not changed", "the configuration asked for touch input already: "
+                 + JSON.stringify(body.slice(Math.max(0, at - 80), at + 120)));
+            return null;
         }
 
         var nativeFetch = window.fetch;

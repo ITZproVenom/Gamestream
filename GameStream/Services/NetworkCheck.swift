@@ -60,15 +60,20 @@ final class NetworkCheck: ObservableObject {
 
     private init() {}
 
-    /// Remembered so later checks measure the streaming region rather than
+    /// Remembered so later checks measure the streaming service rather than
     /// the website's CDN.
+    ///
+    /// Only a host that can actually be reached over HTTP is accepted: the
+    /// page's storage contains the artwork CDN and the account service, and
+    /// timing either of them would say nothing about the stream while
+    /// looking as though it did.
     func rememberRegion(baseURI: String) {
-        guard let url = URL(string: baseURI), url.host != nil else { return }
-        // The base URI is the service root; a path under it answers quickly
-        // and is enough to time the route to the machine that runs the game.
+        guard let url = URL(string: baseURI), let host = url.host else { return }
+        let noise = ["images-", "store-", "assets-", "static-", "catalog-", "join-", "cid-"]
+        if noise.contains(where: { host.hasPrefix($0) }) { return }
         regionProbe = url
-        if latest?.host != url.host {
-            AppLog.shared.info("network", "the stream will be served by \(url.host ?? baseURI)")
+        if latest?.host != host {
+            AppLog.shared.info("network", "the session will be served by \(host)")
         }
     }
 
