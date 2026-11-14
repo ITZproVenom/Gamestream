@@ -4,16 +4,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,27 +20,36 @@ import com.gamestream.app.BetterXCloudInjector
 import com.gamestream.app.CloudCatalogService
 import com.gamestream.app.OnboardingPrefs
 import com.gamestream.app.SessionStore
+import com.gamestream.app.ui.screens.InsightsScreen
 import com.gamestream.app.ui.screens.IntroScreen
 import com.gamestream.app.ui.screens.LibraryScreen
 import com.gamestream.app.ui.screens.SearchScreen
 import com.gamestream.app.ui.screens.SettingsScreen
 import com.gamestream.app.ui.screens.WelcomeScreen
+import com.gamestream.app.ui.theme.GameStreamTheme
+import com.gamestream.app.ui.theme.LocalAccent
+import com.gamestream.app.ui.theme.LocalCardSurface
+import com.gamestream.app.ui.theme.LocalGlassBackdrop
+import com.gamestream.app.ui.theme.accentFor
+import com.gamestream.app.ui.theme.cardSurfaceFor
+import com.styropyr0.prismal.sources.prismalGlassLayer
+import com.styropyr0.prismal.sources.rememberPrismalGlassLayer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/** The five tabs, the same ones the iOS app has. */
 enum class Tab(val label: String) {
-    Library("Library"), Search("Search"), Settings("Settings")
+    Home("Home"), Library("Library"), Search("Search"), Insights("Insights"), Settings("Settings")
 }
 
 @Composable
 fun GameStreamApp(session: SessionStore = viewModel()) {
-    var tab by remember { mutableStateOf(Tab.Library) }
+    var tab by remember { mutableStateOf(Tab.Home) }
     val context = LocalContext.current
     var introCompleted by remember { mutableStateOf(OnboardingPrefs.isIntroDone(context)) }
     val appearance = remember { AppearancePrefs(context) }
     @Suppress("UNUSED_VARIABLE")
     val rev = appearance.revision
-    val bgColor = Color(appearance.backgroundColorArgb())
 
     LaunchedEffect(Unit) {
         CloudCatalogService.fetchAndInstall(context.applicationContext)
@@ -66,14 +67,14 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
             "library" -> tab = Tab.Library
             "search" -> tab = Tab.Search
             "settings" -> tab = Tab.Settings
+            "home" -> tab = Tab.Home
+            "insights" -> tab = Tab.Insights
         }
         session.requestedTab = null
     }
 
     if (!introCompleted) {
-        IntroScreen {
-            introCompleted = true
-        }
+        IntroScreen { introCompleted = true }
         return
     }
 
@@ -82,38 +83,43 @@ fun GameStreamApp(session: SessionStore = viewModel()) {
         return
     }
 
-    Scaffold(
-        containerColor = bgColor,
-        bottomBar = {
-            AnimatedVisibility(visible = !session.isStreaming) {
-                NavigationBar(containerColor = Color(0xEE14141A)) {
-                    NavigationBarItem(
-                        selected = tab == Tab.Library,
-                        onClick = { tab = Tab.Library },
-                        icon = { Icon(Icons.Default.GridView, contentDescription = null) },
-                        label = { Text("Library") }
-                    )
-                    NavigationBarItem(
-                        selected = tab == Tab.Search,
-                        onClick = { tab = Tab.Search },
-                        icon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        label = { Text("Search") }
-                    )
-                    NavigationBarItem(
-                        selected = tab == Tab.Settings,
-                        onClick = { tab = Tab.Settings },
-                        icon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                        label = { Text("Settings") }
-                    )
+    GameStreamTheme {
+        // The glass samples what is behind it, so the background is captured
+        // once here and every card on the screen reads from it.
+        val backdrop = rememberPrismalGlassLayer()
+
+        CompositionLocalProvider(
+            LocalGlassBackdrop provides backdrop,
+            LocalAccent provides accentFor(appearance.accent),
+            LocalCardSurface provides cardSurfaceFor(appearance.cardStyle)
+        ) {
+            Scaffold(
+                containerColor = Color.Transparent,
+                bottomBar = {
+                    AnimatedVisibility(visible = !session.isStreaming) {
+                        GlassNavigationBar(
+                            selected = tab,
+                            onSelect = { tab = it },
+                            backdrop = backdrop
+                        )
+                    }
                 }
-            }
-        }
-    ) { padding ->
-        Box(Modifier.padding(padding).fillMaxSize()) {
-            when (tab) {
-                Tab.Library -> LibraryScreen(session)
-                Tab.Search -> SearchScreen(session)
-                Tab.Settings -> SettingsScreen(session)
+            ) { padding ->
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .prismalGlassLayer(backdrop)
+                ) {
+                    GameStreamBackdrop(appearance)
+                    when (tab) {
+                        Tab.Home -> HomeScreen(session)
+                        Tab.Library -> LibraryScreen(session)
+                        Tab.Search -> SearchScreen(session)
+                        Tab.Insights -> InsightsScreen(session)
+                        Tab.Settings -> SettingsScreen(session)
+                    }
+                }
             }
         }
     }

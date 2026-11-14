@@ -5,25 +5,21 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.gamestream.app.AppearancePrefs
 
-/// Every accent the settings screen offers has a colour here.
-///
-/// Rose, cyan and mono were listed as choices and had no case of their own,
-/// so picking any of them quietly left the app violet.
-fun accentColor(name: String): Color = when (name) {
-    "green", "emerald" -> Color(0xFF2ED9A0)
-    "blue", "azure" -> Color(0xFF4A94FF)
-    "orange", "gold" -> Color(0xFFF5C04A)
-    "crimson" -> Color(0xFFF2476B)
-    "rose" -> Color(0xFFFF7AA8)
-    "cyan" -> Color(0xFF3FD2E0)
-    "mono" -> Color(0xFFBFC2CC)
-    else -> Color(0xFF8B7CFF)
-}
+/**
+ * The colours of the app.
+ *
+ * The accents are the iOS app's nine and the backdrops are its seven, so
+ * the two apps look like the same product. The old Android names - emerald,
+ * azure, gold, crimson - are still understood, so an existing choice is not
+ * thrown away.
+ */
+fun accentColor(name: String): Color = accentFor(name).color
 
 @Composable
 fun GameStreamTheme(content: @Composable () -> Unit) {
@@ -39,7 +35,8 @@ fun GameStreamTheme(content: @Composable () -> Unit) {
         "system" -> isSystemInDarkTheme()
         else -> true
     }
-    val primary = accentColor(appearance.accent)
+    val accent = accentFor(appearance.accent)
+    val primary = accent.color
     val scheme = if (dark) {
         darkColorScheme(
             primary = primary,
@@ -62,5 +59,10 @@ fun GameStreamTheme(content: @Composable () -> Unit) {
             onSurface = Color(0xFF121218)
         )
     }
-    MaterialTheme(colorScheme = scheme, content = content)
+    CompositionLocalProvider(
+        LocalAccent provides accent,
+        LocalCardSurface provides cardSurfaceFor(appearance.cardStyle)
+    ) {
+        MaterialTheme(colorScheme = scheme, content = content)
+    }
 }

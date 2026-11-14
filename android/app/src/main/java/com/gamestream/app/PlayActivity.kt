@@ -92,6 +92,65 @@ class PlayActivity private constructor(context: Context) {
 
     fun stat(id: String): PlayStat? = stats[id]
 
+    /// How many sessions this player has had, in total.
+    fun totalSessionCount(): Int {
+        normalizeWeeks()
+        return stats.values.sumOf { it.sessionCount }
+    }
+
+    /// Every second played, in total.
+    fun totalSeconds(): Long {
+        normalizeWeeks()
+        return stats.values.sumOf { it.totalSeconds } + liveSeconds()
+    }
+
+    /// The last seven days, oldest first, as a short label and the seconds
+    /// played on it.
+    fun weekByDay(): List<Pair<String, Long>> {
+        normalizeWeeks()
+        val calendar = Calendar.getInstance()
+        val days = ArrayList<Pair<String, Long>>(7)
+        for (offset in 6 downTo 0) {
+            val day = calendar.clone() as Calendar
+            day.add(Calendar.DAY_OF_YEAR, -offset)
+            val anchor = day.timeInMillis
+            val seconds = stats.values.sumOf { stat ->
+                if (stat.lastPlayed / 86_400_000L == anchor / 86_400_000L) {
+                    stat.totalSeconds
+                } else {
+                    0L
+                }
+            }
+            val label = when (offset) {
+                0 -> "Today"
+                1 -> "Yesterday"
+                else -> java.text.SimpleDateFormat("EEE", java.util.Locale.getDefault())
+                    .format(day.time)
+            }
+            days.add(label to seconds)
+        }
+        return days
+    }
+
+    /// How many sessions this player has had, in total.
+    fun totalSessionCount(): Int {
+        normalizeWeeks()
+        return stats.values.sumOf { it.sessionCount }
+    }
+
+    /// How long one game is likely to take, from this player's own sessions
+    /// with it.
+    ///
+    /// With no history there is nothing to go on, so Microsoft's own cloud
+    /// session length is used: a queue of games would otherwise be reported
+    /// as taking no time at all.
+    fun estimatedSeconds(id: String): Long {
+        val stat = stats[id] ?: return 30L * 60L
+        if (stat.sessionCount <= 0) return 30L * 60L
+        val average = stat.totalSeconds / stat.sessionCount.coerceAtLeast(1)
+        return average.coerceAtLeast(60L)
+    }
+
     fun liveSeconds(): Long {
         val start = activeStart
         if (activeId == null || start == 0L) return 0
