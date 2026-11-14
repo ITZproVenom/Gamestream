@@ -243,8 +243,9 @@ final class XboxAuth: NSObject, ObservableObject {
             for _ in 0..<3 {
                 try? await Task.sleep(for: .seconds(2))
                 guard generation == authGeneration else { return state }
-                guard let view = probeView else { break }
-                guard let again = try? await view.evaluateJavaScript(WebScripts.authProbeJS),
+                // The probe view was unwrapped earlier in this function, so
+                // it is the one in hand here.
+                guard let again = try? await probeView.evaluateJavaScript(WebScripts.authProbeJS),
                       let next = authPayload(from: again) else { break }
                 if next["signedIn"] as? Bool == true {
                     signedIn = true
