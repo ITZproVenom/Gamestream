@@ -18,6 +18,14 @@ GameStream is an independent client project focused on giving Xbox Cloud Gaming 
 - Kotlin and Jetpack Compose
 - Better xCloud
 - XcodeGen
+
+### Third-party code
+
+- **Prismal** by Saurav Sajeev — the Android liquid-glass rendering (MIT licence).
+  Vendored under `android/app/src/main/java/com/styropyr0/prismal/`, with its
+  licence alongside it. It draws the backdrop blur, the refraction and the
+  specular rim that the Android interface is built from.
+
 - GitHub Actions
 
 ### Acknowledgements
