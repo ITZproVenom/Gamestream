@@ -22,7 +22,11 @@ struct StreamView: View {
         // the app's own loading screen out of the way. Xbox puts dialogs up
         // during a launch - the controller gate, for one - and a loading
         // screen on top of them hides the only thing that can be answered.
-        let showSite = settings.showSiteWhileConnecting && stream.phase != .playing
+        //
+        // It is also shown when the app is not allowed to press Play for
+        // the player: then the page's own Play button is the way to start.
+        let showSite = (settings.showSiteWhileConnecting || !settings.autoStart)
+            && stream.phase != .playing
 
         ZStack {
             Color.black.ignoresSafeArea()

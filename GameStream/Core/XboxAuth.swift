@@ -228,13 +228,41 @@ final class XboxAuth: NSObject, ObservableObject {
         }
 
         guard generation == authGeneration else { return state }
-        let signedIn = payload["signedIn"] as? Bool ?? false
-        let gamertag = (payload["gamertag"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+        var signedIn = payload["signedIn"] as? Bool ?? false
+        var gamertag = (payload["gamertag"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+        var token = payload["token"] as? String
+        var source = payload["source"] as? String ?? ""
+        var expires = payload["expires"] as? String ?? ""
+
+        // The site's own script mints the cloud token a moment after the
+        // page loads, so a first look that finds nothing is not proof that
+        // the session is gone. The player was being signed out by a check
+        // that ran a second too early: the sign-in screen appeared, and a
+        // few seconds later the session came back on its own.
+        if !signedIn {
+            for _ in 0..<3 {
+                try? await Task.sleep(for: .seconds(2))
+                guard generation == authGeneration else { return state }
+                guard let view = probeView else { break }
+                guard let again = try? await view.evaluateJavaScript(WebScripts.authProbeJS),
+                      let next = authPayload(from: again) else { break }
+                if next["signedIn"] as? Bool == true {
+                    signedIn = true
+                    gamertag = (next["gamertag"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+                    token = next["token"] as? String
+                    source = next["source"] as? String ?? ""
+                    expires = next["expires"] as? String ?? ""
+                    log.info("auth", "the session was there on the second look")
+                    break
+                }
+            }
+        }
+
         // Memory only. This is a bearer token for the account; it is not
         // written to UserDefaults, not logged, and not included in exports.
-        xstsToken = payload["token"] as? String
-        tokenSource = payload["source"] as? String ?? ""
-        tokenExpires = payload["expires"] as? String ?? ""
+        xstsToken = token
+        tokenSource = source
+        tokenExpires = expires
         if let scriptError = payload["error"] as? String, !scriptError.isEmpty {
             lastError = scriptError
             log.warn("auth", "probe script error: \(scriptError)")
@@ -329,7 +357,12 @@ final class XboxAuth: NSObject, ObservableObject {
             log.warn("auth", "could not re-check the session; keeping the one we have")
             return
         }
-        apply(.signedOut)
+        // The check could not be carried out, so the session is not known to
+        // be gone - and showing the sign-in screen because the network
+        // blinked is exactly how a player gets "logged out" with a session
+        // still sitting in the data store. The state stays unknown, which
+        // is the screen that says the answer is not in yet.
+        log.warn("auth", "could not check the session; it is not known to be signed out")
     }
 
     private func authPayload(from result: Any?) -> [String: Any]? {

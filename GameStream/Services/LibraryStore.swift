@@ -166,7 +166,19 @@ final class LibraryStore: ObservableObject {
         guard !queue.isEmpty else { return nil }
         let next = queue.removeFirst()
         save(queue, Key.queue)
+        rebuildIndexes()
         return next
+    }
+
+    /// Puts a game back at the front of the queue.
+    ///
+    /// A game taken off the queue to be played next and then never started
+    /// belongs there still: a failed launch should not quietly lose it.
+    func putBackOnQueue(_ game: Game) {
+        guard !queue.contains(where: { $0.matches(id: game.id) }) else { return }
+        queue.insert(game, at: 0)
+        save(queue, Key.queue)
+        rebuildIndexes()
     }
 
     // MARK: - Lists

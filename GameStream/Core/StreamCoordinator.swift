@@ -106,6 +106,9 @@ final class StreamCoordinator: ObservableObject {
     @Published private(set) var stats: StreamStats?
 
     private var startedAt: Date?
+    /// The game that came off the queue to be played next, kept until the
+    /// launch either starts or fails.
+    private var queuedNext: Game?
     private var watchdog: Task<Void, Never>?
     /// The last page written to the log, so a page that reports itself every
     /// two seconds does not fill the log with the same line.
@@ -308,10 +311,14 @@ final class StreamCoordinator: ObservableObject {
     /// starting behind it. The session is written to Activity, the counters
     /// are reset and the same page is pointed at the new game instead.
     func playNextInQueue() {
+        // The game is taken off the queue but remembered, so a launch that
+        // never starts can put it back. Taking it off for good meant a
+        // failed launch quietly lost the game from the queue.
         guard let next = LibraryStore.shared.takeNextFromQueue() else {
             exit()
             return
         }
+        queuedNext = next
         guard XboxAuth.shared.state.isSignedIn else {
             exit()
             play(next)
@@ -570,6 +577,13 @@ final class StreamCoordinator: ObservableObject {
         let detail = message.trimmingCharacters(in: .whitespacesAndNewlines)
         phase = .failed(detail.isEmpty ? "The stream could not be started." : detail)
         log.warn("stream", "failed: \(detail)")
+        // A game that came off the queue and never started goes back on it.
+        // Losing it meant a failed launch quietly removed it from the
+        // player's queue.
+        if let next = queuedNext {
+            queuedNext = nil
+            LibraryStore.shared.putBackOnQueue(next)
+        }
     }
 
     /// A stream that never produces a picture should say so rather than

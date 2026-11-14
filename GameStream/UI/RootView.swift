@@ -96,6 +96,19 @@ struct RootView: View {
                     Text("Checking your Xbox session…")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                    // A check that could not be made leaves the session
+                    // unknown rather than calling it signed out, so this
+                    // screen can stay up. It needs a way out.
+                    if let error = auth.lastError, !auth.isChecking {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                        Button("Try again") {
+                            Task { await auth.refresh(reason: "retry") }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                 }
             }
         }

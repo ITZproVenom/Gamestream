@@ -26,6 +26,8 @@
 
 ### Authentication
 
+- The app no longer signs you out by looking too early. The site's own script mints the cloud token a moment after the page loads, so the first check could find nothing and declare the session gone: the sign-in screen appeared, and a few seconds later the session came back on its own. A check that finds no token now looks again, up to three times over six seconds, before it says the session is over.
+- A check that could not be made at all - a network that blinked, a page that would not load - no longer signs you out either. The session stays "not known", which is the screen that says the answer is not in yet, with a button to try again. Showing the sign-in screen because a check failed is how a player with a working session ends up being told they are signed out.
 - Sign-in and the session probe now run on **`play.xbox.com`** instead of `www.xbox.com`. The XSTS token lives in the origin's `localStorage`, and the stream player runs on `play.xbox.com` — so a token minted on `www.xbox.com` left the player sessionless and every launch bounced back to the home/product page without ever starting a stream. The earlier release announced this fix but only changed a comment; the URLs were never moved.
 - If the lightweight Xbox storage probe returns no token or cannot be read, retry against the full Xbox Cloud Gaming page before showing the signed-out screen. A probe failure alone no longer forces a login prompt.
 - Microsoft sign-in `target=_blank` windows now remain separate WKWebViews, preserving the top-level browsing context used by passkey flows while retaining the shared Xbox data store.
@@ -44,6 +46,8 @@
 - The Library opens on something. It used to open on Favourites, which is empty for almost everyone, so the first thing on the screen was a notice saying there was nothing in it. It now opens on the first shelf that has something in it, and the things the player actually has - what they were playing, what is queued, what they marked - are shown above the shelves.
 - **How long the queue is likely to take** is now shown on Home and in the Library ("3 games queued · about 42m left"), worked out from how long this player actually plays: the average of their own sessions with that game, or their average session overall, or Microsoft's own 30-minute cloud session when there is no history yet.
 - The Library no longer stutters under the thumb. Every tile asked "is this a favourite?" and "how long has this been played?" by walking a list, and the playtime question walked the entire activity log - which the "most played" sort then asked thousands of times for a single frame. Those answers now come from lookup tables, and the filtered and sorted list is worked out when something changes rather than on every redraw.
+- **Start the game automatically** now does something. The switch was stored and never read, so the app pressed Xbox's "Play with cloud" button and answered the controller gate whatever the setting said. With it off, the app does none of that and shows Xbox's own page instead, so the player presses Play themselves.
+- A game taken off the queue to be played next and then never started goes back on the queue. A failed launch used to quietly remove it.
 
 - Added an **All games** Library shelf using a lazy grid, so the full catalog is available without increasing Home's 24-game shelf cap (kept for performance).
 - Added Fortnite as a curated cloud-game fallback when Microsoft's Game Pass catalog feed omits it; deduplicated by product ID.

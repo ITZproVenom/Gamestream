@@ -288,9 +288,17 @@ struct XboxWebView: UIViewRepresentable {
         for source in [WebScripts.streamStateJS, WebScripts.streamChromeJS,
                        WebScripts.streamStatsJS, WebScripts.streamCommandsJS,
                        WebScripts.captureJS, WebScripts.clipJS,
-                       WebScripts.pageSignalsJS,
-                       WebScripts.autoStartJS] {
+                       WebScripts.pageSignalsJS] {
             controller.addUserScript(WKUserScript(source: source,
+                                                  injectionTime: .atDocumentEnd,
+                                                  forMainFrameOnly: true))
+        }
+        // The auto-start script presses Xbox's own "Play with cloud" button
+        // and answers the controller gate. With the setting off, the app
+        // does none of that: the player presses Play on the page instead,
+        // which is why the page is shown when the setting is off.
+        if AppSettings.shared.autoStart {
+            controller.addUserScript(WKUserScript(source: WebScripts.autoStartJS,
                                                   injectionTime: .atDocumentEnd,
                                                   forMainFrameOnly: true))
         }
