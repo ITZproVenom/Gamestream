@@ -209,7 +209,10 @@ struct StatsView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(total.title)
                     .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
+                    // Two lines: the longest titles in the catalogue were
+                    // being cut off at the end, and two games with the same
+                    // first words looked like the same game.
+                    .lineLimit(2)
                 Text("\(total.sessions) session\(total.sessions == 1 ? "" : "s")")
                     .font(.caption)
                     .foregroundStyle(.secondary)

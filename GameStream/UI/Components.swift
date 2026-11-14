@@ -73,12 +73,19 @@ struct GameTile: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(game.title)
+                // A heart in the corner is the only sign that a game is a
+                // favourite, and a screen reader never says it.
+                .accessibilityValue(library.isFavorite(game) ? "Favourite" : "")
 
                 if showsPlayButton {
                     Button(action: play) {
                         Image(systemName: "play.fill")
                             .font(.footnote.weight(.bold))
+                            // The button is thirty-six points across, which
+                            // is under Apple's minimum; the touch area is
+                            // the full forty-four.
                             .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.glassProminent)
                     .buttonBorderShape(.circle)
