@@ -220,6 +220,7 @@ struct LoadingNotice: View {
     var body: some View {
         VStack(spacing: 13) {
             ProgressView()
+                .accessibilityLabel(title)
             Text(title).font(.subheadline).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)

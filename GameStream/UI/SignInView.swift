@@ -53,7 +53,9 @@ struct SignInView: View {
     private var statusBar: some View {
         HStack(spacing: 12) {
             if auth.state.isSignedIn {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .accessibilityHidden(true)
             } else {
                 ProgressView().controlSize(.small)
             }

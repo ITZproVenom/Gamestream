@@ -93,7 +93,7 @@ struct SearchView: View {
         } else {
             switch liveSearchStatus {
             case "loading", "idle":
-                LoadingNotice()
+                LoadingNotice(title: "Asking Xbox for its live catalog…")
             case "results" where !liveGames.isEmpty:
                 VStack(alignment: .leading, spacing: 14) {
                     SectionHeader(title: "Xbox results",

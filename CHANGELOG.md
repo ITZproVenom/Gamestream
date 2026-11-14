@@ -62,6 +62,21 @@
 - The check takes five samples instead of three and reports the middle half of them rather than the whole range, so one slow packet no longer reads as a bad connection, and the reading says which host it was taken against.
 - New setting, **Keep a log**: the diagnostic record can be turned off. Nothing is then kept, written or handed to the system log, and the record that was there is cleared.
 
+### Interface
+
+- The player works in the orientation it is used in. The launch screen was a fixed stack with no scrolling, so on a phone held sideways - about 390 points of height - the Cancel button, the only way out of a launch that never starts, was off the bottom of the screen. The emblem shrinks to the height available and the rest scrolls. The controls were also under Apple's minimum touch target: twenty points for the icons, five for the handle that brings them back.
+- The controls are laid out differently when the phone is held upright: one row of three fixed controls beside a scrolling strip left the strip about a hundred and seventy points wide, so the buttons were pressed together and the read-outs could not be told apart. Portrait now gets two rows.
+- Settings has a shape of its own. The eight categories were in a horizontal scroller that showed two of them, and every switch was a line of text with no icon; the categories are a grid, and the switches, pickers and sub-headings carry icons and sit in the same row shape as everything else. The look of the app has not changed.
+- The Library opens on something: it used to open on Favourites, which is empty for almost everyone, so the first thing on the screen was a notice saying there was nothing in it. What the player actually has is above the shelves, and the shelf in use is kept in view.
+- The three chips on the Home page ended at different heights, because their captions are different lengths; two lines are always reserved now, and the hero card is shorter when the phone is held sideways.
+- Long game names take two lines in "Most played" instead of one, and a tile says that it is a favourite - the heart in the corner was the only sign, and a screen reader never said it.
+- The recorder says what went wrong. It added its tracks only if the device would take them and started writing without asking whether the writer agreed, so a device that would not take a track produced an empty file and the recording looked as though it had worked.
+
+### Performance
+
+- The page no longer works in the background: the scan for the video stopped once the game is playing, and the report that reads the page's buttons and dialogs runs half as often.
+- The catalogue is asked for again every time the app comes to the front, so the first request is always cancelled; that is no longer logged as a warning about a failure that never happened.
+
 ### Streaming and recovery
 
 - A stream no longer fills the log with the same lines. The page reports itself every two seconds and the video reading every 700 ms, and both were written out every time - a two-minute session produced several hundred lines and a pile of disk writes. Pages, page signals and video states are now written only when they change, and the detail lines stay on screen instead of going to the file.
