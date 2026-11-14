@@ -1,8 +1,9 @@
 import java.util.Properties
 
 plugins {
+    // AGP 9 has Kotlin built in; the old Kotlin Android plugin is refused
+    // by it.
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
