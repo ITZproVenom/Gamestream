@@ -196,11 +196,16 @@ struct HeroCard: View {
     let play: () -> Void
 
     @Namespace private var glass
+    /// A phone held sideways has about 390 points of height; a hero card
+    /// of two hundred and sixty took two thirds of the screen.
+    @Environment(\.verticalSizeClass) private var heightClass
+
+    private var height: CGFloat { heightClass == .compact ? 190 : 260 }
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             GameArtwork(url: game.heroURL ?? game.posterURL, cornerRadius: Theme.heroRadius)
-                .frame(height: 260)
+                .frame(height: height)
                 .overlay {
                     LinearGradient(
                         stops: [.init(color: .black.opacity(0), location: 0.3),

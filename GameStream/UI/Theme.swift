@@ -184,6 +184,11 @@ struct StatChip: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
+                // Two lines are always reserved, so a row of chips is the
+                // same height whichever captions it holds - "Day streak" and
+                // "Sessions logged" are not the same length, and the cards
+                // were ending at different heights.
+                .frame(height: 30, alignment: .top)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
