@@ -104,6 +104,7 @@ struct WelcomeView: View {
                             .foregroundStyle(.tint)
                             .padding(18)
                             .glassEffect(.regular, in: Circle())
+                            .accessibilityHidden(true)
 
                         VStack(alignment: .leading, spacing: 10) {
                             Text("GameStream")

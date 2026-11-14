@@ -1157,6 +1157,10 @@ struct DiagnosticsView: View {
                                 Image(systemName: entry.level.symbol)
                                     .font(.caption)
                                     .foregroundStyle(color(for: entry.level))
+                                    // The level is written into the line
+                                    // already; read out, the symbol is a
+                                    // "ladybug" or a cross.
+                                    .accessibilityHidden(true)
                                 Text(entry.line)
                                     .font(.caption.monospaced())
                                     .textSelection(.enabled)
