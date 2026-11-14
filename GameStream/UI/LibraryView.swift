@@ -144,35 +144,50 @@ struct LibraryView: View {
     // MARK: - Pieces
 
     private var shelfPicker: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 9) {
-                ForEach(Shelf.allCases) { option in
-                    FilterChip(title: option.title, isSelected: shelf == option) {
-                        withAnimation(.smooth) {
-                            shelf = option
-                            genre = nil
+        // Five shelves do not fit across a phone, and the ones that were
+        // off the edge could not be found. The shelf in use is kept in view,
+        // and the row says that it can be scrolled.
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal) {
+                HStack(spacing: 9) {
+                    ForEach(Shelf.allCases) { option in
+                        FilterChip(title: option.title, isSelected: shelf == option) {
+                            withAnimation(.smooth) {
+                                shelf = option
+                                genre = nil
+                            }
                         }
+                        .id(option)
                     }
                 }
+                .padding(.horizontal, Theme.pageInset)
             }
-            .padding(.horizontal, Theme.pageInset)
+            .scrollIndicators(.visible)
+            .onAppear {
+                proxy.scrollTo(shelf, anchor: .center)
+            }
+            .onChange(of: shelf) { _, value in
+                withAnimation(.smooth) { proxy.scrollTo(value, anchor: .center) }
+            }
         }
-        .scrollIndicators(.hidden)
     }
 
     private var genreFilter: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 9) {
-                FilterChip(title: "All genres", isSelected: genre == nil) {
-                    withAnimation(.smooth) { genre = nil }
-                }
-                ForEach(availableGenres, id: \.self) { name in
-                    FilterChip(title: name, isSelected: genre == name) {
-                        withAnimation(.smooth) { genre = (genre == name) ? nil : name }
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal) {
+                HStack(spacing: 9) {
+                    FilterChip(title: "All genres", isSelected: genre == nil) {
+                        withAnimation(.smooth) { genre = nil }
+                    }
+                    .id("all")
+                    ForEach(availableGenres, id: \.self) { name in
+                        FilterChip(title: name, isSelected: genre == name) {
+                            withAnimation(.smooth) { genre = (genre == name) ? nil : name }
+                        }
+                        .id(name)
                     }
                 }
-            }
-            .padding(.horizontal, Theme.pageInset)
+                .padding(.horizontal, Theme.pageInset)
         }
         .scrollIndicators(.hidden)
     }

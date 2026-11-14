@@ -283,6 +283,11 @@ final class LibraryStore: ObservableObject {
         return total / Double(activity.count)
     }
 
+    /// How many sessions this player has had with one game.
+    func sessionsByGameCount(forGameID id: String) -> Int {
+        (sessionsByGame[id.lowercased()] ?? []).count
+    }
+
     /// How long one game is likely to take, from this player's own sessions
     /// with it, and otherwise from how long they usually play.
     func estimatedSessionLength(for game: Game) -> TimeInterval {

@@ -101,7 +101,10 @@ extension LibraryStore {
     }
 
     func sessions(forGameID id: String) -> Int {
-        activity.filter { $0.gameID.caseInsensitiveCompare(id) == .orderedSame }.count
+        // The lookup table already holds the sessions per game, so this is a
+        // dictionary read rather than a walk of the whole activity log with a
+        // case-insensitive comparison per record.
+        library.sessionsByGameCount(forGameID: id)
     }
 
     /// The game to offer as "resume": whatever was played last.

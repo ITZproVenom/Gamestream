@@ -9,6 +9,11 @@ struct GameDetailView: View {
 
     @State private var showingLists = false
     @Namespace private var glass
+    /// A phone held sideways has about 390 points of height; a three
+    /// hundred point hero took most of the screen.
+    @Environment(\.verticalSizeClass) private var heightClass
+
+    private var heroHeight: CGFloat { heightClass == .compact ? 210 : 300 }
 
     var body: some View {
         ScrollView {
@@ -82,7 +87,7 @@ struct GameDetailView: View {
             // left edge with the poster and stat cards cut in half.
             GameArtwork(url: game.heroURL ?? game.posterURL, cornerRadius: 0)
                 .frame(maxWidth: .infinity)
-                .frame(height: 300)
+                .frame(height: heroHeight)
                 .clipped()
                 .overlay {
                     LinearGradient(
