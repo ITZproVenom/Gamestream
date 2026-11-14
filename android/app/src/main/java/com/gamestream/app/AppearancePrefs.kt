@@ -30,7 +30,7 @@ class AppearancePrefs(context: Context) {
         set(value) { prefs.edit().putString("mode", value).apply(); bump() }
 
     var accent: String
-        get() = prefs.getString("accent", "violet") ?: "violet"
+        get() = prefs.getString("accent", "Purple") ?: "Purple"
         set(value) { prefs.edit().putString("accent", value).apply(); bump() }
 
     var background: String
@@ -46,8 +46,12 @@ class AppearancePrefs(context: Context) {
         set(value) { prefs.edit().putFloat("bgDim", value).apply(); bump() }
 
     var cardStyle: String
-        get() = prefs.getString("card", "poster") ?: "poster"
-        set(value) { prefs.edit().putString("card", value).apply(); bump() }
+        get() = prefs.getString("cardStyle", "Glass") ?: "Glass"
+        set(value) { prefs.edit().putString("cardStyle", value).apply(); bump() }
+
+    var cardDensity: String
+        get() = prefs.getString("cardDensity", "poster") ?: "poster"
+        set(value) { prefs.edit().putString("cardDensity", value).apply(); bump() }
 
     var density: String
         get() = prefs.getString("density", "comfortable") ?: "comfortable"
@@ -86,10 +90,6 @@ class AppearancePrefs(context: Context) {
         get() = prefs.getBoolean("showGenres", true)
         set(value) { prefs.edit().putBoolean("showGenres", value).apply(); bump() }
 
-    var glassIntensity: Float
-        get() = prefs.getFloat("glass", 1f)
-        set(value) { prefs.edit().putFloat("glass", value).apply(); bump() }
-
     fun sectionSpacingDp(): Int = when (density) {
         "spacious" -> 28
         "compact" -> 12
@@ -97,9 +97,9 @@ class AppearancePrefs(context: Context) {
     }
 
     fun posterWidthFraction(): Float = when {
-        density == "compact" || cardStyle == "compact" -> 0.28f
-        cardStyle == "wide" -> 0.42f
-        density == "spacious" -> 0.36f
+        density == "compact" || cardDensity == "compact" -> 0.28f
+        cardDensity == "wide" -> 0.42f
+        density == "spacious" || cardDensity == "spacious" -> 0.36f
         else -> 0.32f
     }
 
@@ -119,6 +119,18 @@ class AppearancePrefs(context: Context) {
         "midnight" -> 0xFF050514.toInt()
         "dusk" -> 0xFF140A1F.toInt()
         "mesh" -> 0xFF0C0C18.toInt()
+        else -> 0xFF0A0A12.toInt()
+    }
+
+    /** Returns the ARGB colour for the solid/custom backdrop base, from the
+     * stored customBgColor value. Reuses the same map as backgroundColorArgb. */
+    fun customBgArgb(): Int = when (customBgColor) {
+        "charcoal" -> 0xFF1E1E24.toInt()
+        "navy" -> 0xFF0F1A38.toInt()
+        "forest" -> 0xFF0D241A.toInt()
+        "plum" -> 0xFF240F2E.toInt()
+        "wine" -> 0xFF2E0D1A.toInt()
+        "slate" -> 0xFF1A1E29.toInt()
         else -> 0xFF0A0A12.toInt()
     }
 }

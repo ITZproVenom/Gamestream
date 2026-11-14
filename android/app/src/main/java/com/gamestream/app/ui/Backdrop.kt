@@ -32,8 +32,8 @@ fun GameStreamBackdrop(appearance: AppearancePrefs, modifier: Modifier = Modifie
     val solid = name.equals("solid", true) || name.equals("customColor", true)
     val backdrop: Backdrop = if (solid) backdropFor("midnight") else backdropFor(name)
     val accent = backdrop.glow
-    val base = backdrop.base
-    val animated = appearance.animation == "full" && !solid
+    val base = if (solid) appearance.customBgArgb() else backdrop.base
+    val animated = appearance.animation == "full" && !solid && !name.equals("still", true)
     val strength = (1f - appearance.backgroundDim).coerceIn(0.08f, 0.9f)
 
     val drift by if (animated) {

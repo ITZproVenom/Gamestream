@@ -36,6 +36,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.gamestream.app.AppearancePrefs
@@ -148,7 +150,7 @@ fun SettingsScreen(session: SessionStore) {
 
         Category("Appearance") {
             SettingChips("Theme", listOf("system", "light", "dark"), mode) { mode = it; appearance.mode = it }
-            SettingChips("Accent", listOf("violet", "azure", "emerald", "crimson", "gold", "rose", "cyan", "mono"), accent) {
+            SettingChips("Accent", listOf("Purple", "Blue", "Green", "Orange", "Pink", "Cyan", "Teal", "Gold", "Red"), accent) {
                 accent = it; appearance.accent = it
             }
         }
@@ -156,7 +158,7 @@ fun SettingsScreen(session: SessionStore) {
         Category("Background") {
             SettingChips(
                 "Style",
-                listOf("aurora", "still", "solid", "mesh", "dusk", "midnight", "customColor"),
+                listOf("Aurora", "Midnight", "Ocean", "Sunset", "Forest", "Rose Gold", "Monochrome"),
                 background
             ) {
                 background = it; appearance.background = it
@@ -171,13 +173,14 @@ fun SettingsScreen(session: SessionStore) {
                     bgColors.forEach { (key, color) ->
                         Box(
                             Modifier
-                                .size(36.dp)
+                                .size(48.dp)
                                 .clip(CircleShape)
                                 .background(color)
                                 .then(
                                     if (customBg == key) Modifier.border(2.dp, Color.White, CircleShape)
                                     else Modifier
                                 )
+                                .semantics { contentDescription = "Colour ${key.replaceFirstChar { it.uppercase() }}" }
                                 .clickable {
                                     customBg = key
                                     appearance.customBgColor = key
@@ -191,7 +194,22 @@ fun SettingsScreen(session: SessionStore) {
                 }
             }
             Text(
-                "Aurora · Still · Solid · Mesh · Dusk · Midnight, or a custom solid color.",
+                "Aurora · Midnight · Ocean · Sunset · Forest · Rose Gold · Monochrome, or a custom solid colour.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF808088)
+            )
+        }
+
+        Category("Backdrop glow") {
+            Slider(
+                value = appearance.backgroundDim,
+                onValueChange = { value -> appearance.backgroundDim = value },
+                valueRange = 0f..1f,
+                steps = 20,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                "0.45 = default; higher = brighter glow",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color(0xFF808088)
             )
@@ -201,10 +219,14 @@ fun SettingsScreen(session: SessionStore) {
             SettingChips("Home layout", listOf("editorial", "rails", "grid"), hubLayout) {
                 hubLayout = it; appearance.hubLayout = it
             }
-            SettingChips("Game cards", listOf("poster", "wide", "compact"), cardStyle) {
+            SettingChips("Card surface", listOf("Glass", "Tinted", "Solid"), cardStyle) {
                 cardStyle = it; appearance.cardStyle = it
             }
-            SettingChips("Density", listOf("spacious", "comfortable", "compact"), density) {
+            SettingChips("Density", listOf("spacious", "comfortable", "compact"), cardDensity) {
+                cardDensity = it; appearance.cardDensity = it
+                // The same three words drive the spacing as well as the
+                // poster width, so both are written here. Leaving the
+                // spacing pref alone made it a setting nothing read.
                 density = it; appearance.density = it
             }
             ToggleRow("Activity on home", showActivity) {
@@ -221,12 +243,6 @@ fun SettingsScreen(session: SessionStore) {
             }
             SettingChips("Effects", listOf("quality", "balanced", "performance"), effects) {
                 effects = it; appearance.effects = it
-            }
-        }
-
-        Category("Sound") {
-            ToggleRow("UI sounds", uiSounds) {
-                uiSounds = it; appearance.uiSounds = it
             }
         }
 

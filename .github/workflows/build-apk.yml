@@ -85,6 +85,17 @@ jobs:
           } > android/keystore/keystore.properties
           echo "keystore restored ($(stat -c%s android/keystore/gamestream-release.jks) bytes)"
 
+      - name: Static Kotlin check
+        working-directory: .
+        run: |
+          set -euo pipefail
+          # A phone-sized toolchain cannot compile the Android app locally,
+          # so every mistake used to be found by a failed CI build. This
+          # catches the cheap ones -- a symbol used without its import,
+          # braces that do not balance, a Modifier property that does not
+          # exist -- in a second, before Gradle is even started.
+          python3 scripts/kotlin_check.py
+
       - name: Build release APK
         run: |
           set -euo pipefail

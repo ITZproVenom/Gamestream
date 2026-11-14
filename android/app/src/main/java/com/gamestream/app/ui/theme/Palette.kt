@@ -1,5 +1,6 @@
 package com.gamestream.app.ui.theme
 
+import java.util.Locale
 import androidx.compose.ui.graphics.Color
 
 /**
@@ -46,16 +47,38 @@ enum class CardSurface(val title: String) {
 }
 
 /** The accent the app is using, by the name the settings store. */
-fun accentFor(name: String): Accent =
-    Accent.entries.firstOrNull { it.title.equals(name, ignoreCase = true) }
-        ?: Accent.entries.firstOrNull { it.name.equals(name, ignoreCase = true) }
-        ?: Accent.Purple
+fun accentFor(name: String): Accent {
+    // Map legacy chip names first, so old saves still resolve correctly
+    val lower = name.lowercase(Locale.US)
+    return when (lower) {
+        "violet" -> Accent.Purple
+        "azure" -> Accent.Blue
+        "emerald" -> Accent.Green
+        "crimson" -> Accent.Red
+        "rose" -> Accent.Pink
+        "mono" -> Accent.Purple
+        else -> Accent.entries.firstOrNull { it.title.equals(name, ignoreCase = true) }
+            ?: Accent.entries.firstOrNull { it.name.equals(name, ignoreCase = true) }
+            ?: Accent.Purple
+    }
+}
 
 /** The backdrop the app is using, by the name the settings store. */
-fun backdropFor(name: String): Backdrop =
-    Backdrop.entries.firstOrNull { it.title.equals(name, ignoreCase = true) }
-        ?: Backdrop.entries.firstOrNull { it.name.equals(name, ignoreCase = true) }
-        ?: Backdrop.Aurora
+fun backdropFor(name: String): Backdrop {
+    // Map legacy chip names first, so old saves still resolve correctly
+    val lower = name.lowercase(Locale.US)
+    return when (lower) {
+        "aurora" -> Backdrop.Aurora
+        "midnight" -> Backdrop.Midnight
+        "mesh" -> Backdrop.Midnight
+        "dusk" -> Backdrop.Sunset
+        "still" -> Backdrop.Aurora
+        "solid", "customColor" -> Backdrop.Aurora
+        else -> Backdrop.entries.firstOrNull { it.title.equals(name, ignoreCase = true) }
+            ?: Backdrop.entries.firstOrNull { it.name.equals(name, ignoreCase = true) }
+            ?: Backdrop.Aurora
+    }
+}
 
 /** The card finish the app is using, by the name the settings store. */
 fun cardSurfaceFor(name: String): CardSurface =

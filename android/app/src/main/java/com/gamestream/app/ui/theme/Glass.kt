@@ -18,6 +18,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import com.gamestream.app.AppearancePrefs
 import androidx.compose.ui.unit.dp
 import com.styropyr0.prismal.PrismalBackdrop
 import com.styropyr0.prismal.PrismalGlassSurface
@@ -65,6 +68,14 @@ fun GlassCard(
     val backdrop = LocalGlassBackdrop.current
     val accent = LocalAccent.current
     val surface = LocalCardSurface.current
+    val context = LocalContext.current
+    val appearance = remember(context) { AppearancePrefs(context) }
+    // The revision counter is what tells Compose that a setting changed.
+    // Without reading it, picking a different effect quality would not
+    // redraw the cards until the screen was rebuilt from scratch.
+    @Suppress("UNUSED_VARIABLE")
+    val rev = appearance.revision
+    val effects = appearance.effects
 
     if (backdrop == null) {
         // Without a captured backdrop there is nothing to refract, so the
@@ -90,12 +101,17 @@ fun GlassCard(
             CardSurface.Solid -> Color(0xFF14141A)
         },
         tintAlpha = 1f,
-        blurRadius = 14.dp,
+        blurRadius = when (effects) {
+            "performance" -> 8.dp
+            "balanced" -> 12.dp
+            "quality" -> 16.dp
+            else -> 14.dp
+        },
         saturation = 1.4f,
         chromaticAberration = 0.06f,
         refractionHeightPx = 14f,
         refractionAmountPx = 26f,
-        depthEffect = true,
+        depthEffect = effects != "performance",
     ) {
         Box(modifier = Modifier.padding(contentPadding)) { content() }
     }
@@ -112,6 +128,11 @@ fun GlassIconButton(
 ) {
     val backdrop = LocalGlassBackdrop.current
     val accent = LocalAccent.current
+    val context = LocalContext.current
+    val appearance = remember(context) { AppearancePrefs(context) }
+    @Suppress("UNUSED_VARIABLE")
+    val rev = appearance.revision
+    val effects = appearance.effects
     val content: @Composable BoxScope.() -> Unit = {
         Icon(
             imageVector = systemImage,
@@ -136,10 +157,15 @@ fun GlassIconButton(
         shape = { PrismalRoundedRectangle(999.dp) },
         tint = if (active) accent.color.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.08f),
         tintAlpha = 1f,
-        blurRadius = 10.dp,
+        blurRadius = when (effects) {
+            "performance" -> 8.dp
+            "balanced" -> 10.dp
+            "quality" -> 12.dp
+            else -> 10.dp
+        },
         saturation = 1.3f,
         chromaticAberration = 0.04f,
-        depthEffect = true,
+        depthEffect = effects != "performance",
     ) { content() }
 }
 
@@ -153,6 +179,14 @@ fun GlassChip(
 ) {
     val backdrop = LocalGlassBackdrop.current
     val accent = LocalAccent.current
+    val context = LocalContext.current
+    val appearance = remember(context) { AppearancePrefs(context) }
+    // The revision counter is what tells Compose that a setting changed.
+    // Without reading it, picking a different effect quality would not
+    // redraw the cards until the screen was rebuilt from scratch.
+    @Suppress("UNUSED_VARIABLE")
+    val rev = appearance.revision
+    val effects = appearance.effects
     val label: @Composable BoxScope.() -> Unit = {
         Text(
             text = title,
@@ -175,8 +209,13 @@ fun GlassChip(
         shape = { PrismalRoundedRectangle(999.dp) },
         tint = if (selected) accent.color.copy(alpha = 0.26f) else Color.White.copy(alpha = 0.06f),
         tintAlpha = 1f,
-        blurRadius = 10.dp,
+        blurRadius = when (effects) {
+            "performance" -> 8.dp
+            "balanced" -> 10.dp
+            "quality" -> 12.dp
+            else -> 10.dp
+        },
         saturation = 1.3f,
-        depthEffect = true,
+        depthEffect = effects != "performance",
     ) { label() }
 }
