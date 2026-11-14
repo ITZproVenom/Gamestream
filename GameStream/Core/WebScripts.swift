@@ -507,13 +507,6 @@ enum WebScripts {
             // stylesheet: when that sheet is not in the page, the menu came
             // up as bare markup - native dropdowns, a bare slider, no panel.
             ".bx-navigation-dialog { background-color: rgba(20, 20, 23, 0.92) !important; -webkit-backdrop-filter: saturate(160%) blur(26px) !important; backdrop-filter: saturate(160%) blur(26px) !important; border: 1px solid rgba(255, 255, 255, 0.14) !important; border-radius: 22px !important; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55) !important; color: #fff !important; font-family: -apple-system, BlinkMacSystemFont, \"SF Pro Text\", system-ui, sans-serif !important; padding: 14px 16px 18px !important; }",
-            ".bx-navigation-dialog * { color: inherit !important; }",
-            ".bx-navigation-dialog select { background-color: rgba(255, 255, 255, 0.12) !important; color: #fff !important; border: 1px solid rgba(255, 255, 255, 0.16) !important; border-radius: 12px !important; padding: 6px 10px !important; font-size: 15px !important; -webkit-appearance: none !important; appearance: none !important; }",
-            ".bx-navigation-dialog input[type=\"range\"] { accent-color: rgb(120, 170, 255) !important; height: 26px !important; }",
-            ".bx-navigation-dialog input[type=\"checkbox\"] { accent-color: rgb(120, 170, 255) !important; transform: scale(1.15) !important; }",
-            ".bx-navigation-dialog button { background-color: rgba(255, 255, 255, 0.12) !important; border: 1px solid rgba(255, 255, 255, 0.14) !important; border-radius: 999px !important; color: #fff !important; font-weight: 600 !important; padding: 7px 14px !important; margin: 3px 0 !important; }",
-            ".bx-navigation-dialog .bx-donation-link { color: rgba(255, 255, 255, 0.82) !important; text-decoration: none !important; }",
-            ".bx-navigation-dialog .bx-debug-info { opacity: 0.8 !important; }",
             ".bx-settings-dialog, .bx-centered-dialog, .bx-key-binding-dialog { max-height: 86vh !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; touch-action: pan-y !important; position: relative !important; }"
         ].join("\n");
 
@@ -909,6 +902,7 @@ enum WebScripts {
                 if (typeof SettingsDialog !== "undefined"
                     && SettingsDialog.getInstance) {
                     SettingsDialog.getInstance().show();
+                    styleMenu();
                     return "SettingsDialog.show(), " + reveal();
                 }
             } catch (e) {
@@ -928,6 +922,118 @@ enum WebScripts {
                 return "the site's Better xCloud button";
             }
             return "Better xCloud has not finished setting up yet";
+        }
+
+        /// Puts the menu into shape directly, on the elements themselves.
+        ///
+        /// Stylesheets were not enough: the menu came up with the right
+        /// z-index and the right position - so the app's rules were being
+        /// applied - and still bare. The panel, its dropdowns, its slider
+        /// and its switches are therefore given their styles inline, which
+        /// nothing in the page can argue with. The script rebuilds its menu
+        /// as it is used, so it is done again shortly afterwards.
+        function styleMenu() {
+            try {
+                var panels = document.querySelectorAll(
+                    ".bx-navigation-dialog, .bx-settings-dialog, .bx-centered-dialog, .bx-key-binding-dialog");
+                for (var i = 0; i < panels.length; i++) {
+                    var panel = panels[i].style;
+                    panel.setProperty("position", "fixed", "important");
+                    panel.setProperty("top", "0", "important");
+                    panel.setProperty("left", "0", "important");
+                    panel.setProperty("right", "0", "important");
+                    panel.setProperty("bottom", "auto", "important");
+                    panel.setProperty("width", "100%", "important");
+                    panel.setProperty("max-height", "94vh", "important");
+                    panel.setProperty("overflow-y", "auto", "important");
+                    panel.setProperty("overflow-x", "hidden", "important");
+                    panel.setProperty("z-index", "2147483000", "important");
+                    panel.setProperty("background-color", "rgba(20, 20, 23, 0.94)", "important");
+                    panel.setProperty("-webkit-backdrop-filter", "saturate(160%) blur(26px)", "important");
+                    panel.setProperty("backdrop-filter", "saturate(160%) blur(26px)", "important");
+                    panel.setProperty("border", "1px solid rgba(255, 255, 255, 0.16)", "important");
+                    panel.setProperty("border-radius", "22px", "important");
+                    panel.setProperty("box-shadow", "0 18px 48px rgba(0, 0, 0, 0.55)", "important");
+                    panel.setProperty("color", "#ffffff", "important");
+                    panel.setProperty("font-family", "-apple-system, BlinkMacSystemFont, sans-serif", "important");
+                    panel.setProperty("font-size", "15px", "important");
+                    panel.setProperty("padding", "14px 16px 18px", "important");
+                    panel.setProperty("text-align", "left", "important");
+                }
+
+                var backdrops = document.querySelectorAll(".bx-navigation-dialog-overlay");
+                for (var b = 0; b < backdrops.length; b++) {
+                    backdrops[b].style.setProperty("position", "fixed", "important");
+                    backdrops[b].style.setProperty("inset", "0", "important");
+                    backdrops[b].style.setProperty("background", "rgba(0, 0, 0, 0.45)", "important");
+                    backdrops[b].style.setProperty("z-index", "2147482000", "important");
+                }
+
+                var selects = document.querySelectorAll(
+                    ".bx-navigation-dialog select, .bx-settings-dialog select");
+                for (var s = 0; s < selects.length; s++) {
+                    selects[s].style.setProperty("background-color", "rgba(255, 255, 255, 0.16)", "important");
+                    selects[s].style.setProperty("color", "#ffffff", "important");
+                    selects[s].style.setProperty("border", "1px solid rgba(255, 255, 255, 0.2)", "important");
+                    selects[s].style.setProperty("border-radius", "12px", "important");
+                    selects[s].style.setProperty("padding", "7px 10px", "important");
+                    selects[s].style.setProperty("font-size", "15px", "important");
+                    selects[s].style.setProperty("-webkit-appearance", "none", "important");
+                    selects[s].style.setProperty("appearance", "none", "important");
+                }
+
+                var ranges = document.querySelectorAll('input[type="range"]');
+                for (var r = 0; r < ranges.length; r++) {
+                    ranges[r].style.setProperty("accent-color", "rgb(120, 170, 255)", "important");
+                    ranges[r].style.setProperty("height", "26px", "important");
+                    ranges[r].style.setProperty("width", "100%", "important");
+                }
+
+                var checks = document.querySelectorAll('input[type="checkbox"]');
+                for (var c = 0; c < checks.length; c++) {
+                    checks[c].style.setProperty("accent-color", "rgb(120, 170, 255)", "important");
+                    checks[c].style.setProperty("width", "22px", "important");
+                    checks[c].style.setProperty("height", "22px", "important");
+                }
+
+                var buttons = document.querySelectorAll(
+                    ".bx-navigation-dialog button, .bx-settings-dialog button");
+                for (var t = 0; t < buttons.length; t++) {
+                    buttons[t].style.setProperty("background-color", "rgba(255, 255, 255, 0.14)", "important");
+                    buttons[t].style.setProperty("border", "1px solid rgba(255, 255, 255, 0.18)", "important");
+                    buttons[t].style.setProperty("border-radius", "999px", "important");
+                    buttons[t].style.setProperty("color", "#ffffff", "important");
+                    buttons[t].style.setProperty("font-weight", "600", "important");
+                    buttons[t].style.setProperty("padding", "8px 14px", "important");
+                    buttons[t].style.setProperty("margin", "3px 0", "important");
+                }
+            } catch (e) {}
+        }
+
+        /// What the menu actually ended up looking like, so a report can say
+        /// it rather than having it guessed at.
+        function menuReport() {
+            try {
+                var node = document.querySelector(".bx-navigation-dialog");
+                if (!node) return "no .bx-navigation-dialog in the document";
+                var style = window.getComputedStyle(node);
+                var box = node.getBoundingClientRect();
+                var selects = node.querySelectorAll("select").length;
+                var ranges = node.querySelectorAll('input[type="range"]').length;
+                return "dialog class=\"" + node.className + "\""
+                    + " display=" + style.display
+                    + " visibility=" + style.visibility
+                    + " opacity=" + style.opacity
+                    + " z=" + style.zIndex
+                    + " background=" + style.backgroundColor
+                    + " radius=" + style.borderTopLeftRadius
+                    + " font=" + style.fontSize
+                    + " rect=" + Math.round(box.left) + "," + Math.round(box.top)
+                    + " " + Math.round(box.width) + "x" + Math.round(box.height)
+                    + " selects=" + selects + " sliders=" + ranges;
+            } catch (e) {
+                return "the menu could not be measured: " + e;
+            }
         }
 
         /// If the dialog exists but cannot be seen, make it seen.
@@ -1073,7 +1179,7 @@ enum WebScripts {
             if (command === "bxMenu") {
                 var how = openBxSettings();
                 if (how) {
-                    note(command, "opened via " + how);
+                    note(command, "opened via " + how + "; " + menuReport());
                     return true;
                 }
                 // Only if the script is not loaded at all.
