@@ -95,42 +95,63 @@ struct SettingsView: View {
     }
 
     private var categoryPicker: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                ForEach(Category.allCases) { item in
-                    categoryButton(item)
-                }
+        // A row of eight categories in a horizontal scroller hid everything
+        // but the first two, with no hint that there were eight at all. They
+        // are a grid now: every category is visible, and the one in use is
+        // marked.
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10),
+                            GridItem(.flexible(), spacing: 10)],
+                  spacing: 10) {
+            ForEach(Category.allCases) { item in
+                categoryTile(item)
             }
-            .padding(.horizontal, 1)
         }
-        .scrollIndicators(.hidden)
         .accessibilityLabel("Settings categories")
     }
 
-    private func categoryButton(_ item: Category) -> some View {
+    private func categoryTile(_ item: Category) -> some View {
         let selected = category == item
         return Button {
             withAnimation(.smooth(duration: 0.22)) { category = item }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 9) {
                 Image(systemName: item.icon)
-                    .font(.caption.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(settings.accent.color)
+                    .frame(width: 24)
                 Text(item.title)
-                    .font(.caption.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 13)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 13)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .modifier(CardSurfaceModifier(
+                shape: RoundedRectangle(cornerRadius: 14, style: .continuous)))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(selected ? settings.accent.color : .clear, lineWidth: 2)
+            }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(selected ? settings.accent.color : Color.primary)
-        .modifier(CardSurfaceModifier(shape: Capsule()))
-        .overlay {
-            Capsule().strokeBorder(selected ? settings.accent.color.opacity(0.75) : .clear,
-                                   lineWidth: selected ? 1.5 : 0)
-        }
         .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
+
+    /// A switch with an icon, in the same shape as the rows around it.
+    ///
+    /// The settings were a list of switches with no icons and no hierarchy,
+    /// which is why the page read as a wall of text.
+    private func setting(_ title: String, icon: String,
+                         isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            SettingsRowLabel(title: title, icon: icon)
+        }
+    }
+
 
     @ViewBuilder
     private var selectedCategory: some View {
@@ -201,7 +222,8 @@ struct SettingsView: View {
     private var appearance: some View {
         SettingsGroup("Appearance", icon: "paintbrush.fill") {
             VStack(alignment: .leading, spacing: 5) {
-                Toggle("Opening animation", isOn: $settings.launchIntro)
+                setting("Opening animation", icon: "sparkles",
+                       isOn: $settings.launchIntro)
                 Text("A short wordmark animation on a cold launch, drawn in the "
                      + "accent colour. Tap to skip it. With Reduce Motion on it is "
                      + "a plain fade.")
@@ -211,18 +233,22 @@ struct SettingsView: View {
 
             SettingsDivider()
 
-            Picker("Theme", selection: $settings.theme) {
-                ForEach(AppSettings.Theme.allCases) { theme in
-                    Text(theme.title).tag(theme)
+            // A segmented control shows its own labels, so the title is a
+            // heading above it rather than the picker's own label.
+            VStack(alignment: .leading, spacing: 8) {
+                SettingsRowLabel(title: "Theme", icon: "circle.lefthalf.filled")
+                Picker("Theme", selection: $settings.theme) {
+                    ForEach(AppSettings.Theme.allCases) { theme in
+                        Text(theme.title).tag(theme)
+                    }
                 }
+                .pickerStyle(.segmented)
             }
-            .pickerStyle(.segmented)
 
             SettingsDivider()
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Card surface")
-                    .font(.subheadline.weight(.semibold))
+                SettingsRowLabel(title: "Card surface", icon: "square.on.square")
                 Picker("Card surface", selection: $settings.cardSurface) {
                     ForEach(AppSettings.CardSurface.allCases) { surface in
                         Text(surface.title).tag(surface)
@@ -280,10 +306,12 @@ struct SettingsView: View {
             SettingsDivider()
 
             VStack(alignment: .leading, spacing: 8) {
-                Picker("Background motion", selection: $settings.backgroundMotion) {
+                Picker(selection: $settings.backgroundMotion) {
                     ForEach(AppSettings.BackgroundMotion.allCases) { motion in
                         Text(motion.title).tag(motion)
                     }
+                } label: {
+                    SettingsRowLabel(title: "Background motion", icon: "waveform.path")
                 }
                 .pickerStyle(.segmented)
                 Text("Reduce Motion always takes priority over animation.")
@@ -294,10 +322,12 @@ struct SettingsView: View {
             SettingsDivider()
 
             VStack(alignment: .leading, spacing: 8) {
-                Picker("Backdrop glow", selection: $settings.glowIntensity) {
+                Picker(selection: $settings.glowIntensity) {
                     ForEach(AppSettings.GlowIntensity.allCases) { intensity in
                         Text(intensity.title).tag(intensity)
                     }
+                } label: {
+                    SettingsRowLabel(title: "Backdrop glow", icon: "sun.max")
                 }
                 .pickerStyle(.segmented)
                 Text("Adjust how vivid and soft the ambient colors appear.")
@@ -308,7 +338,7 @@ struct SettingsView: View {
             SettingsDivider()
 
             VStack(alignment: .leading, spacing: 11) {
-                Text("Accent").font(.subheadline.weight(.semibold))
+                SettingsRowLabel(title: "Accent", icon: "paintpalette.fill")
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 12) {
                     ForEach(AppSettings.Accent.allCases) { accent in
                         Button {
@@ -370,27 +400,33 @@ struct SettingsView: View {
 
     private var streaming: some View {
         SettingsGroup("Streaming", icon: "cloud.fill") {
-            Picker("Quality", selection: $settings.quality) {
+            Picker(selection: $settings.quality) {
                 ForEach(AppSettings.Quality.allCases) { quality in
                     Text(quality.title).tag(quality)
                 }
-            }
+            } label: {
+                    SettingsRowLabel(title: "Quality", icon: "dial.medium")
+                }
 
             SettingsDivider()
 
-            Picker("Region", selection: $settings.region) {
+            Picker(selection: $settings.region) {
                 ForEach(AppSettings.Region.allCases) { region in
                     Text(region.title).tag(region)
                 }
-            }
+            } label: {
+                    SettingsRowLabel(title: "Region", icon: "globe")
+                }
 
             SettingsDivider()
 
             VStack(alignment: .leading, spacing: 5) {
-                Picker("Touch controls", selection: $settings.touchControls) {
+                Picker(selection: $settings.touchControls) {
                     ForEach(AppSettings.TouchControls.allCases) { mode in
                         Text(mode.title).tag(mode)
                     }
+                } label: {
+                    SettingsRowLabel(title: "Touch controls", icon: "hand.tap")
                 }
                 Text(touchControlsExplanation)
                     .font(.caption)
@@ -402,8 +438,8 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 if settings.touchControls != .hidden {
-                    Toggle("Hide them while a controller is connected",
-                           isOn: $settings.touchAutoOffWithController)
+                    setting("Hide them while a controller is connected", icon: "gamecontroller",
+                       isOn: $settings.touchAutoOffWithController)
                     Text("Touch input is granted when the session is negotiated and "
                          + "cannot be withdrawn afterwards, so a pad connected "
                          + "mid-game would otherwise leave the on-screen controls "
@@ -417,7 +453,8 @@ struct SettingsView: View {
             SettingsDivider()
 
             VStack(alignment: .leading, spacing: 5) {
-                Toggle("Use less data on cellular", isOn: $settings.limitOnCellular)
+                setting("Use less data on cellular", icon: "antenna.radiowaves.left.and.right",
+                       isOn: $settings.limitOnCellular)
                 if settings.limitOnCellular {
                     HStack {
                         Text("Cellular limit").font(.subheadline)
@@ -440,10 +477,11 @@ struct SettingsView: View {
 
             SettingsDivider()
 
-            Toggle("Start the game automatically", isOn: $settings.autoStart)
+            setting("Start the game automatically", icon: "play.circle",
+                       isOn: $settings.autoStart)
             SettingsDivider()
             VStack(alignment: .leading, spacing: 5) {
-                Toggle("Show Xbox's page while the game starts",
+                setting("Show Xbox's page while the game starts", icon: "globe",
                        isOn: $settings.showSiteWhileConnecting)
                 Text("Replaces the app's loading screen with Xbox's own page, so a "
                      + "dialog that needs answering - a controller prompt, a sign-in, "
@@ -454,7 +492,7 @@ struct SettingsView: View {
             }
             SettingsDivider()
             VStack(alignment: .leading, spacing: 5) {
-                Toggle("Open the statistics panel with the stream",
+                setting("Open the statistics panel with the stream", icon: "chart.bar.xaxis",
                        isOn: $settings.showStreamStats)
                 Text("Frame rate, bitrate, latency, jitter, decode time and dropped "
                      + "frames, read from the connection itself. It can also be "
@@ -464,7 +502,8 @@ struct SettingsView: View {
             }
             SettingsDivider()
             VStack(alignment: .leading, spacing: 5) {
-                Toggle("Match the in-stream menus to GameStream", isOn: $settings.matchStreamStyle)
+                setting("Match the in-stream menus to GameStream", icon: "paintbrush",
+                       isOn: $settings.matchStreamStyle)
                 Text("Restyles the streaming enhancement's own menus with the app's "
                      + "accent colour, translucency and type. Takes effect the next "
                      + "time a game starts.")
@@ -472,7 +511,8 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             SettingsDivider()
-            Toggle("Keep the screen awake", isOn: $settings.keepAwake)
+            setting("Keep the screen awake", icon: "sun.max",
+                       isOn: $settings.keepAwake)
             SettingsDivider()
 
             HStack {
@@ -534,7 +574,7 @@ struct SettingsView: View {
             SettingsDivider()
 
             VStack(alignment: .leading, spacing: 5) {
-                Toggle("Open the overlay with the View button",
+                setting("Open the overlay with the View button", icon: "eye",
                        isOn: $settings.overlayButtonEnabled)
                 Text("Press View twice during a game. The page still receives the "
                      + "button, so whatever the game does with it keeps working; "
@@ -544,17 +584,18 @@ struct SettingsView: View {
             }
             SettingsDivider()
 
-            Toggle("Rumble", isOn: $settings.rumbleEnabled)
+            setting("Rumble", icon: "waveform",
+                       isOn: $settings.rumbleEnabled)
 
             if settings.rumbleEnabled {
                 SettingsDivider()
-                Toggle("Vibrate the phone when the controller cannot",
+                setting("Vibrate the phone when the controller cannot", icon: "iphone.radiowaves.left.and.right",
                        isOn: $settings.phoneRumbleFallback)
 
                 SettingsDivider()
                 VStack(alignment: .leading, spacing: 7) {
                     HStack {
-                        Text("Intensity").font(.subheadline.weight(.semibold))
+                        SettingsRowLabel(title: "Intensity", icon: "waveform")
                         Spacer()
                         Text(String(format: "%.1f×", settings.rumbleIntensity))
                             .font(.caption.monospacedDigit())
@@ -632,16 +673,17 @@ struct SettingsView: View {
     /// Everything that governs a running session rather than how it looks.
     private var session: some View {
         SettingsGroup("Session", icon: "timer") {
-            Toggle("Rejoin automatically if the stream drops", isOn: $settings.autoReconnect)
+            setting("Rejoin automatically if the stream drops", icon: "arrow.clockwise",
+                       isOn: $settings.autoReconnect)
             SettingsDivider()
 
-            Toggle("Warn when the connection cannot hold the quality",
-                   isOn: $settings.adaptiveQuality)
+            setting("Warn when the connection cannot hold the quality", icon: "wifi.exclamationmark",
+                       isOn: $settings.adaptiveQuality)
             SettingsDivider()
 
             VStack(alignment: .leading, spacing: 7) {
                 HStack {
-                    Text("Bitrate limit").font(.subheadline.weight(.semibold))
+                    SettingsRowLabel(title: "Bitrate limit", icon: "gauge.with.dots.needle.33percent")
                     Spacer()
                     Text(settings.maxBitrateMbps == 0
                          ? "Unlimited" : "\(settings.maxBitrateMbps) Mbps")
@@ -664,7 +706,8 @@ struct SettingsView: View {
 
             SettingsDivider()
 
-            Toggle("GameStream enhancements", isOn: $settings.enhancerEnabled)
+            setting("GameStream enhancements", icon: "slider.horizontal.3",
+                       isOn: $settings.enhancerEnabled)
             Text("Our own in-page layer. It edits the session description before the "
                  + "stream is negotiated, which is the only place codec and bitrate "
                  + "are actually decided.")
@@ -673,7 +716,8 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             if settings.enhancerEnabled {
-                Toggle("Prefer H.265 when offered", isOn: $settings.preferHEVC)
+                setting("Prefer H.265 when offered", icon: "h.circle",
+                       isOn: $settings.preferHEVC)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(stream.offeredCodecs.isEmpty
                          ? "Start a game to see which codecs the server offers."
@@ -692,7 +736,7 @@ struct SettingsView: View {
 
                 VStack(alignment: .leading, spacing: 7) {
                     HStack {
-                        Text("Sharpness").font(.subheadline.weight(.semibold))
+                        SettingsRowLabel(title: "Sharpness", icon: "triangle.righthalf.filled")
                         Spacer()
                         Text(settings.sharpness == 0 ? "Off" : "\(settings.sharpness)")
                             .font(.caption.monospacedDigit())
@@ -713,7 +757,7 @@ struct SettingsView: View {
 
                 VStack(alignment: .leading, spacing: 7) {
                     HStack {
-                        Text("Saturation").font(.subheadline.weight(.semibold))
+                        SettingsRowLabel(title: "Saturation", icon: "drop.fill")
                         Spacer()
                         Text("\(settings.saturation)%")
                             .font(.caption.monospacedDigit())
@@ -729,7 +773,7 @@ struct SettingsView: View {
 
                 VStack(alignment: .leading, spacing: 7) {
                     HStack {
-                        Text("Contrast").font(.subheadline.weight(.semibold))
+                        SettingsRowLabel(title: "Contrast", icon: "circle.lefthalf.filled")
                         Spacer()
                         Text("\(settings.contrast)%")
                             .font(.caption.monospacedDigit())
@@ -746,7 +790,8 @@ struct SettingsView: View {
 
             SettingsDivider()
 
-            Toggle("Check the connection before starting", isOn: $settings.preflightCheck)
+            setting("Check the connection before starting", icon: "wifi",
+                       isOn: $settings.preflightCheck)
             if let reading = network.latest {
                 Text(reading.reachable
                      ? "Last check: \(reading.latencyMs) ms, ±\(reading.spreadMs) ms against \(reading.host). \(reading.verdict)"
@@ -769,7 +814,8 @@ struct SettingsView: View {
             SettingsDivider()
 
             VStack(alignment: .leading, spacing: 5) {
-                Toggle("Keep a log", isOn: $settings.loggingEnabled)
+                setting("Keep a log", icon: "doc.text",
+                       isOn: $settings.loggingEnabled)
                 Text("Records what the app did, so a problem can be read back afterwards. "
                      + "Turn it off and nothing is kept or written; the record that "
                      + "was there is cleared as well.")
@@ -781,7 +827,7 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: 7) {
                 HStack {
-                    Text("Session limit").font(.subheadline.weight(.semibold))
+                    SettingsRowLabel(title: "Session limit", icon: "timer")
                     Spacer()
                     Text(settings.sessionLimitMinutes == 0
                          ? "Off" : "\(settings.sessionLimitMinutes) min")
@@ -803,7 +849,8 @@ struct SettingsView: View {
 
             SettingsDivider()
 
-            Toggle("Warn on low battery", isOn: $settings.batteryGuard)
+            setting("Warn on low battery", icon: "battery.25",
+                       isOn: $settings.batteryGuard)
         }
     }
 
@@ -811,7 +858,7 @@ struct SettingsView: View {
         SettingsGroup("Clips", icon: "record.circle") {
             VStack(alignment: .leading, spacing: 7) {
                 HStack {
-                    Text("Quality").font(.subheadline.weight(.semibold))
+                    SettingsRowLabel(title: "Quality", icon: "dial.medium")
                     Spacer()
                     Text("\(settings.recordingBitrateMbps) Mbps")
                         .font(.caption.monospacedDigit())
@@ -832,7 +879,7 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: 7) {
                 HStack {
-                    Text("Stop after").font(.subheadline.weight(.semibold))
+                    SettingsRowLabel(title: "Stop after", icon: "stop.circle")
                     Spacer()
                     Text("\(settings.recordingLimitMinutes) min")
                         .font(.caption.monospacedDigit())
@@ -852,7 +899,8 @@ struct SettingsView: View {
             SettingsDivider()
 
             VStack(alignment: .leading, spacing: 5) {
-                Toggle("Record your voice", isOn: $settings.recordMicrophone)
+                setting("Record your voice", icon: "mic",
+                       isOn: $settings.recordMicrophone)
                 Text("Off by default. A clip of a game should not record the room "
                      + "unless asked. Voice is only added when a clip has to be "
                      + "captured from the screen; clips taken from the stream "
