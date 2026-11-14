@@ -1944,11 +1944,95 @@ enum WebScripts {
             return changed;
         }
 
+        /// The session's own configuration, and what the app asks of it.
+        ///
+        /// Xbox's cloud session carries the knobs that decide how the
+        /// picture is decoded and drawn: "enableHevc" (HEVC is decoded in
+        /// hardware far more cheaply than H.264 at the same size),
+        /// "useSoftwareRendering" (false means the GPU draws it),
+        /// "decoderType" (Auto or WebCodecs, never Software), and
+        /// "useHardwareAudioDecoding".
+        ///
+        /// The session request does not contain the touch fields at all -
+        /// the site's own configuration has "enableGamepadInput" and
+        /// "sensorInputPollingRateInHz" - so the touch request has to be
+        /// added rather than flipped.
+        function sessionSettings(node, depth) {
+            if (!node || typeof node !== "object" || depth > 4) return false;
+            var changed = false;
+
+            var input = node.inputConfiguration;
+            if (!input || typeof input !== "object") {
+                input = {};
+                node.inputConfiguration = input;
+                changed = true;
+            }
+            if (input.enableTouchInput !== true) {
+                input.enableTouchInput = true;
+                changed = true;
+            }
+            if (Number(input.maxTouchPoints || 0) < MAX_TOUCH_POINTS) {
+                input.maxTouchPoints = MAX_TOUCH_POINTS;
+                changed = true;
+            }
+
+            var video = node.videoConfiguration;
+            if (!video || typeof video !== "object") {
+                video = {};
+                node.videoConfiguration = video;
+                changed = true;
+            }
+            if (window.__gsPreferHEVC && video.enableHevc !== true) {
+                video.enableHevc = true;
+                changed = true;
+            }
+            if (video.useSoftwareRendering === true) {
+                video.useSoftwareRendering = false;
+                changed = true;
+            }
+            if (video.decoderType === 1) {
+                video.decoderType = 4;
+                changed = true;
+            }
+
+            var audio = node.audioConfiguration;
+            if (audio && typeof audio === "object"
+                && audio.useHardwareAudioDecoding === false) {
+                audio.useHardwareAudioDecoding = true;
+                changed = true;
+            }
+            return changed;
+        }
+
+        /// Finds the configuration object wherever it sits in the body.
+        function applySettings(parsed) {
+            if (!parsed || typeof parsed !== "object") return false;
+            var changed = sessionSettings(parsed, 0);
+            var paths = ["data", "configuration", "sessionConfiguration", "request",
+                         "session", "payload", "body"];
+            for (var i = 0; i < paths.length; i++) {
+                var child = parsed[paths[i]];
+                if (child && typeof child === "object") {
+                    if (sessionSettings(child, 1)) changed = true;
+                }
+            }
+            return changed;
+        }
+
         /// Rewrites a request body, or returns null when there is nothing in
         /// it that concerns touch input.
         function rewrite(body) {
             if (!body || typeof body !== "string" || body.length === 0) return null;
-            if (body.indexOf("enableTouchInput") === -1) return null;
+
+            // The session request is the one that matters: it carries the
+            // configuration the server sets the stream up with. It does not
+            // mention touch input at all, so the body is recognised by the
+            // configuration it holds rather than by the field being asked
+            // for.
+            var isSession = body.indexOf("inputConfiguration") !== -1
+                || body.indexOf("videoConfiguration") !== -1
+                || body.indexOf("enableTouchInput") !== -1;
+            if (!isSession) return null;
 
             // The body is often a stream of JSON events, one after another,
             // which JSON.parse refuses because of what follows the first
@@ -1960,33 +2044,36 @@ enum WebScripts {
             var rebuilt = [];
             for (var i = 0; i < lines.length; i++) {
                 var line = lines[i];
-                if (line.indexOf("enableTouchInput") === -1) {
-                    rebuilt.push(line);
-                    continue;
-                }
                 var parsed = null;
                 try { parsed = JSON.parse(line); } catch (e) { parsed = null; }
-                if (parsed && force(parsed, 0)) {
+                if (parsed && applySettings(parsed)) {
                     rebuilt.push(JSON.stringify(parsed));
                     changed++;
+                    continue;
+                }
+                if (line.indexOf("enableTouchInput") === -1
+                    && line.indexOf("enableHevc") === -1
+                    && line.indexOf("useSoftwareRendering") === -1) {
+                    rebuilt.push(line);
                     continue;
                 }
                 var patched = line
                     .replace(/("enableTouchInput"\s*:\s*)false/g, "$1true")
                     .replace(/("enableTouchInput"\s*:\s*)0/g, "$1true")
-                    .replace(/("maxTouchPoints"\s*:\s*)\d+/g, "$1" + MAX_TOUCH_POINTS);
+                    .replace(/("maxTouchPoints"\s*:\s*)\d+/g, "$1" + MAX_TOUCH_POINTS)
+                    .replace(/("enableHevc"\s*:\s*)false/g, "$1true")
+                    .replace(/("useSoftwareRendering"\s*:\s*)true/g, "$1false")
+                    .replace(/("useHardwareAudioDecoding"\s*:\s*)false/g, "$1true");
                 if (patched !== line) changed++;
                 rebuilt.push(patched);
             }
             if (changed > 0) {
-                post("forced", "touch input was added to the session configuration");
+                post("forced", "the session asked for touch input"
+                     + (window.__gsPreferHEVC ? " and HEVC" : "")
+                     + ", with hardware rendering");
                 return rebuilt.join("\n");
             }
-
-            // Nothing was changed, so say what was actually seen.
-            var at = body.indexOf("enableTouchInput");
-            post("not changed", "the configuration asked for touch input already: "
-                 + JSON.stringify(body.slice(Math.max(0, at - 80), at + 120)));
+            post("not changed", "the session configuration was left as it was");
             return null;
         }
 

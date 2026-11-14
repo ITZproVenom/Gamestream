@@ -221,6 +221,13 @@ struct XboxWebView: UIViewRepresentable {
         controller.addUserScript(WKUserScript(source: WebScripts.pwaStandaloneJS,
                                               injectionTime: .atDocumentStart,
                                               forMainFrameOnly: true))
+        // The app's own setting is read here, so the session can be asked
+        // for HEVC: the site's own "enableHevc" switch lives in the same
+        // configuration the app already patches.
+        controller.addUserScript(WKUserScript(
+            source: "window.__gsPreferHEVC = \(AppSettings.shared.preferHEVC ? "true" : "false");",
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true))
         // The rumble bridge must wrap createDataChannel before the page opens
         // its WebRTC session, so it has to run at document start.
         let settings = AppSettings.shared
