@@ -188,8 +188,15 @@ struct LibraryView: View {
                     }
                 }
                 .padding(.horizontal, Theme.pageInset)
+            }
+            .scrollIndicators(.visible)
+            .onAppear {
+                proxy.scrollTo(genre ?? "all", anchor: .center)
+            }
+            .onChange(of: genre) { _, value in
+                withAnimation(.smooth) { proxy.scrollTo(value ?? "all", anchor: .center) }
+            }
         }
-        .scrollIndicators(.hidden)
     }
 
     @ViewBuilder
