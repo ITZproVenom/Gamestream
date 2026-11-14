@@ -503,6 +503,17 @@ enum WebScripts {
             // top of it, where it can be read and scrolled.
             ".bx-navigation-dialog-overlay { position: fixed !important; inset: 0 !important; width: 100% !important; height: 100% !important; background: rgba(0,0,0,0.45) !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; z-index: 2147482000 !important; }",
             ".bx-navigation-dialog { position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: auto !important; width: 100% !important; max-height: 94vh !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; touch-action: pan-y !important; z-index: 2147483000 !important; }",
+            // The menu is styled here rather than left to the script's own
+            // stylesheet: when that sheet is not in the page, the menu came
+            // up as bare markup - native dropdowns, a bare slider, no panel.
+            ".bx-navigation-dialog { background-color: rgba(20, 20, 23, 0.92) !important; -webkit-backdrop-filter: saturate(160%) blur(26px) !important; backdrop-filter: saturate(160%) blur(26px) !important; border: 1px solid rgba(255, 255, 255, 0.14) !important; border-radius: 22px !important; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55) !important; color: #fff !important; font-family: -apple-system, BlinkMacSystemFont, \"SF Pro Text\", system-ui, sans-serif !important; padding: 14px 16px 18px !important; }",
+            ".bx-navigation-dialog * { color: inherit !important; }",
+            ".bx-navigation-dialog select { background-color: rgba(255, 255, 255, 0.12) !important; color: #fff !important; border: 1px solid rgba(255, 255, 255, 0.16) !important; border-radius: 12px !important; padding: 6px 10px !important; font-size: 15px !important; -webkit-appearance: none !important; appearance: none !important; }",
+            ".bx-navigation-dialog input[type=\"range\"] { accent-color: rgb(120, 170, 255) !important; height: 26px !important; }",
+            ".bx-navigation-dialog input[type=\"checkbox\"] { accent-color: rgb(120, 170, 255) !important; transform: scale(1.15) !important; }",
+            ".bx-navigation-dialog button { background-color: rgba(255, 255, 255, 0.12) !important; border: 1px solid rgba(255, 255, 255, 0.14) !important; border-radius: 999px !important; color: #fff !important; font-weight: 600 !important; padding: 7px 14px !important; margin: 3px 0 !important; }",
+            ".bx-navigation-dialog .bx-donation-link { color: rgba(255, 255, 255, 0.82) !important; text-decoration: none !important; }",
+            ".bx-navigation-dialog .bx-debug-info { opacity: 0.8 !important; }",
             ".bx-settings-dialog, .bx-centered-dialog, .bx-key-binding-dialog { max-height: 86vh !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; touch-action: pan-y !important; position: relative !important; }"
         ].join("\n");
 
