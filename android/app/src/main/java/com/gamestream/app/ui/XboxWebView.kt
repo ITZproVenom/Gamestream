@@ -68,11 +68,13 @@ fun XboxWebView(
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                     url?.let { session.updateStreamingFromUrl(it) }
                     inject(view, session)
+                    StreamLaunchBridge.install(view)
                 }
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     url?.let { session.updateStreamingFromUrl(it) }
                     inject(view, session)
+                    StreamLaunchBridge.install(view)
                     view?.evaluateJavascript(SPA_BRIDGE, null)
                     view?.evaluateJavascript(RUMBLE_BRIDGE, null)
                     CookieManager.getInstance().flush()
@@ -83,6 +85,11 @@ fun XboxWebView(
                 @JavascriptInterface
                 fun onUrl(href: String) {
                     mainHandler.post { session.updateStreamingFromUrl(href) }
+                }
+
+                @JavascriptInterface
+                fun onLog(message: String) {
+                    android.util.Log.i("GameStream", message)
                 }
 
                 @JavascriptInterface
