@@ -914,9 +914,18 @@ enum WebScripts {
             try {
                 if (typeof SettingsDialog !== "undefined"
                     && SettingsDialog.getInstance) {
-                    SettingsDialog.getInstance().show();
+                    var dialog = SettingsDialog.getInstance();
+                    // The dialog opens with no tab selected unless one is
+                    // focused first, and a dialog with no tab is an empty
+                    // strip: the menu looked like it had not opened at all.
+                    // The script's own "manage" button does exactly this.
+                    var tab = focusFirstTab(dialog);
+                    dialog.show();
                     styleMenu();
-                    return "SettingsDialog.show(), " + reveal();
+                    // The content is laid out after it is shown, so the
+                    // panel is measured and styled again a moment later.
+                    setTimeout(function() { styleMenu(); }, 300);
+                    return "SettingsDialog.show(" + (tab ? ", " + tab : "") + "), " + reveal();
                 }
             } catch (e) {
                 // The dialog object exists but refused to open. The script's
@@ -935,6 +944,37 @@ enum WebScripts {
                 return "the site's Better xCloud button";
             }
             return "Better xCloud has not finished setting up yet";
+        }
+
+        /// Opens one of the dialog's tabs.
+        ///
+        /// The script's tabs are pictures with a group name on them, and the
+        /// script's own "manage" button clicks one before showing the
+        /// dialog. Without that, the dialog opens with nothing in it: it
+        /// comes up as a thirty-four pixel strip with no settings on it.
+        function focusFirstTab(dialog) {
+            var preferred = ["general", "stream", "mkb", "touch-control", "ui", "advanced"];
+            var container = null;
+            try { container = dialog && dialog.$container; } catch (e) {}
+            if (!container) return "";
+            var tabs = container.querySelectorAll(".bx-settings-tabs svg[data-group]");
+            for (var i = 0; i < preferred.length; i++) {
+                for (var j = 0; j < tabs.length; j++) {
+                    if (tabs[j].getAttribute("data-group") !== preferred[i]) continue;
+                    try {
+                        tabs[j].dispatchEvent(new Event("click"));
+                        return preferred[i];
+                    } catch (e) {}
+                }
+            }
+            // Nothing named as expected: take the first tab there is.
+            if (tabs.length > 0) {
+                try {
+                    tabs[0].dispatchEvent(new Event("click"));
+                    return tabs[0].getAttribute("data-group") || "the first tab";
+                } catch (e) {}
+            }
+            return "";
         }
 
         /// Puts the menu into shape directly, on the elements themselves.

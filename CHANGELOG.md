@@ -1,123 +1,59 @@
 ## Unreleased (iOS beta)
 
+The stream starts and keeps running, the account stays signed in, and the
+app has been made to work in the orientation and with the hands it is
+actually used with.
 
+### Streaming
 
-### Ambient customization
-
-- Added persistent Still, Gentle, and Flowing backdrop motion controls; iOS Reduce Motion always overrides animation. New installations default to Still to minimize continuous GPU animation.
-- Added Soft, Balanced, and Vivid ambient glow controls for finer background intensity. New installations default to Soft for lower visual-processing load.
-- Pauses the animated blurred background while a stream session is active to avoid drawing covered Home/Library/Settings backdrops underneath the player.
-- Settings now has an eight-category navigator—Account, Appearance, Streaming, Controller, Session, Clips, Storage, About—so groups no longer form one long settings page.
-
-### Card surface treatments
-
-- Added a saved Glass, Tinted, or Solid card surface preference in Appearance, defaulting to Glass for existing installations.
-- Applied the selected treatment through a shared surface modifier to reusable cards, game tiles, horizontal game cards, stat chips, and filter chips; Tinted follows the current accent color.
-
-### Backdrop palettes
-
-- Added seven selectable visual worlds: Aurora, Midnight, Ocean, Sunset, Forest, Rose Gold, and Monochrome. Palette selection saves immediately and previews on every screen.
-
-### Accent colors
-
-- Expanded the accent palette with Cyan, Teal, Gold, and Red alongside Purple, Blue, Green, Orange, and Pink.
-- Reworked accent selection into labeled swatches with clear selected-state feedback.
-
-
-### Authentication
-
-- The app no longer signs you out by looking too early. The site's own script mints the cloud token a moment after the page loads, so the first check could find nothing and declare the session gone: the sign-in screen appeared, and a few seconds later the session came back on its own. A check that finds no token now looks again, up to three times over six seconds, before it says the session is over.
-- A check that could not be made at all - a network that blinked, a page that would not load - no longer signs you out either. The session stays "not known", which is the screen that says the answer is not in yet, with a button to try again. Showing the sign-in screen because a check failed is how a player with a working session ends up being told they are signed out.
-- Sign-in and the session probe now run on **`play.xbox.com`** instead of `www.xbox.com`. The XSTS token lives in the origin's `localStorage`, and the stream player runs on `play.xbox.com` — so a token minted on `www.xbox.com` left the player sessionless and every launch bounced back to the home/product page without ever starting a stream. The earlier release announced this fix but only changed a comment; the URLs were never moved.
-- If the lightweight Xbox storage probe returns no token or cannot be read, retry against the full Xbox Cloud Gaming page before showing the signed-out screen. A probe failure alone no longer forces a login prompt.
-- Microsoft sign-in `target=_blank` windows now remain separate WKWebViews, preserving the top-level browsing context used by passkey flows while retaining the shared Xbox data store.
-- Passkeys (WebAuthn) now work in Microsoft sign-in: the app declares Microsoft's and Xbox's sign-in domains as associated domains with the **`webcredentials:`** service type (`login.live.com`, `login.microsoftonline.com`, `account.microsoft.com`, `www.xbox.com`, `xbox.com`, `play.xbox.com`), which Apple requires before a WKWebView will create or use a passkey — `applinks:` alone does not enable WebAuthn. CI ad-hoc-signs the unsigned archive with the entitlement before packaging the beta IPA and verifies the packaged binary carries it, so sideloaded installs keep it.
-
-### Search
-
-- Search submits to Xbox Cloud Gaming's official live search route and renders the returned games as native GameStream cards, rather than using the local catalog as the result set.
-- Live Xbox results can include currently cloud-playable titles omitted from GameStream's cached Game Pass feed, including free-to-play listings.
-- Result titles, product IDs, slugs, and artwork come from Xbox's rendered search cards; selecting a result continues through GameStream's native details and stream flow.
-- Xbox no-results and page-load failures are shown separately with retry. Recent search terms remain stored locally.
-- No undocumented search API is called; if Xbox changes its page markup, GameStream shows an extraction error instead of silently falling back to local-only matches.
-
-### Library, search, and home
-
-- The Library opens on something. It used to open on Favourites, which is empty for almost everyone, so the first thing on the screen was a notice saying there was nothing in it. It now opens on the first shelf that has something in it, and the things the player actually has - what they were playing, what is queued, what they marked - are shown above the shelves.
-- **How long the queue is likely to take** is now shown on Home and in the Library ("3 games queued · about 42m left"), worked out from how long this player actually plays: the average of their own sessions with that game, or their average session overall, or Microsoft's own 30-minute cloud session when there is no history yet.
-- The Library no longer stutters under the thumb. Every tile asked "is this a favourite?" and "how long has this been played?" by walking a list, and the playtime question walked the entire activity log - which the "most played" sort then asked thousands of times for a single frame. Those answers now come from lookup tables, and the filtered and sorted list is worked out when something changes rather than on every redraw.
-- **Start the game automatically** now does something. The switch was stored and never read, so the app pressed Xbox's "Play with cloud" button and answered the controller gate whatever the setting said. With it off, the app does none of that and shows Xbox's own page instead, so the player presses Play themselves.
-- A game taken off the queue to be played next and then never started goes back on the queue. A failed launch used to quietly remove it.
-
-- Added an **All games** Library shelf using a lazy grid, so the full catalog is available without increasing Home's 24-game shelf cap (kept for performance).
-- Added Fortnite as a curated cloud-game fallback when Microsoft's Game Pass catalog feed omits it; deduplicated by product ID.
-- Recent searches remain available locally for convenience; typed game searches always use Xbox's live results.
-- Added loading and retryable catalog-error states to Library.
-- Removed the extra genre-filter row from Home to reduce visual clutter; browsing and filtering remain in Library.
-- Added US market/language metadata when the catalog falls back to Microsoft's US feed.
-
-### Diagnostics
-
-- The connection check now measures the machine that will actually carry the stream. It was timing `www.xbox.com/play` - a web page on the website's CDN - and nothing ever told it where the account's cloud region was, so the "connection is poor" verdict was about the wrong host entirely. The page now reports the region it is talking to and the check times that.
-- The check takes five samples instead of three and reports the middle half of them rather than the whole range, so one slow packet no longer reads as a bad connection, and the reading says which host it was taken against.
-- New setting, **Keep a log**: the diagnostic record can be turned off. Nothing is then kept, written or handed to the system log, and the record that was there is cleared.
+- The session is negotiated on `play.xbox.com`, where the player lives,
+  so the stream finds the token it needs and starts. It launches from
+  `play.xbox.com/play/launch/…`, presses Xbox's own "Play with cloud"
+  button, and answers the controller gate with "Connect later".
+- The page is given a gamepad it can see: the app mirrors the attached
+  controller into it, so the game stops asking for one and the buttons,
+  sticks and triggers arrive in the game.
+- The session is asked for HEVC, for the GPU rather than the processor,
+  and for the on-screen controls, in the request the server reads.
+- Better xCloud's menu opens with a tab selected and is styled to match
+  the app; its fullscreen prompt is answered for you.
+- The diagnostics log records what the page itself reports: its address,
+  whether it believes it is a standalone app, the buttons and dialogs it
+  has, and the state of every video element.
 
 ### Interface
 
-- The player works in the orientation it is used in. The launch screen was a fixed stack with no scrolling, so on a phone held sideways - about 390 points of height - the Cancel button, the only way out of a launch that never starts, was off the bottom of the screen. The emblem shrinks to the height available and the rest scrolls. The controls were also under Apple's minimum touch target: twenty points for the icons, five for the handle that brings them back.
-- The controls are laid out differently when the phone is held upright: one row of three fixed controls beside a scrolling strip left the strip about a hundred and seventy points wide, so the buttons were pressed together and the read-outs could not be told apart. Portrait now gets two rows.
-- Settings has a shape of its own. The eight categories were in a horizontal scroller that showed two of them, and every switch was a line of text with no icon; the categories are a grid, and the switches, pickers and sub-headings carry icons and sit in the same row shape as everything else. The look of the app has not changed.
-- The Library opens on something: it used to open on Favourites, which is empty for almost everyone, so the first thing on the screen was a notice saying there was nothing in it. What the player actually has is above the shelves, and the shelf in use is kept in view.
-- The three chips on the Home page ended at different heights, because their captions are different lengths; two lines are always reserved now, and the hero card is shorter when the phone is held sideways.
-- Long game names take two lines in "Most played" instead of one, and a tile says that it is a favourite - the heart in the corner was the only sign, and a screen reader never said it.
-- The recorder says what went wrong. It added its tracks only if the device would take them and started writing without asking whether the writer agreed, so a device that would not take a track produced an empty file and the recording looked as though it had worked.
+- The player works sideways: the launch screen shrinks and scrolls so
+  Cancel is always reachable, and the controls are two rows on a phone
+  held upright.
+- Settings has a grid of categories instead of a scroller, and every
+  switch, picker and heading carries an icon.
+- The Library opens on what you have, with the time the queue will take,
+  and the shelf in use kept in view.
+- Touch targets are at least forty-four points, and what a picture means
+  is said aloud.
+
+### Fixed
+
+- The app no longer signs you out when a check runs too early or fails.
+- A cancelled catalogue refresh is no longer logged as a failure.
+- A game taken off the queue and never started goes back on the queue.
+- The recorder says what went wrong instead of writing an empty clip.
+- Long game names, favourite tiles and the search spinner say what they
+  are.
 
 ### Performance
 
-- The page no longer works in the background: the scan for the video stopped once the game is playing, and the report that reads the page's buttons and dialogs runs half as often.
-- The catalogue is asked for again every time the app comes to the front, so the first request is always cancelled; that is no longer logged as a warning about a failure that never happened.
+- The page stops looking for the video once the game is playing, and
+  reads itself half as often.
+- The launch screen draws a lighter blur, less often, and the log no
+  longer fills the disk.
 
-### Streaming and recovery
+### Appearance
 
-- A stream no longer fills the log with the same lines. The page reports itself every two seconds and the video reading every 700 ms, and both were written out every time - a two-minute session produced several hundred lines and a pile of disk writes. Pages, page signals and video states are now written only when they change, and the detail lines stay on screen instead of going to the file.
-- Better xCloud is now given the finished page instead of being injected into a page that does not exist yet. It builds its interface against the page it finds and publishes what it exposes on `window.BX_EXPOSED` at the end of that work; injected at document start it left its dialog behind without its exports, so opening its menu threw "window.BX_EXPOSED is undefined" and the menu did nothing. The diagnostics now also say whether Better xCloud managed to set itself up.
-- The touch-control rewrite no longer gives up silently on a session configuration it cannot parse: it reports the length of the body and how it began, so the next log can say what has to be parsed instead of "not JSON".
-- The diagnostics log now records what the Xbox page itself reports: the full URL of every page, whether the page believes it is a standalone installed app (`navigator.standalone`, `display-mode: standalone`, service worker support), the user agent and touch capabilities the page sees, the buttons it has rendered, any visible dialog text, the state of every video element (size, readiness, playback position, remote tracks), and the labels that were on the page when no cloud-play button matched. A launch that stops can now be read straight off the log instead of guessed at.
-- After the cloud-play button is pressed, Xbox asks for a controller before it starts the session ("Let's get ready — You'll need a controller to play — Controller not detected"). On a phone with no controller paired, that dialog is where the launch used to stop: the app pressed Play again every few seconds and nothing ever began. The dialog is now answered with "Connect later" (and the equivalent wording), and the session that follows is where the app adds the on-screen touch controls. The Play button is also no longer pressed again while the session is starting.
-- New setting, **Show Xbox's page while the game starts**: while the session is being set up, the app's loading screen can be replaced by Xbox's own page, which is live and can be tapped. A launch that stops on a dialog is then something that can be seen and answered instead of something that has to be diagnosed from the log. It is off by default; turn it on in Settings → Streaming when a launch needs watching.
-- The streaming page is now given a gamepad it can see. WKWebView never exposes an attached controller to a web page - `navigator.getGamepads()` was empty no matter what was paired - so Xbox's cloud client kept asking for a controller: the "Let's get ready" dialog before the session, then a "Controller not detected" chip for the whole session. The page is handed one gamepad that mirrors the real controller - it appears when a controller is attached and disappears when it is not, so the page is never told about a controller the player does not have - and the buttons, sticks and triggers the player presses now reach the game. The pad's vibration actuator is part of the same object, so the game's rumble reaches the controller.
-- Better xCloud's "Don't want games to launch fullscreen?" prompt, which sat over the game with its question still open, is now answered for you.
-- Streams launch from `play.xbox.com/play/launch/...` instead of `www.xbox.com/play/launch/...`: www now redirects that route to the store page (`/play/games`), so the auto-start script never fired and the stream never started. The player itself is at `play.xbox.com/stream/<id>/<slug>`; the app's page classification, chrome-hiding and leave-detection treat both `/play/launch` and `/stream/` as the stream page, and auto-start now clicks Xbox's actual cloud-play button on the product page — "Play with cloud (with ads)" / "Play with cloud" — which the previous fixed label list never matched, so the launch sat on the product page until the watchdog gave up.
-- The stream webview presents a desktop Windows user agent and spoofs `navigator.standalone` / `display-mode: standalone` at document start: on an iOS UA Xbox requires the home-screen PWA for cloud play and bounces the launch to the store page with an "Add to Home Screen" gate. Sign-in and the auth probe keep the mobile Safari UA.
-- Sign-in and the session probe now run on `play.xbox.com` (where www.xbox.com/play redirects anyway): the XSTS token lands in play.xbox.com's storage, which is the origin the stream player checks. Previously the token sat only on www.xbox.com, so the player on play.xbox.com was sessionless and the launch bounced back to the home page.
-- New cinematic launch screen when Play is tapped: the game's hero art drifts blurred behind a moving accent mesh gradient, the poster sits inside an orbiting energy ring with a pulsing glow, and real progress steps (launch → connect → start session) tick over as the stream coordinator advances. Reduce Motion freezes all of it.
-- A launch that Xbox redirects to the store page (`/play/games`) or the `/play` home while connecting now fails fast with a clear message and re-checks the session, instead of sitting on "Connecting" until the 75-second watchdog fired. This is what a stale web session looks like when Play is tapped.
-- Better xCloud's dimming overlay cleanup now checks actual dialog visibility, reducing stale blur after a menu closes.
-- Persistent Xbox error screens are reported once per visible message, avoiding duplicate callbacks that could abort automatic reconnect.
-- Pending reconnects recheck Auto Reconnect after backoff; switching it off prevents the scheduled retry.
-- Late stream-start callbacks are ignored after the session exits.
-- New installs use Xbox's per-game touch-layout choice by default; existing explicit touch-control preferences are retained.
-
-### Library, recording, and diagnostics
-
-- Creating a list from a game's detail page now adds that game to the new list.
-- Recording start rejects duplicate attempts while capture is starting, recording, or saving.
-- Clearing artwork cache cancels and invalidates in-flight poster downloads so they cannot repopulate the cleared cache.
-- VoiceOver now announces the actual stream metrics, and Insights displays FPS and latency on separate scales.
-- Search/Settings controls expose catalog recovery and accessible slider labels/values.
-- Settings asks for confirmation before clearing activity or recently-played history.
-- The signed-out welcome screen scales with Dynamic Type and scrolls on compact or large-text layouts.
-
-### Authentication and integration integrity
-
-- Sign-out invalidates in-flight authentication refreshes so a late result cannot restore the signed-in state.
-- Authentication probe callbacks are matched to their originating navigation, preventing stale callbacks from completing a newer fallback load.
-- Better xCloud is pinned to reviewed v6.7.12 and its downloaded and cached script SHA-256 digests are verified before injection. Updating it now requires a reviewed GameStream release.
-
-### Thermal guard removal (iOS)
-
-- Removed the overheating toggle, thermal-status display, thermal observer, heat notices, quality advice, automatic stream termination, and thermal diagnostics output.
-- Low-battery protection, session time limits, and network-based adaptive quality are unchanged.
+- Seven backdrops, nine accent colours, Glass, Tinted or Solid cards,
+  motion and glow controls, and an eight-category Settings. The animated
+  backdrop pauses while a game is running.
 
 ## 2.1.1 (beta)
 
