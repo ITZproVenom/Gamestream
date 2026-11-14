@@ -53,6 +53,26 @@ struct StreamView: View {
                 EmptyView()
             }
 
+            // When the page is shown instead of the loading screen, the
+            // player still needs to know the app is working: a small line
+            // of text at the top, out of the way of the page and of its own
+            // touches.
+            if showSite, case .connecting = stream.phase {
+                VStack {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.mini)
+                        Text(stageMessage)
+                            .font(.caption.weight(.semibold))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .glassEffect(.regular, in: Capsule())
+                    .padding(.top, 10)
+                    Spacer(minLength: 0)
+                }
+                .allowsHitTesting(false)
+            }
+
             if stream.phase == .playing {
                 // The controls hide themselves after a few seconds. The
                 // statistics used to be inside them and went with them, so
