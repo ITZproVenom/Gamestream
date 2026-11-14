@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -20,6 +21,7 @@ import com.gamestream.app.BetterXCloudInjector
 import com.gamestream.app.CloudCatalogService
 import com.gamestream.app.OnboardingPrefs
 import com.gamestream.app.SessionStore
+import com.gamestream.app.ui.screens.HomeScreen
 import com.gamestream.app.ui.screens.InsightsScreen
 import com.gamestream.app.ui.screens.IntroScreen
 import com.gamestream.app.ui.screens.LibraryScreen

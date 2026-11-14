@@ -132,25 +132,6 @@ class PlayActivity private constructor(context: Context) {
         return days
     }
 
-    /// How many sessions this player has had, in total.
-    fun totalSessionCount(): Int {
-        normalizeWeeks()
-        return stats.values.sumOf { it.sessionCount }
-    }
-
-    /// How long one game is likely to take, from this player's own sessions
-    /// with it.
-    ///
-    /// With no history there is nothing to go on, so Microsoft's own cloud
-    /// session length is used: a queue of games would otherwise be reported
-    /// as taking no time at all.
-    fun estimatedSeconds(id: String): Long {
-        val stat = stats[id] ?: return 30L * 60L
-        if (stat.sessionCount <= 0) return 30L * 60L
-        val average = stat.totalSeconds / stat.sessionCount.coerceAtLeast(1)
-        return average.coerceAtLeast(60L)
-    }
-
     fun liveSeconds(): Long {
         val start = activeStart
         if (activeId == null || start == 0L) return 0

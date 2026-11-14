@@ -114,7 +114,7 @@ fun GlassIconButton(
     val accent = LocalAccent.current
     val content: @Composable BoxScope.() -> Unit = {
         Icon(
-            systemImage = systemImage,
+            imageVector = systemImage,
             contentDescription = label,
             tint = if (active) accent.color else Color.White,
             modifier = Modifier.padding(12.dp)
