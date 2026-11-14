@@ -301,7 +301,12 @@ final class StreamRecorder: NSObject, ObservableObject {
                 ]
             ])
             video.expectsMediaDataInRealTime = true
-            if writer.canAdd(video) { writer.add(video) }
+            guard writer.canAdd(video) else {
+                throw NSError(domain: "com.gamestream.recorder", code: 1, userInfo: [
+                    NSLocalizedDescriptionKey: "This device would not take the video track, so no clip could be written."
+                ])
+            }
+            writer.add(video)
 
             let audio = AVAssetWriterInput(mediaType: .audio, outputSettings: [
                 AVFormatIDKey: kAudioFormatMPEG4AAC,
@@ -310,7 +315,12 @@ final class StreamRecorder: NSObject, ObservableObject {
                 AVEncoderBitRateKey: 128_000
             ])
             audio.expectsMediaDataInRealTime = true
-            if writer.canAdd(audio) { writer.add(audio) }
+            guard writer.canAdd(audio) else {
+                throw NSError(domain: "com.gamestream.recorder", code: 2, userInfo: [
+                    NSLocalizedDescriptionKey: "This device would not take the sound track, so no clip could be written."
+                ])
+            }
+            writer.add(audio)
 
             let wantsMicrophone = AppSettings.shared.recordMicrophone
             var mic: AVAssetWriterInput?
@@ -336,7 +346,14 @@ final class StreamRecorder: NSObject, ObservableObject {
             // Writing starts before capture does. The other way round, every
             // sample that arrives in the gap is dropped because the writer is
             // not writing yet, and the clip begins late.
-            writer.startWriting()
+            guard writer.startWriting() else {
+                // A writer that refuses to start would otherwise sit there
+                // producing an empty file, and the recording would look as
+                // though it worked.
+                throw NSError(domain: "com.gamestream.recorder", code: 3, userInfo: [
+                    NSLocalizedDescriptionKey: "The recorder could not start writing, so no clip could be made."
+                ])
+            }
 
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 recorder.startCapture { [weak self] sample, type, error in
