@@ -493,8 +493,17 @@ enum WebScripts {
             // on a phone is entirely below the fold - the menu was open and
             // invisible.
             ".bx-dialog-overlay { position: fixed !important; inset: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; z-index: 2147483000 !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgba(0,0,0,0.4) !important; }",
-            // And the menu inside it has to fit the screen and scroll.
-            ".bx-navigation-dialog, .bx-settings-dialog, .bx-centered-dialog, .bx-key-binding-dialog { max-height: 86vh !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; touch-action: pan-y !important; position: relative !important; }"
+            // The menu is not inside that overlay: Better xCloud appends the
+            // backdrop and the panel to the document as two separate
+            // siblings, and the panel is laid out in the flow
+            // (position: absolute). It was opening 390 pixels down a 390
+            // pixel-tall landscape screen - entirely below the visible area,
+            // with the right size and the right z-index and still invisible.
+            // The backdrop covers the screen and the panel is pinned to the
+            // top of it, where it can be read and scrolled.
+            ".bx-navigation-dialog-overlay { position: fixed !important; inset: 0 !important; width: 100% !important; height: 100% !important; background: rgba(0,0,0,0.45) !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; z-index: 2147482000 !important; }",
+            ".bx-navigation-dialog { position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: auto !important; width: 100% !important; max-height: 94vh !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; touch-action: pan-y !important; z-index: 2147483000 !important; }",
+            ".bx-settings-dialog, .bx-centered-dialog, .bx-key-binding-dialog { max-height: 86vh !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; touch-action: pan-y !important; position: relative !important; }"
         ].join("\n");
 
         function onLaunchPage() {
@@ -1918,6 +1927,19 @@ enum WebScripts {
             } catch (e) {}
         }
 
+        /// The address a request is going to, so the log can say which
+        /// request was changed. A session configuration can travel in
+        /// several places, and without the address there is no telling
+        /// whether the one that was patched is the one the server reads.
+        function urlOf(input) {
+            try {
+                if (!input) return "";
+                if (typeof input === "string") return input;
+                if (typeof input.url === "string") return input.url;
+            } catch (e) {}
+            return "";
+        }
+
         /// True when the object had a touch configuration to change.
         function force(node, depth) {
             if (!node || typeof node !== "object" || depth > 6) return false;
@@ -2070,7 +2092,8 @@ enum WebScripts {
             if (changed > 0) {
                 post("forced", "the session asked for touch input"
                      + (window.__gsPreferHEVC ? " and HEVC" : "")
-                     + ", with hardware rendering");
+                     + ", with hardware rendering"
+                     + (window.__gsPatchTarget ? " - in " + window.__gsPatchTarget : ""));
                 return rebuilt.join("\n");
             }
             post("not changed", "the session configuration was left as it was");
@@ -2082,7 +2105,9 @@ enum WebScripts {
             window.fetch = function(input, init) {
                 try {
                     if (init && typeof init.body === "string") {
+                        window.__gsPatchTarget = urlOf(input);
                         var next = rewrite(init.body);
+                        window.__gsPatchTarget = "";
                         if (next !== null) {
                             init = Object.assign({}, init, { body: next });
                         }
@@ -2095,7 +2120,9 @@ enum WebScripts {
                         // the promise keeps the call's own semantics.
                         var request = input;
                         return request.clone().text().then(function(text) {
+                            window.__gsPatchTarget = urlOf(request);
                             var replacement = rewrite(text);
+                            window.__gsPatchTarget = "";
                             if (replacement === null) {
                                 return nativeFetch.call(window, request, init);
                             }
@@ -2115,10 +2142,20 @@ enum WebScripts {
 
         var nativeSend = window.XMLHttpRequest &&
             window.XMLHttpRequest.prototype && window.XMLHttpRequest.prototype.send;
+        var nativeOpen = window.XMLHttpRequest &&
+            window.XMLHttpRequest.prototype && window.XMLHttpRequest.prototype.open;
+        if (typeof nativeOpen === "function") {
+            window.XMLHttpRequest.prototype.open = function(method, url) {
+                try { this.__gsUrl = url; } catch (e) {}
+                return nativeOpen.apply(this, arguments);
+            };
+        }
         if (typeof nativeSend === "function") {
             window.XMLHttpRequest.prototype.send = function(body) {
                 try {
+                    window.__gsPatchTarget = this.__gsUrl || "";
                     var next = rewrite(body);
+                    window.__gsPatchTarget = "";
                     if (next !== null) return nativeSend.call(this, next);
                 } catch (e) {}
                 return nativeSend.apply(this, arguments);
