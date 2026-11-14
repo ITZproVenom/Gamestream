@@ -625,15 +625,19 @@ struct LaunchBackdrop: View {
             if let art = game?.heroURL ?? game?.posterURL {
                 if reduceMotion {
                     GameArtwork(url: art, cornerRadius: 0)
-                        .blur(radius: 64)
+                        .blur(radius: 46)
                         .scaleEffect(1.15)
                         .overlay(Color.black.opacity(0.2))
                 } else {
-                    TimelineView(.animation(minimumInterval: 1 / 30)) { context in
+                    // A full-screen blur is expensive to redraw, and this
+                    // runs for as long as the launch takes. Twenty-four
+                    // frames a second is smooth enough for a slow breath,
+                    // and the blur is lighter than it was.
+                    TimelineView(.animation(minimumInterval: 1 / 24)) { context in
                         let t = context.date.timeIntervalSince1970
                         let s = 1.12 + 0.05 * CGFloat(sin(t * 0.45))
                         GameArtwork(url: art, cornerRadius: 0)
-                            .blur(radius: 64)
+                            .blur(radius: 46)
                             .scaleEffect(s)
                             .offset(x: 14 * CGFloat(sin(t * 0.3)), y: 10 * CGFloat(cos(t * 0.23)))
                             .overlay(Color.black.opacity(0.2))
@@ -718,7 +722,9 @@ struct LaunchEmblem: View {
                         .stroke(settings.accent.color.opacity(0.85), lineWidth: 3)
                         .frame(width: 178 * scale, height: 178 * scale)
                 } else {
-                    TimelineView(.animation(minimumInterval: 1 / 60)) { context in
+                    // The ring turns once a second; redrawing a gradient at
+                    // sixty frames a second is work for nothing.
+                    TimelineView(.animation(minimumInterval: 1 / 30)) { context in
                         let angle = context.date.timeIntervalSince1970 * 100
                         Circle()
                             .trim(from: 0, to: 0.72)
