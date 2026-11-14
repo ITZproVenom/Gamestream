@@ -477,6 +477,12 @@ enum WebScripts {
             // Better xCloud's own stats bar duplicates the app's, in a
             // different place and a different font, over the game.
             ".bx-stats-bar { display: none !important; }",
+            // Its failure screen - "Failed to run Better xCloud" with a
+            // "How to fix" link - covers the whole page and stops it. It
+            // appears when the script is not run while the document is
+            // still loading, which is not how the app runs it, but a screen
+            // that blocks the game is not something to leave lying over it.
+            ".bx-reload-overlay { display: none !important; }",
             // Its dialog dims the stream behind a blurred overlay. When the
             // overlay outlives the dialog the game is left permanently
             // frosted, which only a reconnect used to clear. The blur is
@@ -888,7 +894,7 @@ enum WebScripts {
                 enable(target);
                 return "the site's Better xCloud button";
             }
-            return null;
+            return "Better xCloud has not finished setting up yet";
         }
 
         /// If the dialog exists but cannot be seen, make it seen.
@@ -1680,7 +1686,11 @@ enum WebScripts {
             }
             return {
                 id: "Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 02fd)",
-                index: 0,
+                // Slot 1, not slot 0. Better xCloud puts its own virtual pad
+                // - the one it uses for mouse and keyboard - in slot 0 and
+                // overwrites whatever is there, so the real controller would
+                // have been hidden behind it.
+                index: 1,
                 connected: !!state.connected,
                 mapping: "standard",
                 timestamp: performance.now(),
@@ -1712,7 +1722,8 @@ enum WebScripts {
         function pads() {
             // The real API returns a fixed-length array with nulls where
             // there is no pad, and the site's own code indexes into it.
-            return [state.connected ? makePad() : null];
+            // Slot 0 is left empty for Better xCloud's own virtual pad.
+            return [null, state.connected ? makePad() : null];
         }
 
         try {

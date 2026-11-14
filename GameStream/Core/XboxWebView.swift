@@ -266,15 +266,12 @@ struct XboxWebView: UIViewRepresentable {
             AppLog.shared.info("betterxcloud", "the next page load starts from clean storage")
         }
         if let script = BetterXCloud.shared.cachedScript {
-            // Better xCloud builds its own interface against the page it
-            // finds, and publishes what it exposes on window.BX_EXPOSED at
-            // the end of that work. Injected at document start it ran
-            // against a page that did not exist yet: its dialog was there
-            // but its exports never were, so opening the menu threw
-            // "window.BX_EXPOSED is undefined" and the menu did nothing.
-            // It is given the finished page instead.
+            // Better xCloud rewrites the site's own JavaScript bundle as it
+            // loads, so it has to be in place before the page boots: given
+            // the finished page it says "Failed to run Better xCloud" and
+            // does nothing.
             controller.addUserScript(WKUserScript(source: script,
-                                                  injectionTime: .atDocumentEnd,
+                                                  injectionTime: .atDocumentStart,
                                                   forMainFrameOnly: true))
         }
         // The skin has to land after Better xCloud's own stylesheet, so it
