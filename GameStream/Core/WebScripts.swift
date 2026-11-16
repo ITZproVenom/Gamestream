@@ -1051,12 +1051,18 @@ enum WebScripts {
         window.__gsCommand = function(command) {
             var target = null;
 
-            if (command === "bxMenu" || command === "bxClose") {
-                // The app's stream settings are its own panel now. The
-                // script's menu is its own business: it rebuilds it whenever
-                // it likes and writes its own stylesheet over the app's, so
-                // dressing it up never settled. The page is left alone.
-                note(command, "the app's own settings are used for this");
+            if (command === "bxMenu") {
+                var how = openBxMenu();
+                if (how) {
+                    note(command, "opened " + how);
+                    return true;
+                }
+                // The script has not set itself up yet; its own button
+                // appears when it has.
+                note(command, "Better xCloud is not ready yet");
+                return false;
+            } else if (command === "bxClose") {
+                note(command, closeBxMenu());
                 return true;
             } else if (command === "quit") {
                 // Ending the session properly is the site's own quit, inside

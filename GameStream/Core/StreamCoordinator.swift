@@ -349,6 +349,9 @@ final class StreamCoordinator: ObservableObject {
         touchInputOutcome = ""
         resetSessionMetrics()
         startedAt = Date()
+        // The queue's next game has been taken; it only goes back if the
+        // launch fails.
+        queuedNext = nil
         LibraryStore.shared.noteLaunch(next)
         // The guard measures one sitting, not one game, so it keeps running.
         phase = .connecting("Starting \(next.title)")
