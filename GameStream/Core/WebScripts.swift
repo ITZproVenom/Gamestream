@@ -1672,7 +1672,7 @@ enum WebScripts {
         if (window.__gsGamepadBridge) return;
         window.__gsGamepadBridge = true;
 
-        var state = { connected: false, axes: [0, 0, 0, 0], buttons: [] };
+        var state = { connected: false, axes: [0, 0, 0, 0], buttons: [], values: [] };
 
         function post(payload) {
             try {
@@ -1680,14 +1680,21 @@ enum WebScripts {
             } catch (e) {}
         }
 
-        function makeButton(pressed) {
-            return { pressed: pressed, touched: pressed, value: pressed ? 1 : 0 };
-        }
-
         function makePad() {
             var buttons = [];
             for (var i = 0; i < 17; i++) {
-                buttons.push(makeButton(!!state.buttons[i]));
+                var pressed = !!state.buttons[i];
+                // The triggers are analog: the page reads their value, so
+                // how far they are pulled has to reach it.
+                var value = state.values && state.values.length > i
+                    ? Number(state.values[i]) || 0
+                    : (pressed ? 1 : 0);
+                if (pressed && value < 1) value = 1;
+                buttons.push({
+                    pressed: pressed,
+                    touched: pressed,
+                    value: value
+                });
             }
             return {
                 id: "Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 02fd)",
@@ -1746,6 +1753,7 @@ enum WebScripts {
                 if (next && typeof next.connected === "boolean") state.connected = next.connected;
                 if (next && next.axes) state.axes = next.axes;
                 if (next && next.buttons) state.buttons = next.buttons;
+                if (next && next.values) state.values = next.values;
                 if (state.connected && !was) {
                     var event = null;
                     try {

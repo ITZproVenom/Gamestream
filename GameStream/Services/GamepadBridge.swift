@@ -87,19 +87,24 @@ final class GamepadBridge {
     }
 
     /// The current state of the pad, in the page's own terms.
-    private func snapshot() -> (axes: [Double], buttons: [Bool]) {
+    private func snapshot() -> (axes: [Double], buttons: [Bool], values: [Double]) {
         var buttons = [Bool](repeating: false, count: 17)
+        var values = [Double](repeating: 0, count: 17)
         var axes = [Double](repeating: 0, count: 4)
         let controller = GCController.current ?? GCController.controllers().first
-        guard let pad = controller?.extendedGamepad else { return (axes, buttons) }
+        guard let pad = controller?.extendedGamepad else { return (axes, buttons, values) }
         buttons[0] = pad.buttonA.isPressed
         buttons[1] = pad.buttonB.isPressed
         buttons[2] = pad.buttonX.isPressed
         buttons[3] = pad.buttonY.isPressed
         buttons[4] = pad.leftShoulder.isPressed
         buttons[5] = pad.rightShoulder.isPressed
-        buttons[6] = pad.leftTrigger.value > 0.1
-        buttons[7] = pad.rightTrigger.value > 0.1
+        // The triggers are analog: the page reads their value, not just
+        // whether they are down.
+        buttons[6] = pad.leftTrigger.value > 0.02
+        values[6] = Double(pad.leftTrigger.value)
+        buttons[7] = pad.rightTrigger.value > 0.02
+        values[7] = Double(pad.rightTrigger.value)
         buttons[8] = pad.buttonMenu.isPressed
         buttons[9] = pad.buttonOptions?.isPressed ?? false
         buttons[10] = pad.leftThumbstickButton?.isPressed ?? false
@@ -110,10 +115,14 @@ final class GamepadBridge {
         buttons[15] = pad.dpad.right.isPressed
         buttons[16] = pad.buttonHome?.isPressed ?? false
         axes[0] = Double(pad.leftThumbstick.xAxis.value)
-        axes[1] = Double(pad.leftThumbstick.yAxis.value)
+        // The two systems disagree about which way is up. Apple's stick
+        // reports up as positive; the Gamepad API reports it as negative,
+        // because its Y axis points the way the screen does. Copying the
+        // value straight through turned every push up into a push down.
+        axes[1] = -Double(pad.leftThumbstick.yAxis.value)
         axes[2] = Double(pad.rightThumbstick.xAxis.value)
-        axes[3] = Double(pad.rightThumbstick.yAxis.value)
-        return (axes, buttons)
+        axes[3] = -Double(pad.rightThumbstick.yAxis.value)
+        return (axes, buttons, values)
     }
 
     private func push(force: Bool) {
@@ -129,7 +138,8 @@ final class GamepadBridge {
         let payload: [String: Any] = [
             "connected": connected,
             "axes": state.axes,
-            "buttons": state.buttons.map { $0 ? 1 : 0 }
+            "buttons": state.buttons.map { $0 ? 1 : 0 },
+            "values": state.values
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: payload),
               let json = String(data: data, encoding: .utf8) else { return }
