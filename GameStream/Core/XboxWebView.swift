@@ -253,7 +253,14 @@ struct XboxWebView: UIViewRepresentable {
             forMainFrameOnly: true))
         // The input configuration leaves the page over the network, so the
         // wrapper has to be in place before the site builds its session.
-        if settings.touchControls == .everyGame {
+        //
+        // It used to be installed only when touch controls were set to
+        // "every game", so with the ordinary setting - "when offered" - the
+        // request was never made at all and the page never sent an input
+        // configuration to patch. The wrapper asks for touch input; whether
+        // the on-screen controls are shown is the separate question the
+        // setting decides.
+        if settings.touchControls != .hidden {
             controller.addUserScript(WKUserScript(source: WebScripts.touchInputJS,
                                                   injectionTime: .atDocumentStart,
                                                   forMainFrameOnly: true))
