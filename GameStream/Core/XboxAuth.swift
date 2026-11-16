@@ -239,9 +239,16 @@ final class XboxAuth: NSObject, ObservableObject {
         // seconds. Looking again a couple of times over six seconds was not
         // always enough, and a session that was there all along was being
         // called gone.
+        //
+        // How long to keep looking depends on where the check came from: at
+        // launch the app has nothing else to show, so it is worth waiting;
+        // when the app comes back to the front, the player is looking at
+        // something else and the answer is needed now.
         if !signedIn {
-            for attempt in 0..<5 {
-                try? await Task.sleep(for: .seconds(3))
+            let tries = reason == "launch" ? 5 : 2
+            let wait = reason == "launch" ? 3.0 : 1.5
+            for attempt in 0..<tries {
+                try? await Task.sleep(for: .seconds(wait))
                 guard generation == authGeneration else { return state }
                 // The probe view was unwrapped earlier in this function, so
                 // it is the one in hand here.
@@ -256,8 +263,9 @@ final class XboxAuth: NSObject, ObservableObject {
                     log.info("auth", "the session was there on the second look")
                     break
                 }
-                if attempt == 4 {
-                    log.info("auth", "no session after looking for 15 seconds")
+                if attempt == tries - 1 {
+                    log.info("auth", "no session after looking for "
+                             + "\(Int(wait * Double(tries))) seconds")
                 }
             }
         }
