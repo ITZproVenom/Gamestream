@@ -1125,16 +1125,27 @@ enum WebScripts {
         if (window.__gsCapture) return;
 
         function biggestVideo() {
+            // The game is the video with a remote track on it. The site
+            // shows trailers and pictures of its own, and the biggest one is
+            // often one of those - a screenshot of an advert is not what the
+            // player asked for.
             var videos = document.querySelectorAll("video");
+            var live = null;
             var best = null;
             for (var i = 0; i < videos.length; i++) {
                 var v = videos[i];
                 if (!v.videoWidth || !v.videoHeight) continue;
+                var tracks = 0;
+                try {
+                    var stream = v.srcObject;
+                    if (stream && stream.getVideoTracks) tracks = stream.getVideoTracks().length;
+                } catch (e) {}
+                if (tracks > 0 && !live) live = v;
                 if (!best || v.videoWidth * v.videoHeight > best.videoWidth * best.videoHeight) {
                     best = v;
                 }
             }
-            return best;
+            return live || best;
         }
 
         function grab(video) {
