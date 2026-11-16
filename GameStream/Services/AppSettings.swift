@@ -260,6 +260,9 @@ final class AppSettings: ObservableObject {
         static let saturation = "settings.saturation"
         static let contrast = "settings.contrast"
         static let hideTouchControls = "settings.hideTouchControls"
+        static let invertLeftStick = "settings.invertLeftStick"
+        static let invertRightStick = "settings.invertRightStick"
+        static let stickAsButtons = "settings.stickAsButtons"
         static let touchControls = "settings.touchControls"
         static let cellularLimit = "settings.cellularLimit"
         static let cellularBitrate = "settings.cellularBitrateMbps"
@@ -369,6 +372,27 @@ final class AppSettings: ObservableObject {
     @Published var contrast: Int {
         didSet { store(contrast, Key.contrast); applyToLiveStream() }
     }
+
+    /// Turns the vertical axis of a stick the other way round.
+    ///
+    /// The controller and the web page disagree about which way is up, and
+    /// which way a given game wants is not something the app can know: one
+    /// reads the stick the way the browser reports it, another reads it the
+    /// way the game did on a console. Rather than guess, the player decides.
+    @Published var invertLeftStick: Bool {
+        didSet { store(invertLeftStick, Key.invertLeftStick) }
+    }
+    @Published var invertRightStick: Bool {
+        didSet { store(invertRightStick, Key.invertRightStick) }
+    }
+    /// Uses the stick as the direction pad instead of as an axis.
+    ///
+    /// Some games read the direction pad and the stick separately, and some
+    /// only read the stick. With this on, pushing the stick sends the same
+    /// up, down, left and right that the direction pad sends.
+    @Published var stickAsButtons: Bool {
+        didSet { store(stickAsButtons, Key.stickAsButtons) }
+    }
     @Published var touchControls: TouchControls {
         didSet { store(touchControls.rawValue, Key.touchControls); applyToLiveStream() }
     }
@@ -475,6 +499,9 @@ final class AppSettings: ObservableObject {
             touchControls = .whenOffered
         }
         limitOnCellular = defaults.object(forKey: Key.cellularLimit) as? Bool ?? true
+        invertLeftStick = defaults.object(forKey: Key.invertLeftStick) as? Bool ?? false
+        invertRightStick = defaults.object(forKey: Key.invertRightStick) as? Bool ?? false
+        stickAsButtons = defaults.object(forKey: Key.stickAsButtons) as? Bool ?? false
         cellularBitrateMbps = defaults.object(forKey: Key.cellularBitrate) as? Int ?? 5
         overlayButtonEnabled = defaults.object(forKey: Key.overlayButton) as? Bool ?? false
         touchAutoOffWithController = defaults.object(forKey: Key.touchAutoOff) as? Bool ?? true

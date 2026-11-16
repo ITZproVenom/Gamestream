@@ -119,9 +119,33 @@ final class GamepadBridge {
         // reports up as positive; the Gamepad API reports it as negative,
         // because its Y axis points the way the screen does. Copying the
         // value straight through turned every push up into a push down.
-        axes[1] = -Double(pad.leftThumbstick.yAxis.value)
+        //
+        // Which way a particular game wants is not something the app can
+        // know, so the player decides: the setting turns either stick the
+        // other way round.
+        let settings = AppSettings.shared
+        axes[1] = (settings.invertLeftStick ? 1 : -1) * Double(pad.leftThumbstick.yAxis.value)
         axes[2] = Double(pad.rightThumbstick.xAxis.value)
-        axes[3] = -Double(pad.rightThumbstick.yAxis.value)
+        axes[3] = (settings.invertRightStick ? 1 : -1) * Double(pad.rightThumbstick.yAxis.value)
+
+        // Some games read the direction pad and the stick separately, and
+        // some only read one of them. Sending the stick as the direction
+        // pad as well means a push moves the character whichever of the two
+        // the game happens to read.
+        if settings.stickAsButtons {
+            // Apple's stick reports up as positive, so the direction is
+            // taken from the value before it is turned round for the
+            // browser: up is above the middle, down is below it.
+            let leftX = Double(pad.leftThumbstick.xAxis.value)
+            let leftY = Double(pad.leftThumbstick.yAxis.value)
+            let threshold = 0.5
+            buttons[12] = buttons[12] || leftY > threshold    // up
+            buttons[13] = buttons[13] || leftY < -threshold   // down
+            buttons[14] = buttons[14] || leftX < -threshold   // left
+            buttons[15] = buttons[15] || leftX > threshold    // right
+            // The right stick usually aims, and aiming is not a direction,
+            // so it is left alone.
+        }
         return (axes, buttons, values)
     }
 

@@ -587,6 +587,32 @@ struct SettingsView: View {
             setting("Rumble", icon: "waveform",
                        isOn: $settings.rumbleEnabled)
 
+            SettingsDivider()
+
+            VStack(alignment: .leading, spacing: 5) {
+                SettingsRowLabel(title: "Left stick", icon: "arrow.up.and.down")
+                setting("Turn it upside down", icon: "arrow.up.arrow.down",
+                       isOn: $settings.invertLeftStick)
+                setting("Use it as the direction pad", icon: "dpad",
+                       isOn: $settings.stickAsButtons)
+                Text("The controller and the web page disagree about which way is "
+                     + "up. If a push up moves the character down, turn it upside "
+                     + "down here.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsDivider()
+
+            VStack(alignment: .leading, spacing: 5) {
+                SettingsRowLabel(title: "Right stick", icon: "arrow.up.and.down.square")
+                setting("Turn it upside down", icon: "arrow.up.arrow.down.square",
+                       isOn: $settings.invertRightStick)
+                Text("For aiming, in the games that read the right stick.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             if settings.rumbleEnabled {
                 SettingsDivider()
                 setting("Vibrate the phone when the controller cannot", icon: "iphone.radiowaves.left.and.right",
