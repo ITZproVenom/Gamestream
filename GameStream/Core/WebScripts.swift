@@ -1378,6 +1378,21 @@ enum WebScripts {
         /// What the peer connection handed the page, kept by the enhancement
         /// layer because it is the only place that sees the track arrive.
         function source() {
+            // The game arrives as a video element carrying a remote track.
+            // The element that has one is the game; the others on the page
+            // are the site's own pictures and trailers, and recording one
+            // of those would save a clip of an advert.
+            var videos = document.querySelectorAll("video");
+            for (var i = 0; i < videos.length; i++) {
+                try {
+                    var stream = videos[i].srcObject;
+                    if (stream && stream.getVideoTracks && stream.getVideoTracks().length) {
+                        return stream;
+                    }
+                } catch (e) {}
+            }
+            // The remote stream the site handed over directly, if there is
+            // one.
             try {
                 var media = window.__gsMediaStream;
                 if (media && media.getVideoTracks && media.getVideoTracks().length) {
