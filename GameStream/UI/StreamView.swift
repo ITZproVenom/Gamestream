@@ -16,8 +16,6 @@ struct StreamView: View {
     @State private var elapsed: TimeInterval = 0
     @State private var startedAt = Date()
     @State private var showingStats = false
-    /// The app's own stream settings, over the game.
-    @State private var showingSettings = false
     @StateObject private var recorder = StreamRecorder.shared
 
     @Namespace private var glass
@@ -152,12 +150,6 @@ struct StreamView: View {
             }
         }
         .animation(.smooth(duration: 0.2), value: stream.notice)
-        // The app's own stream settings, over the game.
-        .sheet(isPresented: $showingSettings) {
-            EnhancementsSheet()
-                .environmentObject(settings)
-                .environmentObject(stream)
-        }
         .statusBarHidden(stream.phase == .playing)
         .persistentSystemOverlays(stream.phase == .playing ? .hidden : .automatic)
         // There is deliberately no tap gesture over the whole view.
@@ -400,10 +392,11 @@ struct StreamView: View {
                     }
 
                     hudIcon("slider.horizontal.3",
-                            label: "Streaming settings",
-                            id: "enhance") {
+                            label: stream.enhancementMenuOpen
+                            ? "Close enhancements" : "Streaming enhancements",
+                            id: "enhance",
+                            active: stream.enhancementMenuOpen) {
                         stream.toggleEnhancementMenu()
-                        showingSettings = true
                     }
 
                     if recorder.isRecording {

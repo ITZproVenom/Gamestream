@@ -862,46 +862,115 @@ enum WebScripts {
             return null;
         }
 
+        /// Opens Better xCloud's own menu, the way its own button does.
+        ///
         /// Better xCloud is not wrapped in a closure: its top-level classes
-        /// live in the page's global lexical scope, so the settings dialog can
-        /// be opened by the same call its own button makes —
-        /// `SettingsDialog.getInstance().show()`. Pressing the cloned HUD
-        /// button was never reliable: the script sets pointer-events: none on
-        /// it during the HUD fade and only restores it when the HUD finishes
-        /// at exactly left: 0px, so the element is frequently inert.
-
-        /// Opens one of the dialog's tabs.
+        /// live in the page's global lexical scope, so its dialog can be
+        /// opened by the same calls its own button makes - it focuses one
+        /// of its tabs, then shows the dialog.
         ///
-        /// The script's tabs are pictures with a group name on them, and the
-        /// script's own "manage" button clicks one before showing the
-        /// dialog. Without that, the dialog opens with nothing in it: it
-        /// comes up as a thirty-four pixel strip with no settings on it.
-
-        /// Puts the menu into shape directly, on the elements themselves.
+        /// Both parts matter. Without the tab, the dialog opens with
+        /// nothing in it and comes up as a thin empty strip. Without the
+        /// scroll, it opens in the document where this webview has put it,
+        /// which is below the fold - opened, and invisible to the player.
         ///
-        /// Stylesheets were not enough: the menu came up with the right
-        /// z-index and the right position - so the app's rules were being
-        /// applied - and still bare. The panel, its dropdowns, its slider
-        /// and its switches are therefore given their styles inline, which
-        /// nothing in the page can argue with. The script rebuilds its menu
-        /// as it is used, so it is done again shortly afterwards.
+        /// Nothing about the menu's own look is touched. It keeps its size,
+        /// its colours and its styles; the app only opens it and makes sure
+        /// it can be seen.
+        function openBxMenu() {
+            try {
+                if (typeof SettingsDialog === "undefined" || !SettingsDialog.getInstance) {
+                    return "";
+                }
+                var dialog = SettingsDialog.getInstance();
+                var tab = focusBxTab(dialog);
+                dialog.show();
+                // The content is laid out after it is shown, so the scroll
+                // happens a moment later.
+                setTimeout(function() { revealBxDialog(); }, 250);
+                return "Better xCloud's menu" + (tab ? " on its " + tab + " tab" : "");
+            } catch (e) {
+                return "";
+            }
+        }
 
-        /// What the menu actually ended up looking like, so a report can say
-        /// it rather than having it guessed at.
-
-        /// If the dialog exists but cannot be seen, make it seen.
+        /// Picks one of the script's tabs.
         ///
-        /// Better xCloud hides it with a `bx-gone` class and shows it by
-        /// removing that class. Anything that leaves it hidden — its own
-        /// stylesheet failing to load, or a restyle of ours interfering —
-        /// produces a button that appears to do nothing at all.
+        /// Its tabs are pictures carrying the name of the group they show,
+        /// and focusing one is a click on that picture.
+        function focusBxTab(dialog) {
+            var preferred = ["general", "stream", "mkb", "touch-control", "ui", "advanced"];
+            var container = null;
+            try { container = dialog && dialog.$container; } catch (e) {}
+            if (!container) return "";
+            var tabs = container.querySelectorAll(".bx-settings-tabs svg[data-group]");
+            for (var i = 0; i < preferred.length; i++) {
+                for (var j = 0; j < tabs.length; j++) {
+                    if (tabs[j].getAttribute("data-group") !== preferred[i]) continue;
+                    try {
+                        tabs[j].dispatchEvent(new Event("click"));
+                        return preferred[i];
+                    } catch (e) {}
+                }
+            }
+            if (tabs.length > 0) {
+                try {
+                    tabs[0].dispatchEvent(new Event("click"));
+                    return tabs[0].getAttribute("data-group") || "first tab";
+                } catch (e) {}
+            }
+            return "";
+        }
 
-        /// "Nothing happened" covers two very different faults: the dialog was
-        /// never created, or it was created and cannot be seen. Only the page
-        /// can tell them apart, so it reports which.
+        /// Brings the dialog into view.
+        ///
+        /// The script places its menu with `position: absolute` and no
+        /// offset, so it lands where it would have sat in the flow of a
+        /// normal page - which, in a full-screen player, is below the fold:
+        /// opened, and invisible to the player. The app pins it to the
+        /// screen and lets it scroll.
+        ///
+        /// That is all it touches. The menu keeps its own colours, fonts,
+        /// sizes and spacing; only where it sits is decided here.
+        function revealBxDialog() {
+            try {
+                var node = document.querySelector(".bx-navigation-dialog");
+                if (!node) return "";
+                // The script hides the dialog by moving it off the screen
+                // with a class; if it is still hidden, that class is what
+                // needs to go.
+                if (node.classList.contains("bx-gone")) {
+                    node.classList.remove("bx-gone");
+                }
+                var style = node.style;
+                style.setProperty("position", "fixed", "important");
+                style.setProperty("top", "0", "important");
+                style.setProperty("left", "0", "important");
+                style.setProperty("right", "0", "important");
+                style.setProperty("bottom", "auto", "important");
+                style.setProperty("max-height", "92vh", "important");
+                style.setProperty("overflow-y", "auto", "important");
+                var box = node.getBoundingClientRect();
+                return "at " + Math.round(box.left) + "," + Math.round(box.top)
+                    + " " + Math.round(box.width) + "x" + Math.round(box.height);
+            } catch (e) {
+                return "";
+            }
+        }
 
-        /// The site's own HUD button, which is what opens the Xbox guide.
-        /// Better xCloud finds it the same way, and clones it for itself.
+        /// Closes the script's menu.
+        function closeBxMenu() {
+            try {
+                if (typeof SettingsDialog !== "undefined" && SettingsDialog.getInstance) {
+                    var dialog = SettingsDialog.getInstance();
+                    if (dialog && dialog.hide) dialog.hide();
+                }
+                return "closed";
+            } catch (e) {
+                return "could not be closed";
+            }
+        }
+
         function guideButton() {
             var hud = document.querySelector("#StreamHud");
             if (!hud) return null;
