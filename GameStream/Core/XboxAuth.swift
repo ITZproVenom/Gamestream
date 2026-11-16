@@ -235,13 +235,13 @@ final class XboxAuth: NSObject, ObservableObject {
         var expires = payload["expires"] as? String ?? ""
 
         // The site's own script mints the cloud token a moment after the
-        // page loads, so a first look that finds nothing is not proof that
-        // the session is gone. The player was being signed out by a check
-        // that ran a second too early: the sign-in screen appeared, and a
-        // few seconds later the session came back on its own.
+        // page loads, and on a slow connection that can take several
+        // seconds. Looking again a couple of times over six seconds was not
+        // always enough, and a session that was there all along was being
+        // called gone.
         if !signedIn {
-            for _ in 0..<3 {
-                try? await Task.sleep(for: .seconds(2))
+            for attempt in 0..<5 {
+                try? await Task.sleep(for: .seconds(3))
                 guard generation == authGeneration else { return state }
                 // The probe view was unwrapped earlier in this function, so
                 // it is the one in hand here.
@@ -255,6 +255,9 @@ final class XboxAuth: NSObject, ObservableObject {
                     expires = next["expires"] as? String ?? ""
                     log.info("auth", "the session was there on the second look")
                     break
+                }
+                if attempt == 4 {
+                    log.info("auth", "no session after looking for 15 seconds")
                 }
             }
         }
