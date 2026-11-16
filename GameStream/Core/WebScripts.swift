@@ -496,31 +496,6 @@ enum WebScripts {
             // still loading, which is not how the app runs it, but a screen
             // that blocks the game is not something to leave lying over it.
             ".bx-reload-overlay { display: none !important; }",
-            // Its dialog dims the stream behind a blurred overlay. When the
-            // overlay outlives the dialog the game is left permanently
-            // frosted, which only a reconnect used to clear. The blur is
-            // removed outright so a stale overlay is at worst invisible.
-            // The overlay is what the menu is shown in. It has to cover the
-            // screen and centre what is inside it: the menu itself came up
-            // 844 by 2266 pixels, starting 390 pixels down the page, which
-            // on a phone is entirely below the fold - the menu was open and
-            // invisible.
-            ".bx-dialog-overlay { position: fixed !important; inset: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; z-index: 2147483000 !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgba(0,0,0,0.4) !important; }",
-            // The menu is not inside that overlay: Better xCloud appends the
-            // backdrop and the panel to the document as two separate
-            // siblings, and the panel is laid out in the flow
-            // (position: absolute). It was opening 390 pixels down a 390
-            // pixel-tall landscape screen - entirely below the visible area,
-            // with the right size and the right z-index and still invisible.
-            // The backdrop covers the screen and the panel is pinned to the
-            // top of it, where it can be read and scrolled.
-            ".bx-navigation-dialog-overlay { position: fixed !important; inset: 0 !important; width: 100% !important; height: 100% !important; background: rgba(0,0,0,0.45) !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; z-index: 2147482000 !important; }",
-            ".bx-navigation-dialog { position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: auto !important; width: 100% !important; max-height: 94vh !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; touch-action: pan-y !important; z-index: 2147483000 !important; }",
-            // The menu is styled here rather than left to the script's own
-            // stylesheet: when that sheet is not in the page, the menu came
-            // up as bare markup - native dropdowns, a bare slider, no panel.
-            ".bx-navigation-dialog { background-color: rgba(20, 20, 23, 0.92) !important; -webkit-backdrop-filter: saturate(160%) blur(26px) !important; backdrop-filter: saturate(160%) blur(26px) !important; border: 1px solid rgba(255, 255, 255, 0.14) !important; border-radius: 22px !important; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55) !important; color: #fff !important; font-family: -apple-system, BlinkMacSystemFont, \"SF Pro Text\", system-ui, sans-serif !important; padding: 14px 16px 18px !important; }",
-            ".bx-settings-dialog, .bx-centered-dialog, .bx-key-binding-dialog { max-height: 86vh !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; touch-action: pan-y !important; position: relative !important; }"
         ].join("\n");
 
         function onLaunchPage() {
@@ -894,57 +869,6 @@ enum WebScripts {
         /// button was never reliable: the script sets pointer-events: none on
         /// it during the HUD fade and only restores it when the HUD finishes
         /// at exactly left: 0px, so the element is frequently inert.
-        function openBxSettings() {
-            try {
-                var grip = document.querySelector("#StreamHud button[class^=GripHandle]");
-                if (grip && grip.ariaExpanded === "true") {
-                    grip.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
-                    grip.click();
-                }
-            } catch (e) {}
-
-            // Better xCloud's dialog writes to window.BX_EXPOSED as it opens.
-            // When the script is injected at document start that export is
-            // not always there yet, and the write threw "undefined is not an
-            // object" - which stopped the menu from opening at all.
-            try {
-                if (!window.BX_EXPOSED) window.BX_EXPOSED = {};
-            } catch (e) {}
-
-            try {
-                if (typeof SettingsDialog !== "undefined"
-                    && SettingsDialog.getInstance) {
-                    var dialog = SettingsDialog.getInstance();
-                    // The dialog opens with no tab selected unless one is
-                    // focused first, and a dialog with no tab is an empty
-                    // strip: the menu looked like it had not opened at all.
-                    // The script's own "manage" button does exactly this.
-                    var tab = focusFirstTab(dialog);
-                    dialog.show();
-                    styleMenu();
-                    // The content is laid out after it is shown, so the
-                    // panel is measured and styled again a moment later.
-                    setTimeout(function() { styleMenu(); }, 300);
-                    return "SettingsDialog.show(" + (tab ? ", " + tab : "") + "), " + reveal();
-                }
-            } catch (e) {
-                // The dialog object exists but refused to open. The script's
-                // own settings button opens the same thing, so that is tried
-                // next rather than giving up.
-            }
-
-            // The site's own Better xCloud button.
-            var target = match([
-                "[title=\"Better xCloud\"]",
-                "button[title*=\"Better xCloud\" i]",
-                ".bx-header-settings-button"
-            ], /better\s*xcloud/);
-            if (target) {
-                enable(target);
-                return "the site's Better xCloud button";
-            }
-            return "Better xCloud has not finished setting up yet";
-        }
 
         /// Opens one of the dialog's tabs.
         ///
@@ -952,30 +876,6 @@ enum WebScripts {
         /// script's own "manage" button clicks one before showing the
         /// dialog. Without that, the dialog opens with nothing in it: it
         /// comes up as a thirty-four pixel strip with no settings on it.
-        function focusFirstTab(dialog) {
-            var preferred = ["general", "stream", "mkb", "touch-control", "ui", "advanced"];
-            var container = null;
-            try { container = dialog && dialog.$container; } catch (e) {}
-            if (!container) return "";
-            var tabs = container.querySelectorAll(".bx-settings-tabs svg[data-group]");
-            for (var i = 0; i < preferred.length; i++) {
-                for (var j = 0; j < tabs.length; j++) {
-                    if (tabs[j].getAttribute("data-group") !== preferred[i]) continue;
-                    try {
-                        tabs[j].dispatchEvent(new Event("click"));
-                        return preferred[i];
-                    } catch (e) {}
-                }
-            }
-            // Nothing named as expected: take the first tab there is.
-            if (tabs.length > 0) {
-                try {
-                    tabs[0].dispatchEvent(new Event("click"));
-                    return tabs[0].getAttribute("data-group") || "the first tab";
-                } catch (e) {}
-            }
-            return "";
-        }
 
         /// Puts the menu into shape directly, on the elements themselves.
         ///
@@ -985,109 +885,9 @@ enum WebScripts {
         /// and its switches are therefore given their styles inline, which
         /// nothing in the page can argue with. The script rebuilds its menu
         /// as it is used, so it is done again shortly afterwards.
-        function styleMenu() {
-            try {
-                var panels = document.querySelectorAll(
-                    ".bx-navigation-dialog, .bx-settings-dialog, .bx-centered-dialog, .bx-key-binding-dialog");
-                for (var i = 0; i < panels.length; i++) {
-                    var panel = panels[i].style;
-                    panel.setProperty("position", "fixed", "important");
-                    panel.setProperty("top", "0", "important");
-                    panel.setProperty("left", "0", "important");
-                    panel.setProperty("right", "0", "important");
-                    panel.setProperty("bottom", "auto", "important");
-                    panel.setProperty("width", "100%", "important");
-                    panel.setProperty("max-height", "94vh", "important");
-                    panel.setProperty("overflow-y", "auto", "important");
-                    panel.setProperty("overflow-x", "hidden", "important");
-                    panel.setProperty("z-index", "2147483000", "important");
-                    panel.setProperty("background-color", "rgba(20, 20, 23, 0.94)", "important");
-                    panel.setProperty("-webkit-backdrop-filter", "saturate(160%) blur(26px)", "important");
-                    panel.setProperty("backdrop-filter", "saturate(160%) blur(26px)", "important");
-                    panel.setProperty("border", "1px solid rgba(255, 255, 255, 0.16)", "important");
-                    panel.setProperty("border-radius", "22px", "important");
-                    panel.setProperty("box-shadow", "0 18px 48px rgba(0, 0, 0, 0.55)", "important");
-                    panel.setProperty("color", "#ffffff", "important");
-                    panel.setProperty("font-family", "-apple-system, BlinkMacSystemFont, sans-serif", "important");
-                    panel.setProperty("font-size", "15px", "important");
-                    panel.setProperty("padding", "14px 16px 18px", "important");
-                    panel.setProperty("text-align", "left", "important");
-                }
-
-                var backdrops = document.querySelectorAll(".bx-navigation-dialog-overlay");
-                for (var b = 0; b < backdrops.length; b++) {
-                    backdrops[b].style.setProperty("position", "fixed", "important");
-                    backdrops[b].style.setProperty("inset", "0", "important");
-                    backdrops[b].style.setProperty("background", "rgba(0, 0, 0, 0.45)", "important");
-                    backdrops[b].style.setProperty("z-index", "2147482000", "important");
-                }
-
-                var selects = document.querySelectorAll(
-                    ".bx-navigation-dialog select, .bx-settings-dialog select");
-                for (var s = 0; s < selects.length; s++) {
-                    selects[s].style.setProperty("background-color", "rgba(255, 255, 255, 0.16)", "important");
-                    selects[s].style.setProperty("color", "#ffffff", "important");
-                    selects[s].style.setProperty("border", "1px solid rgba(255, 255, 255, 0.2)", "important");
-                    selects[s].style.setProperty("border-radius", "12px", "important");
-                    selects[s].style.setProperty("padding", "7px 10px", "important");
-                    selects[s].style.setProperty("font-size", "15px", "important");
-                    selects[s].style.setProperty("-webkit-appearance", "none", "important");
-                    selects[s].style.setProperty("appearance", "none", "important");
-                }
-
-                var ranges = document.querySelectorAll('input[type="range"]');
-                for (var r = 0; r < ranges.length; r++) {
-                    ranges[r].style.setProperty("accent-color", "rgb(120, 170, 255)", "important");
-                    ranges[r].style.setProperty("height", "26px", "important");
-                    ranges[r].style.setProperty("width", "100%", "important");
-                }
-
-                var checks = document.querySelectorAll('input[type="checkbox"]');
-                for (var c = 0; c < checks.length; c++) {
-                    checks[c].style.setProperty("accent-color", "rgb(120, 170, 255)", "important");
-                    checks[c].style.setProperty("width", "22px", "important");
-                    checks[c].style.setProperty("height", "22px", "important");
-                }
-
-                var buttons = document.querySelectorAll(
-                    ".bx-navigation-dialog button, .bx-settings-dialog button");
-                for (var t = 0; t < buttons.length; t++) {
-                    buttons[t].style.setProperty("background-color", "rgba(255, 255, 255, 0.14)", "important");
-                    buttons[t].style.setProperty("border", "1px solid rgba(255, 255, 255, 0.18)", "important");
-                    buttons[t].style.setProperty("border-radius", "999px", "important");
-                    buttons[t].style.setProperty("color", "#ffffff", "important");
-                    buttons[t].style.setProperty("font-weight", "600", "important");
-                    buttons[t].style.setProperty("padding", "8px 14px", "important");
-                    buttons[t].style.setProperty("margin", "3px 0", "important");
-                }
-            } catch (e) {}
-        }
 
         /// What the menu actually ended up looking like, so a report can say
         /// it rather than having it guessed at.
-        function menuReport() {
-            try {
-                var node = document.querySelector(".bx-navigation-dialog");
-                if (!node) return "no .bx-navigation-dialog in the document";
-                var style = window.getComputedStyle(node);
-                var box = node.getBoundingClientRect();
-                var selects = node.querySelectorAll("select").length;
-                var ranges = node.querySelectorAll('input[type="range"]').length;
-                return "dialog class=\"" + node.className + "\""
-                    + " display=" + style.display
-                    + " visibility=" + style.visibility
-                    + " opacity=" + style.opacity
-                    + " z=" + style.zIndex
-                    + " background=" + style.backgroundColor
-                    + " radius=" + style.borderTopLeftRadius
-                    + " font=" + style.fontSize
-                    + " rect=" + Math.round(box.left) + "," + Math.round(box.top)
-                    + " " + Math.round(box.width) + "x" + Math.round(box.height)
-                    + " selects=" + selects + " sliders=" + ranges;
-            } catch (e) {
-                return "the menu could not be measured: " + e;
-            }
-        }
 
         /// If the dialog exists but cannot be seen, make it seen.
         ///
@@ -1095,48 +895,10 @@ enum WebScripts {
         /// removing that class. Anything that leaves it hidden — its own
         /// stylesheet failing to load, or a restyle of ours interfering —
         /// produces a button that appears to do nothing at all.
-        function reveal() {
-            var node = document.querySelector(".bx-navigation-dialog");
-            if (!node) return dialogState();
-
-            var before = dialogState();
-            var style = window.getComputedStyle(node);
-            var box = node.getBoundingClientRect();
-            var hidden = style.display === "none"
-                || style.visibility === "hidden"
-                || parseFloat(style.opacity) < 0.05
-                || box.width < 8 || box.height < 8;
-            if (!hidden) return before;
-
-            node.classList.remove("bx-gone");
-            node.style.setProperty("display", "flex", "important");
-            node.style.setProperty("visibility", "visible", "important");
-            node.style.setProperty("opacity", "1", "important");
-            node.style.setProperty("pointer-events", "auto", "important");
-            if (box.width < 8 || box.height < 8) {
-                node.style.setProperty("position", "fixed", "important");
-                node.style.setProperty("inset", "0", "important");
-                node.style.setProperty("z-index", "9999", "important");
-            }
-            return "was hidden (" + before + "), forced visible: " + dialogState();
-        }
 
         /// "Nothing happened" covers two very different faults: the dialog was
         /// never created, or it was created and cannot be seen. Only the page
         /// can tell them apart, so it reports which.
-        function dialogState() {
-            var node = document.querySelector(".bx-navigation-dialog");
-            if (!node) return "no .bx-navigation-dialog in the document";
-            var style = window.getComputedStyle(node);
-            var box = node.getBoundingClientRect();
-            return "dialog class=\"" + node.className + "\""
-                + " display=" + style.display
-                + " visibility=" + style.visibility
-                + " opacity=" + style.opacity
-                + " z=" + style.zIndex
-                + " rect=" + Math.round(box.left) + "," + Math.round(box.top)
-                + " " + Math.round(box.width) + "x" + Math.round(box.height);
-        }
 
         /// The site's own HUD button, which is what opens the Xbox guide.
         /// Better xCloud finds it the same way, and clones it for itself.
@@ -1171,15 +933,6 @@ enum WebScripts {
         /// dimming overlay in the document. That overlay swallows every touch
         /// meant for the game, which reads as a frozen, frosted picture that
         /// only a reconnect clears.
-        function closeBxSettings() {
-            try {
-                if (typeof SettingsDialog !== "undefined" && SettingsDialog.getInstance) {
-                    var dialog = SettingsDialog.getInstance();
-                    if (dialog && dialog.hide) dialog.hide();
-                }
-            } catch (e) {}
-            return sweepOverlays();
-        }
 
         /// Removes any dimming overlay that no longer has a dialog to dim.
         function sweepOverlays() {
@@ -1229,21 +982,12 @@ enum WebScripts {
         window.__gsCommand = function(command) {
             var target = null;
 
-            if (command === "bxMenu") {
-                var how = openBxSettings();
-                if (how) {
-                    note(command, "opened via " + how + "; " + menuReport());
-                    return true;
-                }
-                // Only if the script is not loaded at all.
-                target = match([
-                    "[title=\"Better xCloud\"]",
-                    "button[title*=\"Better xCloud\" i]",
-                    ".bx-header-settings-button"
-                ], /better\s*xcloud/);
-                enable(target);
-            } else if (command === "bxClose") {
-                note(command, closeBxSettings());
+            if (command === "bxMenu" || command === "bxClose") {
+                // The app's stream settings are its own panel now. The
+                // script's menu is its own business: it rebuilds it whenever
+                // it likes and writes its own stylesheet over the app's, so
+                // dressing it up never settled. The page is left alone.
+                note(command, "the app's own settings are used for this");
                 return true;
             } else if (command === "quit") {
                 // Ending the session properly is the site's own quit, inside

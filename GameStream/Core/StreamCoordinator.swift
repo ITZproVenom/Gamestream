@@ -525,20 +525,24 @@ final class StreamCoordinator: ObservableObject {
     }
 
     /// Opens the streaming enhancement's own menu.
+    /// The stream settings are the app's own panel now.
+    ///
+    /// The script draws a menu of its own, and the app used to open it and
+    /// then try to make it look like the app: rules for its panels, its
+    /// dropdowns, its buttons, and a tab to click first. The script rebuilds
+    /// all of that whenever it likes and writes its own stylesheet over the
+    /// app's, so the result changed every time and never settled.
+    ///
+    /// The app's panel is opened by the view instead, and the page is left
+    /// alone. The script is still installed for the things only it can do.
     func openEnhancementMenu() {
-        log.info("stream", "opening the enhancement menu")
-        XboxWebView.Registry.shared.run(
-            "window.__gsCommand ? '' : 'the command bridge is not installed on this page';"
-        )
-        XboxWebView.Registry.shared.run("window.__gsCommand && window.__gsCommand('bxMenu');")
+        log.info("stream", "opening the stream settings")
     }
 
-    /// Closes the enhancement's menu and clears anything it left over the
-    /// game. Dismissing it by tapping outside leaves its dimming overlay in
-    /// the page, which swallows every touch meant for the stream.
+    /// Closes the app's panel. The page is not touched: there is no overlay
+    /// of ours to clear, and nothing of the script's is left over the game.
     func closeEnhancementMenu() {
-        log.info("stream", "closing the enhancement menu")
-        XboxWebView.Registry.shared.run("window.__gsCommand && window.__gsCommand('bxClose');")
+        log.info("stream", "closing the stream settings")
     }
 
     /// Presses the site's Xbox guide button.
