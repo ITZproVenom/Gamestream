@@ -431,7 +431,7 @@ enum WebScripts {
     """#
 
     static let cloudServersJS = #"""
-(function() {
+    (function() {
     if (window.__gsCloudServers) return;
     window.__gsCloudServers = true;
 
@@ -612,7 +612,7 @@ enum WebScripts {
         } catch (e) {}
         return nativeSend.apply(this, arguments);
     };
-})();
+    })();
     """#
 
     static let xboxSearchResultsJS = #"""
