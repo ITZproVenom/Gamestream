@@ -89,6 +89,29 @@ struct SearchView: View {
                     }
                 }
                 .padding(.horizontal, Theme.pageInset)
+
+                // A title the catalogue has not caught up with can still be
+                // started, if its product id is known.
+                if let direct = directTarget(for: clean) {
+                    GlassCard {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Start it by its product id")
+                                .font(.subheadline.weight(.semibold))
+                            Text("This title is not in the app's catalogue, but it can be asked for directly. Whether the cloud streams it is Microsoft's decision.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Button {
+                                stream.play(direct)
+                            } label: {
+                                Label("Play \(direct.title)", systemImage: "play.fill")
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .buttonStyle(.glassProminent)
+                            .buttonBorderShape(.capsule)
+                        }
+                    }
+                    .padding(.horizontal, Theme.pageInset)
+                }
             }
         } else {
             switch liveSearchStatus {
@@ -141,6 +164,18 @@ struct SearchView: View {
         liveSearchMessage = ""
         liveSearchStatus = "loading"
         submittedSearchURL = url
+    }
+
+    /// The title a query names directly, when the query is a product id or
+    /// an Xbox link.
+    private func directTarget(for query: String) -> Game? {
+        if let link = DirectLaunch.productID(inLink: query) {
+            return DirectLaunch.game(forID: link.id, slug: link.slug)
+        }
+        if let id = DirectLaunch.productID(in: query) {
+            return DirectLaunch.game(forID: id)
+        }
+        return nil
     }
 
     private func receiveXboxResults(_ sourceURL: URL, _ games: [Game],
