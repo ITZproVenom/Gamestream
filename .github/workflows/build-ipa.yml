@@ -301,6 +301,30 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Keep the build that is working now
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Before the pointer moves, the build that is published now is
+          # kept as a rollback. If the new one turns out to be worse, the
+          # last known good one is one tap away instead of a search
+          # through old releases.
+          mkdir -p backup
+          if gh release download latest-ios-beta --pattern 'GameStream-unsigned.ipa' --dir backup 2>/dev/null \
+             && [ -s backup/GameStream-unsigned.ipa ]; then
+            gh release delete ios-known-good --yes --cleanup-tag 2>/dev/null || true
+            gh release create ios-known-good \
+              backup/GameStream-unsigned.ipa \
+              --title "iOS - the build before the latest" \
+              --notes "The build that was published before this one. Install it if the newest build does not work for you." \
+              --prerelease
+            echo "the previous build was kept as ios-known-good"
+          else
+            echo "there was no previous build to keep"
+          fi
+
       - name: Move the latest-ios-beta pointer
         if: github.event_name != 'pull_request'
         env:

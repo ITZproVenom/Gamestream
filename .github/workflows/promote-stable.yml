@@ -80,6 +80,27 @@ jobs:
             echo "_Unsigned. Not affiliated with Microsoft._"
           } > notes.md
 
+      - name: Keep the stable build that is published now
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # The stable build in place now is kept as a rollback, so a
+          # promotion can be undone with one tap.
+          mkdir -p backup
+          if gh release download latest-ios --pattern 'GameStream-unsigned.ipa' --dir backup 2>/dev/null \
+             && [ -s backup/GameStream-unsigned.ipa ]; then
+            gh release delete ios-stable-known-good --yes --cleanup-tag 2>/dev/null || true
+            gh release create ios-stable-known-good \
+              backup/GameStream-unsigned.ipa \
+              --title "iOS stable - the build before this one" \
+              --notes "The stable build that was published before this one. Install it if the new stable does not work for you." \
+              --prerelease: false
+            echo "the previous stable was kept as ios-stable-known-good"
+          else
+            echo "there was no previous stable to keep"
+          fi
+
       - name: Publish the stable release
         uses: softprops/action-gh-release@v2
         with:
