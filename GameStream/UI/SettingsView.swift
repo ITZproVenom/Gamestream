@@ -536,6 +536,26 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             SettingsDivider()
+
+            VStack(alignment: .leading, spacing: 7) {
+                SettingsRowLabel(title: "Catalogue region", icon: "globe.europe.africa")
+                Picker("Catalogue region", selection: $settings.catalogRegion) {
+                    ForEach(CatalogRegion.allCases) { region in
+                        Text(region.title).tag(region)
+                    }
+                }
+                Text(settings.catalogRegion.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("Xbox offers different titles in different markets. Asking for "
+                     + "another region's catalogue is how a title that is not "
+                     + "offered where you are can be found. It changes what the "
+                     + "catalogue says, not what the account owns, and a title "
+                     + "that no region hosts still cannot be streamed.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            SettingsDivider()
             setting("Keep the screen awake", icon: "sun.max",
                        isOn: $settings.keepAwake)
             SettingsDivider()

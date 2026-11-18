@@ -265,6 +265,7 @@ final class AppSettings: ObservableObject {
         static let stickAsButtons = "settings.stickAsButtons"
         static let deviceProfile = "settings.deviceProfile"
         static let customUserAgent = "settings.customUserAgent"
+        static let catalogRegion = "settings.catalogRegion"
         static let touchControls = "settings.touchControls"
         static let cellularLimit = "settings.cellularLimit"
         static let cellularBitrate = "settings.cellularBitrateMbps"
@@ -400,6 +401,11 @@ final class AppSettings: ObservableObject {
         didSet { store(customUserAgent, Key.customUserAgent) }
     }
 
+    /// Which region's catalogue the cloud is asked for.
+    @Published var catalogRegion: CatalogRegion {
+        didSet { store(catalogRegion.rawValue, Key.catalogRegion) }
+    }
+
     /// The user agent the app sends, whatever the profile is.
     var userAgent: String { deviceProfile.userAgent(custom: customUserAgent) }
 
@@ -522,6 +528,7 @@ final class AppSettings: ObservableObject {
         stickAsButtons = defaults.object(forKey: Key.stickAsButtons) as? Bool ?? false
         deviceProfile = DeviceProfile(rawValue: defaults.string(forKey: Key.deviceProfile) ?? "") ?? .windows
         customUserAgent = defaults.string(forKey: Key.customUserAgent) ?? ""
+        catalogRegion = CatalogRegion(rawValue: defaults.string(forKey: Key.catalogRegion) ?? "") ?? .defaultRegion
         cellularBitrateMbps = defaults.object(forKey: Key.cellularBitrate) as? Int ?? 5
         overlayButtonEnabled = defaults.object(forKey: Key.overlayButton) as? Bool ?? false
         touchAutoOffWithController = defaults.object(forKey: Key.touchAutoOff) as? Bool ?? true
@@ -578,6 +585,15 @@ final class AppSettings: ObservableObject {
         let ceiling = effectiveBitrateMbps
         if ceiling > 0 {
             values["stream.video.maxBitrate"] = String(ceiling * 1_000_000)
+        }
+        // Which region's catalogue the cloud is asked for. The script asks
+        // by sending the login request with the address of a regional cloud
+        // server, so the service answers with that region's catalogue -
+        // which is where titles that are not offered in the phone's own
+        // market can be found.
+        if catalogRegion != .defaultRegion {
+            values["server.bypassRestriction"] = catalogRegion.bypassCode
+            values["server.region"] = catalogRegion.continent
         }
         if matchStreamStyle {
             // The dark base is the only one of its themes that a translucent
