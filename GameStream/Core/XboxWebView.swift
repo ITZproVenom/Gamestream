@@ -142,7 +142,14 @@ struct XboxWebView: UIViewRepresentable {
         // UA the site demands the home-screen PWA (navigator.standalone) and
         // bounces the launch to the store page. Every other role keeps the
         // mobile Safari UA.
-        webView.customUserAgent = role == .stream ? XboxAuth.desktopUserAgent : XboxAuth.userAgent
+        // The device the app says it is. The player is always a desktop
+        // browser - the site gates cloud play on iOS behind the home-screen
+        // app - but which desktop is a choice, and the service answers a
+        // television differently in places.
+        let profile = AppSettings.shared
+        webView.customUserAgent = role == .stream
+            ? profile.userAgent
+            : (profile.deviceProfile == .windows ? XboxAuth.userAgent : profile.userAgent)
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = role != .stream

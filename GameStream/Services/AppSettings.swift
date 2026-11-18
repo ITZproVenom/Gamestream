@@ -263,6 +263,8 @@ final class AppSettings: ObservableObject {
         static let invertLeftStick = "settings.invertLeftStick"
         static let invertRightStick = "settings.invertRightStick"
         static let stickAsButtons = "settings.stickAsButtons"
+        static let deviceProfile = "settings.deviceProfile"
+        static let customUserAgent = "settings.customUserAgent"
         static let touchControls = "settings.touchControls"
         static let cellularLimit = "settings.cellularLimit"
         static let cellularBitrate = "settings.cellularBitrateMbps"
@@ -385,6 +387,22 @@ final class AppSettings: ObservableObject {
     @Published var invertRightStick: Bool {
         didSet { store(invertRightStick, Key.invertRightStick) }
     }
+    /// The device the app says it is.
+    ///
+    /// The cloud answers a television and a desktop browser differently in
+    /// places, and the app can ask as either. It is the same choice the
+    /// enhancement script offers in its own settings.
+    @Published var deviceProfile: DeviceProfile {
+        didSet { store(deviceProfile.rawValue, Key.deviceProfile) }
+    }
+    /// The user agent to send when the profile is "custom".
+    @Published var customUserAgent: String {
+        didSet { store(customUserAgent, Key.customUserAgent) }
+    }
+
+    /// The user agent the app sends, whatever the profile is.
+    var userAgent: String { deviceProfile.userAgent(custom: customUserAgent) }
+
     /// Uses the stick as the direction pad instead of as an axis.
     ///
     /// Some games read the direction pad and the stick separately, and some
@@ -502,6 +520,8 @@ final class AppSettings: ObservableObject {
         invertLeftStick = defaults.object(forKey: Key.invertLeftStick) as? Bool ?? false
         invertRightStick = defaults.object(forKey: Key.invertRightStick) as? Bool ?? false
         stickAsButtons = defaults.object(forKey: Key.stickAsButtons) as? Bool ?? false
+        deviceProfile = DeviceProfile(rawValue: defaults.string(forKey: Key.deviceProfile) ?? "") ?? .windows
+        customUserAgent = defaults.string(forKey: Key.customUserAgent) ?? ""
         cellularBitrateMbps = defaults.object(forKey: Key.cellularBitrate) as? Int ?? 5
         overlayButtonEnabled = defaults.object(forKey: Key.overlayButton) as? Bool ?? false
         touchAutoOffWithController = defaults.object(forKey: Key.touchAutoOff) as? Bool ?? true

@@ -511,6 +511,31 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             SettingsDivider()
+
+            VStack(alignment: .leading, spacing: 7) {
+                SettingsRowLabel(title: "Device", icon: "tv.badge.wifi")
+                Picker("Device profile", selection: $settings.deviceProfile) {
+                    ForEach(DeviceProfile.allCases) { profile in
+                        Text(profile.title).tag(profile)
+                    }
+                }
+                Text(settings.deviceProfile.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if settings.deviceProfile == .custom {
+                    TextField("User agent", text: $settings.customUserAgent)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .font(.caption.monospaced())
+                }
+                Text("The cloud is asked as whatever this says. A television and a "
+                     + "desktop browser are sometimes answered differently, and a "
+                     + "title that will not appear for one can appear for another. "
+                     + "Takes effect the next time the app opens.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            SettingsDivider()
             setting("Keep the screen awake", icon: "sun.max",
                        isOn: $settings.keepAwake)
             SettingsDivider()
