@@ -33,6 +33,28 @@ final class Catalog: ObservableObject {
              tagline: "Battle Royale", genre: "Action")
     ]
 
+    /// Adds the titles Xbox's own cloud pages list to the catalogue.
+    ///
+    /// The subscription feed the app reads lags and leaves out anything
+    /// outside it, so a title that launched yesterday is missing from the
+    /// catalogue and cannot be started from the app at all. The site's own
+    /// pages have it, and they are added as they arrive.
+    func addCloudSiteTitles(_ incoming: [Game]) {
+        guard !incoming.isEmpty else { return }
+        var known = Set(games.map { $0.id.uppercased() })
+        var added: [Game] = []
+        for game in incoming {
+            guard !known.contains(game.id.uppercased()) else { continue }
+            known.insert(game.id.uppercased())
+            added.append(game)
+        }
+        guard !added.isEmpty else { return }
+        games.append(contentsOf: added.sorted {
+            $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+        })
+        log.info("catalog", "added \(added.count) titles from Xbox's own cloud list")
+    }
+
     private static func includingAdditionalCloudGames(_ source: [Game]) -> [Game] {
         var result = source
         for game in additionalCloudGames where !result.contains(where: { $0.matches(id: game.id) }) {
@@ -196,6 +218,10 @@ final class Catalog: ObservableObject {
             }
 
             merged = Self.includingAdditionalCloudGames(merged)
+            // What the site itself lists is added to what the subscription
+            // feed lists. The feed lags and leaves out anything outside the
+            // subscription, so a title that launched yesterday is missing
+            // from it; the site's own pages have it.
             games = merged
             updatedAt = Date()
             if let data = try? JSONEncoder().encode(merged) {

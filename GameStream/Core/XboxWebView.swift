@@ -18,6 +18,9 @@ struct XboxWebView: UIViewRepresentable {
         /// A Cloud Gaming search page whose rendered results are returned to the
         /// native Search UI.
         case searchResults
+        /// Xbox's own cloud home, read for the titles it lists. The Game Pass
+        /// feed the app uses leaves out anything outside the subscription.
+        case cloudCatalogue
         /// A game launch page, with the player scripts and rumble bridge.
         case stream
     }
@@ -28,6 +31,8 @@ struct XboxWebView: UIViewRepresentable {
     var reloadToken: Int = 0
     /// Receives native models extracted from Xbox's rendered search results.
     var onSearchResults: ((URL, [Game], String, String) -> Void)? = nil
+    /// Receives the titles Xbox's own cloud pages list.
+    var onCloudCatalogue: (([Game]) -> Void)? = nil
 
     @MainActor
     final class Registry {
@@ -111,7 +116,8 @@ struct XboxWebView: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(role: role, onSearchResults: onSearchResults)
+        Coordinator(role: role, onSearchResults: onSearchResults,
+                    onCloudCatalogue: onCloudCatalogue)
     }
 
     func makeUIView(context: Context) -> WKWebView {
@@ -176,6 +182,7 @@ struct XboxWebView: UIViewRepresentable {
 
     func updateUIView(_ webView: WKWebView, context: Context) {
         context.coordinator.onSearchResults = onSearchResults
+        context.coordinator.onCloudCatalogue = onCloudCatalogue
         let addressChanged = context.coordinator.loadedURL != url
         if addressChanged {
             context.coordinator.loadedURL = url
@@ -210,6 +217,13 @@ struct XboxWebView: UIViewRepresentable {
 
         if role == .searchResults {
             controller.addUserScript(WKUserScript(source: WebScripts.xboxSearchResultsJS,
+                                                  injectionTime: .atDocumentEnd,
+                                                  forMainFrameOnly: true))
+            return
+        }
+
+        if role == .cloudCatalogue {
+            controller.addUserScript(WKUserScript(source: WebScripts.cloudCatalogueJS,
                                                   injectionTime: .atDocumentEnd,
                                                   forMainFrameOnly: true))
             return
@@ -343,15 +357,18 @@ struct XboxWebView: UIViewRepresentable {
 
         let role: Role
         var onSearchResults: ((URL, [Game], String, String) -> Void)?
+        var onCloudCatalogue: (([Game]) -> Void)?
         var loadedURL: URL?
         var reloadToken = 0
         private weak var webView: WKWebView?
         private var signInPopups: [WKWebView] = []
         private let log = AppLog.shared
 
-        init(role: Role, onSearchResults: ((URL, [Game], String, String) -> Void)? = nil) {
+        init(role: Role, onSearchResults: ((URL, [Game], String, String) -> Void)? = nil,
+             onCloudCatalogue: (([Game]) -> Void)? = nil) {
             self.role = role
             self.onSearchResults = onSearchResults
+            self.onCloudCatalogue = onCloudCatalogue
         }
 
         func attach(to webView: WKWebView) {
@@ -382,6 +399,26 @@ struct XboxWebView: UIViewRepresentable {
 
         private func handle(type: String, body: [String: Any]) {
             switch type {
+            case "cloudCatalogue":
+                guard role == .cloudCatalogue else { return }
+                var seen = Set<String>()
+                let rows = body["items"] as? [[String: Any]] ?? []
+                let games = rows.compactMap { row -> Game? in
+                    guard let id = row["id"] as? String,
+                          (8...20).contains(id.count),
+                          id.unicodeScalars.allSatisfy({ CharacterSet.alphanumerics.contains($0) }),
+                          seen.insert(id.uppercased()).inserted,
+                          let slug = row["slug"] as? String, !slug.isEmpty,
+                          slug.unicodeScalars.allSatisfy({ CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-").contains($0) }),
+                          let title = row["title"] as? String, !title.isEmpty else { return nil }
+                    let poster = (row["image"] as? String).flatMap { URL(string: $0) }
+                    let safePoster = poster.flatMap {
+                        $0.scheme == "https" && $0.host == "store-images.s-microsoft.com" ? $0 : nil
+                    }
+                    return Game(id: id, slug: slug, title: title, tagline: "",
+                                genre: "Cloud", posterURL: safePoster)
+                }
+                onCloudCatalogue?(games)
             case "xboxSearchResults":
                 guard role == .searchResults,
                       let href = body["href"] as? String,

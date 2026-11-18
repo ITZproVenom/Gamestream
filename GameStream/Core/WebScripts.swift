@@ -354,6 +354,82 @@ enum WebScripts {
     /// This intentionally reads rendered links instead of relying on an
     /// undocumented search API; if Xbox changes its page markup, extraction
     /// fails with a visible state rather than silently falling back locally.
+    /// Reads the titles Xbox's own cloud pages list.
+    ///
+    /// The Game Pass feed the app uses leaves out anything outside the
+    /// subscription, so a title that launched yesterday is not in it. The
+    /// site's own pages list what the cloud can play, including the free
+    /// titles and the new arrivals, and the app can read that list the same
+    /// way it reads the search results.
+    static let cloudCatalogueJS = #"""
+    (function() {
+        if (window.__gsCloudCatalogue) return;
+        window.__gsCloudCatalogue = true;
+
+        var attempts = 0;
+        var timer = null;
+        var observer = null;
+        var lastSignature = "";
+
+        function send(items) {
+            var signature = items.map(function(item) { return item.id; }).join(",");
+            if (signature === lastSignature) return;
+            lastSignature = signature;
+            try {
+                window.webkit.messageHandlers.gamestream.postMessage({
+                    type: "cloudCatalogue", items: items
+                });
+            } catch (e) {}
+        }
+
+        function scan() {
+            attempts++;
+            var root = document.querySelector("#gamepass-root")
+                || document.querySelector("[id*=gamepass]")
+                || document.body;
+            if (!root) return;
+            if (!observer) {
+                observer = new MutationObserver(scan);
+                observer.observe(root, { childList: true, subtree: true });
+            }
+            var seen = {};
+            var items = [];
+            var links = root.querySelectorAll('a[href*="/play/games/"]');
+            for (var i = 0; i < links.length; i++) {
+                var link = links[i];
+                var url;
+                try { url = new URL(link.href, location.href); } catch (e) { continue; }
+                if (url.protocol !== "https:") continue;
+                if (url.hostname !== "www.xbox.com" && url.hostname !== "play.xbox.com") continue;
+                var parts = url.pathname.split("/").filter(Boolean);
+                if (parts.length < 4 || parts[0] !== "play" || parts[1] !== "games") continue;
+                var slug = parts[2];
+                var id = parts[3];
+                if (!/^[A-Za-z0-9]{8,20}$/.test(id) || seen[id.toUpperCase()]) continue;
+                var titleNode = link.querySelector('[class*="title"]');
+                var title = titleNode ? (titleNode.innerText || "").trim()
+                                      : (link.innerText || "").trim().split("\n")[0].trim();
+                if (!title || title.length > 120) continue;
+                seen[id.toUpperCase()] = true;
+                var image = link.querySelector("img");
+                var imageURL = image ? (image.currentSrc || image.src || "") : "";
+                items.push({ id: id, slug: slug, title: title, image: imageURL });
+            }
+            if (items.length) {
+                send(items);
+                return;
+            }
+            if (attempts >= 30) {
+                if (timer) clearInterval(timer);
+                send([]);
+            }
+        }
+
+        scan();
+        timer = setInterval(scan, 1500);
+    })();
+    """#
+
     static let xboxSearchResultsJS = #"""
     (function() {
         if (window.__gsXboxSearchResults) return;

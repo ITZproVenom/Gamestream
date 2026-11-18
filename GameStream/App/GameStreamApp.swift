@@ -72,6 +72,25 @@ struct GameStreamApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                // Xbox's own cloud list, read in the background. The
+                // subscription feed the app uses leaves out anything
+                // outside the subscription, so a title that launched
+                // yesterday is missing from the catalogue and cannot be
+                // started from the app at all. The page is hidden and takes
+                // no touches; all that is wanted is what it lists.
+                .background {
+                    XboxWebView(
+                        role: .cloudCatalogue,
+                        url: URL(string: "https://play.xbox.com/")!,
+                        reloadToken: 0,
+                        onCloudCatalogue: { games in
+                            CloudCatalogue.shared.absorb(games)
+                        }
+                    )
+                    .opacity(0.001)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                }
                 .environmentObject(auth)
                 .environmentObject(settings)
                 .environmentObject(catalog)
