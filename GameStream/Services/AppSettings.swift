@@ -266,6 +266,7 @@ final class AppSettings: ObservableObject {
         static let deviceProfile = "settings.deviceProfile"
         static let customUserAgent = "settings.customUserAgent"
         static let catalogRegion = "settings.catalogRegion"
+        static let pickServerBeforePlay = "settings.pickServerBeforePlay"
         static let touchControls = "settings.touchControls"
         static let cellularLimit = "settings.cellularLimit"
         static let cellularBitrate = "settings.cellularBitrateMbps"
@@ -401,9 +402,35 @@ final class AppSettings: ObservableObject {
         didSet { store(customUserAgent, Key.customUserAgent) }
     }
 
+    /// Shows the cloud servers before a game starts, so one can be picked.
+    ///
+    /// The queue on one side of the world can be much shorter than the
+    /// queue on the other, and the only way to find out is to be shown.
+    @Published var pickServerBeforePlay: Bool {
+        didSet { store(pickServerBeforePlay, Key.pickServerBeforePlay) }
+    }
+
     /// Which region's catalogue the cloud is asked for.
     @Published var catalogRegion: CatalogRegion {
         didSet { store(catalogRegion.rawValue, Key.catalogRegion) }
+    }
+
+    /// The client the app says it is, in the form the service expects:
+    /// the operating system, the browser, the browser's version, the
+    /// screen's size, the kind of client and the client's version.
+    ///
+    /// The service is asked as the same thing whichever way the page is
+    /// opened, so the app and the page never disagree about what is
+    /// asking.
+    var cloudClientClaim: String {
+        switch deviceProfile {
+        case .windows, .custom:
+            return "windows|chrome|140.0.3485.54|3840|2160|browser|26.1.97"
+        case .smartTV:
+            return "tizen|chrome|140.0.3485.54|3840|2160|browser|26.1.97"
+        case .tizenTV:
+            return "tizen|chrome|140.0.3485.54|3840|2160|tizen|26.1.97"
+        }
     }
 
     /// The user agent the app sends, whatever the profile is.
@@ -529,6 +556,7 @@ final class AppSettings: ObservableObject {
         deviceProfile = DeviceProfile(rawValue: defaults.string(forKey: Key.deviceProfile) ?? "") ?? .windows
         customUserAgent = defaults.string(forKey: Key.customUserAgent) ?? ""
         catalogRegion = CatalogRegion(rawValue: defaults.string(forKey: Key.catalogRegion) ?? "") ?? .defaultRegion
+        pickServerBeforePlay = defaults.object(forKey: Key.pickServerBeforePlay) as? Bool ?? false
         cellularBitrateMbps = defaults.object(forKey: Key.cellularBitrate) as? Int ?? 5
         overlayButtonEnabled = defaults.object(forKey: Key.overlayButton) as? Bool ?? false
         touchAutoOffWithController = defaults.object(forKey: Key.touchAutoOff) as? Bool ?? true

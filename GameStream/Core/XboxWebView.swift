@@ -320,6 +320,22 @@ struct XboxWebView: UIViewRepresentable {
                 forMainFrameOnly: true))
         }
 
+        // The cloud servers, the chosen one and the client the app says it
+        // is. This has to be in place before the page signs in, because the
+        // sign-in answer is what says which servers exist and what the
+        // session is created against.
+        controller.addUserScript(WKUserScript(source: WebScripts.cloudServersJS,
+                                              injectionTime: .atDocumentStart,
+                                              forMainFrameOnly: true))
+        // The server the player picked and the client the app says it is
+        // are handed to the page as it loads.
+        controller.addUserScript(WKUserScript(
+            source: "window.__gsSetCloudChoice && window.__gsSetCloudChoice(\""
+                + (CloudServers.shared.chosen) + "\", \""
+                + AppSettings.shared.cloudClientClaim + "\");",
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true))
+
         for source in [WebScripts.streamStateJS, WebScripts.streamChromeJS,
                        WebScripts.streamStatsJS, WebScripts.streamCommandsJS,
                        WebScripts.captureJS, WebScripts.clipJS,
@@ -426,6 +442,15 @@ struct XboxWebView: UIViewRepresentable {
                                 genre: "Cloud", posterURL: safePoster)
                 }
                 onCloudCatalogue?(games)
+            case "cloudServers":
+                guard role == .stream else { return }
+                let regions = body["regions"] as? [[String: Any]] ?? []
+                CloudServers.shared.absorb(regions)
+            case "cloudWait":
+                guard role == .stream else { return }
+                CloudServers.shared.recordWait(
+                    seconds: body["seconds"] as? Int ?? 0,
+                    for: body["region"] as? String)
             case "xboxSearchResults":
                 guard role == .searchResults,
                       let href = body["href"] as? String,

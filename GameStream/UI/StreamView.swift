@@ -150,6 +150,14 @@ struct StreamView: View {
             }
         }
         .animation(.smooth(duration: 0.2), value: stream.notice)
+        // The servers a game can be streamed from, when the player asked to
+        // be shown them before a launch.
+        .sheet(item: $stream.serverPickerGame) { game in
+            ServerPickerSheet(game: game) { server in
+                stream.launch(game, on: server)
+            }
+            .environmentObject(CloudServers.shared)
+        }
         .statusBarHidden(stream.phase == .playing)
         .persistentSystemOverlays(stream.phase == .playing ? .hidden : .automatic)
         // There is deliberately no tap gesture over the whole view.

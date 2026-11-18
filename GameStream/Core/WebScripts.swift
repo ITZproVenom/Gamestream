@@ -430,6 +430,191 @@ enum WebScripts {
     })();
     """#
 
+    static let cloudServersJS = #"""
+(function() {
+    if (window.__gsCloudServers) return;
+    window.__gsCloudServers = true;
+
+    var CHOSEN = "";          // the server the player picked
+    var CLIENT = "";          // the client the app says it is
+
+    function post(payload) {
+        try {
+            window.webkit.messageHandlers.gamestream.postMessage(payload);
+        } catch (e) {}
+    }
+
+    function setChosen(name, client) {
+        CHOSEN = name || "";
+        CLIENT = client || "";
+    }
+
+    // The app says which server was picked and which client it is, before
+    // the page asks anything.
+    window.__gsSetCloudChoice = function(name, client) {
+        setChosen(name, client);
+    };
+
+    /// The client the app says it is.
+    ///
+    /// The service is told what kind of client is asking: the operating
+    /// system, the browser and the screen. These are the values the site's
+    /// own client sends.
+    function deviceInfo() {
+        var os = "windows";
+        var browserName = "chrome";
+        var browserVersion = "140.0.3485.54";
+        var width = 3840;
+        var height = 2160;
+        var clientType = "browser";
+        var appVersion = "26.1.97";
+        if (CLIENT) {
+            try {
+                var parts = CLIENT.split("|");
+                if (parts[0]) os = parts[0];
+                if (parts[1]) browserName = parts[1];
+                if (parts[2]) browserVersion = parts[2];
+                if (parts[3]) width = parseInt(parts[3], 10) || width;
+                if (parts[4]) height = parseInt(parts[4], 10) || height;
+                if (parts[5]) clientType = parts[5];
+                if (parts[6]) appVersion = parts[6];
+            } catch (e) {}
+        }
+        return {
+            appInfo: { env: { clientAppId: window.location.host,
+                              clientAppType: clientType,
+                              clientAppVersion: appVersion,
+                              clientSdkVersion: "10.3.7",
+                              httpEnvironment: "prod",
+                              sdkInstallId: "" } },
+            dev: { os: { name: os, ver: "22631.2715", platform: "desktop" },
+                   hw: { make: "Microsoft", model: "unknown", sdktype: "web" },
+                   browser: { browserName: browserName, browserVersion: browserVersion },
+                   displayInfo: { dimensions: { widthInPixels: width, heightInPixels: height },
+                                  pixelDensity: { dpiX: 1, dpiY: 1 } } }
+        };
+    }
+
+    function headersOf(init) {
+        var headers = {};
+        try {
+            if (init && init.headers) {
+                var list = init.headers instanceof Headers
+                    ? Array.from(init.headers.entries())
+                    : Object.entries(init.headers);
+                for (var i = 0; i < list.length; i++) headers[list[i][0]] = list[i][1];
+            }
+        } catch (e) {}
+        return headers;
+    }
+
+    /// The server the chosen name refers to, so the sign-in answer can be
+    /// narrowed to it.
+    function narrow(regions) {
+        if (!CHOSEN || !regions || !regions.length) return regions;
+        var picked = null;
+        for (var i = 0; i < regions.length; i++) {
+            if (regions[i] && regions[i].name === CHOSEN) { picked = regions[i]; break; }
+        }
+        if (!picked) return regions;
+        picked = Object.assign({}, picked);
+        picked.isDefault = true;
+        return [picked];
+    }
+
+    function handleSignIn(text) {
+        try {
+            var payload = JSON.parse(text);
+            var offering = payload.offeringSettings || {};
+            var regions = offering.regions || [];
+            if (!regions.length) return null;
+            post({ type: "cloudServers", regions: regions });
+            if (!CHOSEN) return null;
+            offering.regions = narrow(regions);
+            payload.offeringSettings = offering;
+            return JSON.stringify(payload);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function handleSession(text) {
+        try {
+            var payload = JSON.parse(text);
+            var wait = payload.provisioningEstimatedWaitTimeInSeconds;
+            if (wait === undefined || wait === null) return null;
+            post({ type: "cloudWait", seconds: Number(wait) || 0, region: payload.region || "" });
+            return null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    var nativeFetch = window.fetch;
+    if (typeof nativeFetch === "function") {
+        window.fetch = function(input, init) {
+            try {
+                var url = (typeof input === "string") ? input : ((input && input.url) || "");
+                var headers = headersOf(init);
+                // The client the app says it is goes on every request.
+                headers["x-ms-device-info"] = JSON.stringify(deviceInfo());
+                var options = Object.assign({}, init || {});
+                options.headers = headers;
+
+                var body = options.body;
+                if (typeof body !== "string" && input && typeof input.clone === "function"
+                    && input.method && input.method !== "GET") {
+                    var request = input;
+                    return request.clone().text().then(function(text) {
+                        var replacement = null;
+                        if (url.indexOf("/login/user") !== -1) replacement = handleSignIn(text);
+                        else replacement = handleSession(text);
+                        var next = replacement !== null ? replacement : text;
+                        return nativeFetch.call(window, new Request(request, {
+                            method: request.method,
+                            headers: headers,
+                            body: next
+                        }));
+                    }).catch(function() {
+                        return nativeFetch.call(window, request, init);
+                    });
+                }
+
+                if (typeof body === "string") {
+                    var replacement = null;
+                    if (url.indexOf("/login/user") !== -1) replacement = handleSignIn(body);
+                    else replacement = handleSession(body);
+                    if (replacement !== null) options.body = replacement;
+                }
+                return nativeFetch.call(window, input, options);
+            } catch (e) {
+                return nativeFetch.apply(this, arguments);
+            }
+        };
+    }
+
+    var nativeOpen = XMLHttpRequest.prototype.open;
+    var nativeSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function(method, url) {
+        try { this.__gsUrl = String(url || ""); } catch (e) {}
+        return nativeOpen.apply(this, arguments);
+    };
+    XMLHttpRequest.prototype.send = function(body) {
+        try {
+            this.setRequestHeader("x-ms-device-info", JSON.stringify(deviceInfo()));
+            if (typeof body === "string") {
+                var url = this.__gsUrl || "";
+                var replacement = null;
+                if (url.indexOf("/login/user") !== -1) replacement = handleSignIn(body);
+                else replacement = handleSession(body);
+                if (replacement !== null) return nativeSend.call(this, replacement);
+            }
+        } catch (e) {}
+        return nativeSend.apply(this, arguments);
+    };
+})();
+    """#
+
     static let xboxSearchResultsJS = #"""
     (function() {
         if (window.__gsXboxSearchResults) return;

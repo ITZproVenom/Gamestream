@@ -123,7 +123,27 @@ final class StreamCoordinator: ObservableObject {
 
     // MARK: - Session control
 
+    /// The game waiting for a server to be chosen, when the player asked
+    /// to be shown the servers before a launch.
+    @Published var serverPickerGame: Game?
+
     func play(_ game: Game) {
+        // When the player wants to pick a server, the choice is made before
+        // anything starts: the session is created against the server that
+        // was picked, and it cannot be moved afterwards.
+        if AppSettings.shared.pickServerBeforePlay, !CloudServers.shared.servers.isEmpty {
+            serverPickerGame = game
+            return
+        }
+        launch(game, on: nil)
+    }
+
+    /// Starts a game, on the server the player chose.
+    func launch(_ game: Game, on server: CloudServer?) {
+        if let server {
+            CloudServers.shared.chosen = server.name
+            AppLog.shared.info("servers", "playing on \(server.shortName)")
+        }
         guard XboxAuth.shared.state.isSignedIn else {
             log.warn("stream", "refused to launch \(game.title): not signed in")
             phase = .failed("Sign in to your Microsoft account before starting a game.")
