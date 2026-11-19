@@ -159,9 +159,14 @@ enum StreamEnhancer {
             if (config.preferHEVC) {
                 if (prefer(lines, section, "H265")) {
                     report.chosen = "H265";
-                    note("asked for H.265");
+                    // What this does is put H.265 at the front of the
+                    // codecs the server sent. It is not an asking: the
+                    // asking happens in the session request, and the log
+                    // said "asked for H.265" for a long time, which sent
+                    // the hunt for the request in the wrong direction.
+                    note("H.265 was in the server's list and was moved to the front");
                 } else {
-                    note("H.265 was not offered by the server");
+                    note("H.265 was not in the server's list at all");
                 }
             }
             if (config.bitrateKbps > 0) {

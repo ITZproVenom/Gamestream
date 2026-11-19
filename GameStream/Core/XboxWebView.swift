@@ -259,8 +259,14 @@ struct XboxWebView: UIViewRepresentable {
         // The app's own setting is read here, so the session can be asked
         // for HEVC: the site's own "enableHevc" switch lives in the same
         // configuration the app already patches.
+        // The session is asked for the resolution and the bitrate ceiling
+        // the player has chosen, so the cellular limit works on its own.
+        let quality = AppSettings.shared.effectiveQuality
+        let bitrate = AppSettings.shared.effectiveBitrateMbps
         controller.addUserScript(WKUserScript(
-            source: "window.__gsPreferHEVC = \(AppSettings.shared.preferHEVC ? "true" : "false");",
+            source: "window.__gsPreferHEVC = \(AppSettings.shared.preferHEVC ? "true" : "false");"
+                + "window.__gsResolution = \"\(quality.sessionValue)\";"
+                + "window.__gsMaxBitrateKbps = \(bitrate > 0 ? bitrate * 1000 : 0);",
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true))
         // The rumble bridge must wrap createDataChannel before the page opens
@@ -295,11 +301,17 @@ struct XboxWebView: UIViewRepresentable {
         // configuration to patch. The wrapper asks for touch input; whether
         // the on-screen controls are shown is the separate question the
         // setting decides.
-        if settings.touchControls != .hidden {
-            controller.addUserScript(WKUserScript(source: WebScripts.touchInputJS,
-                                                  injectionTime: .atDocumentStart,
-                                                  forMainFrameOnly: true))
-        }
+        // The session settings - HEVC, the resolution, the bitrate ceiling -
+        // are asked for whatever the touch setting says. Only the touch
+        // fields themselves are conditional, and the script is told which.
+        controller.addUserScript(WKUserScript(
+            source: "window.__gsWantTouch = "
+                + (settings.touchControls != .hidden ? "true" : "false") + ";",
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true))
+        controller.addUserScript(WKUserScript(source: WebScripts.touchInputJS,
+                                              injectionTime: .atDocumentStart,
+                                              forMainFrameOnly: true))
         controller.addUserScript(WKUserScript(source: WebScripts.betterXCloudPrefsJS(
             global: AppSettings.shared.betterXCloudGlobalPreferences(),
             stream: AppSettings.shared.betterXCloudStreamPreferences()),

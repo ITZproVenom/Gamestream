@@ -167,6 +167,19 @@ final class AppSettings: ObservableObject {
             case .p1080hq: return "1080p-hq"
             }
         }
+
+        /// The value the cloud session itself expects.
+        ///
+        /// The session's own configuration names the resolution differently
+        /// from the script's preference, so the two are kept apart.
+        var sessionValue: String {
+            switch self {
+            case .auto: return "auto"
+            case .p720: return "720p"
+            case .p1080: return "1080p"
+            case .p1080hq: return "1080p-hq"
+            }
+        }
     }
 
     /// What the site's on-screen controls should do.

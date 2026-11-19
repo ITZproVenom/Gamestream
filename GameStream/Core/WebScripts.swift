@@ -2317,17 +2317,27 @@ enum WebScripts {
             if (!node || typeof node !== "object" || depth > 4) return false;
             var changed = false;
 
+            // The touch fields are only asked for when the player wants the
+            // on-screen controls. The video and sound settings are asked
+            // for whatever the player has chosen, so they are not tied to
+            // the touch setting - which is what used to happen: with the
+            // touch controls hidden, the session was never asked for HEVC,
+            // for the resolution or for the bitrate ceiling either.
             var input = node.inputConfiguration;
-            if (!input || typeof input !== "object") {
-                input = {};
-                node.inputConfiguration = input;
-                changed = true;
+            if (window.__gsWantTouch) {
+                if (!input || typeof input !== "object") {
+                    input = {};
+                    node.inputConfiguration = input;
+                    changed = true;
+                }
+            } else {
+                input = null;
             }
-            if (input.enableTouchInput !== true) {
+            if (input && input.enableTouchInput !== true) {
                 input.enableTouchInput = true;
                 changed = true;
             }
-            if (Number(input.maxTouchPoints || 0) < MAX_TOUCH_POINTS) {
+            if (input && Number(input.maxTouchPoints || 0) < MAX_TOUCH_POINTS) {
                 input.maxTouchPoints = MAX_TOUCH_POINTS;
                 changed = true;
             }
@@ -2348,6 +2358,21 @@ enum WebScripts {
             }
             if (video.decoderType === 1) {
                 video.decoderType = 4;
+                changed = true;
+            }
+            // The resolution and the bitrate ceiling are asked for here as
+            // well, so that "use less data on a cellular connection" works
+            // whether or not the enhancement script happens to be installed:
+            // its own preferences were the only place they were set, and
+            // without the script the limit did nothing at all.
+            var wantedResolution = window.__gsResolution;
+            if (wantedResolution && video.resolution !== wantedResolution) {
+                video.resolution = wantedResolution;
+                changed = true;
+            }
+            var wantedBitrate = Number(window.__gsMaxBitrateKbps) || 0;
+            if (wantedBitrate > 0 && Number(video.maxBitrateMbps || 0) !== wantedBitrate) {
+                video.maxBitrateMbps = wantedBitrate;
                 changed = true;
             }
 
