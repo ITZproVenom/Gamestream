@@ -467,7 +467,9 @@ enum WebScripts {
         /// big a picture to send, so it has to be the same client the
         /// request asks for.
         function claimedClient() {
-            var claim = window.__gsClientClaim || "";
+            // The claim the app has already given comes first; the one the
+            // app set on the page is the fallback.
+            var claim = CLIENT || window.__gsClientClaim || "";
             var os = claim.split("|")[0];
             return os || "windows";
         }
@@ -2450,7 +2452,9 @@ enum WebScripts {
 
         /// The client the app says it is, as the service reads it.
         function claimedClient() {
-            var claim = window.__gsClientClaim || "";
+            // The claim the app has already given comes first; the one the
+            // app set on the page is the fallback.
+            var claim = CLIENT || window.__gsClientClaim || "";
             var os = claim.split("|")[0];
             return os || "windows";
         }
@@ -2487,7 +2491,7 @@ enum WebScripts {
 
         /// Rewrites a request body, or returns null when there is nothing in
         /// it that concerns touch input.
-        function rewrite(body) {
+        function rewrite(body, url) {
             if (!body || typeof body !== "string" || body.length === 0) return null;
 
             // The session request is the one that matters: it carries the
@@ -2496,8 +2500,14 @@ enum WebScripts {
             // configuration it holds rather than by the field being asked
             // for.
             // The request that starts the session carries the resolution.
-            var play = rewritePlay(body);
-            if (play !== null) return play;
+            // Only that request: the rule was being applied to every body,
+            // and the session's own settings - hardware decoding, the
+            // touch request - were never reached because it answered
+            // first.
+            if (url && url.indexOf("/play") !== -1) {
+                var play = rewritePlay(body);
+                if (play !== null) return play;
+            }
 
             var isSession = body.indexOf("inputConfiguration") !== -1
                 || body.indexOf("videoConfiguration") !== -1
@@ -2569,7 +2579,7 @@ enum WebScripts {
                         var request = input;
                         return request.clone().text().then(function(text) {
                             window.__gsPatchTarget = urlOf(request);
-                            var replacement = rewrite(text);
+                            var replacement = rewrite(text, url);
                             window.__gsPatchTarget = "";
                             if (replacement === null) {
                                 return nativeFetch.call(window, request, init);
@@ -2602,7 +2612,7 @@ enum WebScripts {
             window.XMLHttpRequest.prototype.send = function(body) {
                 try {
                     window.__gsPatchTarget = this.__gsUrl || "";
-                    var next = rewrite(body);
+                    var next = rewrite(body, url);
                     window.__gsPatchTarget = "";
                     if (next !== null) return nativeSend.call(this, next);
                 } catch (e) {}

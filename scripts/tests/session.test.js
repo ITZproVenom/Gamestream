@@ -92,7 +92,10 @@ function check(name, ok, detail) {
           !i2 || i2.enableTouchInput === undefined, JSON.stringify(i2));
 
     // 3. The play request carries the resolution, as the client that tier
-    //    calls for.
+    //    calls for. The session's own settings must still be asked for on
+    //    a request that is not the play request - the rule for the
+    //    resolution used to run on every body and answered first, so the
+    //    hardware decoding and the touch request were never reached.
     sent = null;
     await sandbox.window.fetch("https://xhome.gssv-play-prod.xboxlive.com/v2/sessions/home/play", {
         method: "POST", body: JSON.stringify({ offeringId: "xcloud", settings: {} })
