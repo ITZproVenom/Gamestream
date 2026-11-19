@@ -117,6 +117,16 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Check the scripts the page runs
+        run: |
+          set -euo pipefail
+          # The scripts the app runs in the web page are checked here: each
+          # one must be valid JavaScript, and the three that decide what the
+          # page is told - the session request, the sign-in answer and the
+          # pad - are run against a fake answer. They are taken out of the
+          # Swift source, so what is checked is what the app runs.
+          node scripts/tests/run.js
+
       - name: Confirm every source file is in the target
         run: |
           set -euo pipefail
