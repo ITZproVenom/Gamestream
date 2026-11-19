@@ -10,6 +10,16 @@ actually used with.
   so the stream finds the token it needs and starts. It launches from
   `play.xbox.com/play/launch/…`, presses Xbox's own "Play with cloud"
   button, and answers the controller gate with "Connect later".
+- The session is asked for the resolution, the bitrate ceiling and
+  hardware decoding where the service reads them, so "use less data on a
+  cellular connection" and "prefer H.265" work whether or not the
+  enhancement script is installed.
+- The cloud servers the account can be served by are shown before a game
+  starts, with the ping measured live and the queue as it was last time,
+  and the one that is picked is the one the session is created against.
+- A title that is in the cloud but not yet in the catalogue can be
+  started by its product id, and the catalogue is read from Xbox's own
+  pages as well as the subscription feed.
 - The page is given a gamepad it can see: the app mirrors the attached
   controller into it, so the game stops asking for one and the buttons,
   sticks and triggers arrive in the game.
@@ -35,6 +45,11 @@ actually used with.
 
 ### Fixed
 
+- The controller's sticks were upside down, and the trigger was always
+  full. The stick can also be turned over, or used as the direction pad,
+  from the settings.
+- The rumble went to the virtual pad the enhancement script makes for
+  mouse and keyboard, which has no motors, so the controller stayed still.
 - The app no longer signs you out when a check runs too early or fails.
 - A cancelled catalogue refresh is no longer logged as a failure.
 - A game taken off the queue and never started goes back on the queue.
