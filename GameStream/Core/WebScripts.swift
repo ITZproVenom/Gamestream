@@ -2013,13 +2013,21 @@ enum WebScripts {
         function makePad() {
             var buttons = [];
             for (var i = 0; i < 17; i++) {
-                var pressed = !!state.buttons[i];
-                // The triggers are analog: the page reads their value, so
-                // how far they are pulled has to reach it.
+                var analog = (i === 6 || i === 7);   // the two triggers
                 var value = state.values && state.values.length > i
                     ? Number(state.values[i]) || 0
-                    : (pressed ? 1 : 0);
-                if (pressed && value < 1) value = 1;
+                    : 0;
+                var pressed;
+                if (analog) {
+                    // A trigger is analog: how far it is pulled is the
+                    // value, and it is pressed when it has been pulled at
+                    // all. Forcing the value to one turned every pull into
+                    // a full pull.
+                    pressed = value > 0.1;
+                } else {
+                    pressed = !!state.buttons[i];
+                    value = pressed ? 1 : 0;
+                }
                 buttons.push({
                     pressed: pressed,
                     touched: pressed,

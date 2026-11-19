@@ -280,7 +280,7 @@ struct LibraryView: View {
         if !library.recents.isEmpty, shelf != .recents {
             VStack(alignment: .leading, spacing: 10) {
                 header("Jump back in", detail: "Where you left off")
-                GameShelf(games: Array(library.recents.prefix(12))) { game in
+                GameShelf(games: Array(library.recents.prefix(12)), width: 138) { game in
                     let played = library.playtime(forGameID: game.id)
                     return played > 0 ? Format.duration(played) : nil
                 }
@@ -290,14 +290,17 @@ struct LibraryView: View {
         if !library.queue.isEmpty, shelf != .queue {
             VStack(alignment: .leading, spacing: 10) {
                 header("Up next", detail: queueDetail)
-                GameShelf(games: library.queue)
+                GameShelf(games: library.queue, width: 138) { game in
+                    let estimate = library.estimatedSessionLength(for: game.id)
+                    return estimate > 0 ? "about \(Format.duration(estimate))" : nil
+                }
             }
         }
 
         if !library.favorites.isEmpty, shelf != .favorites {
             VStack(alignment: .leading, spacing: 10) {
                 header("Favorites", detail: "\(library.favorites.count) saved")
-                GameShelf(games: Array(library.favorites.prefix(12)))
+                GameShelf(games: Array(library.favorites.prefix(12)), width: 138)
             }
         }
     }

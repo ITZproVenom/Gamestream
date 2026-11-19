@@ -159,7 +159,10 @@ struct GlassIconButton: View {
     private var icon: some View {
         Image(systemName: systemImage)
             .font(.system(size: 15, weight: .semibold))
-            .frame(width: 34, height: 34)
+            // The glyph is small, but the target is not: these are pressed
+            // one-handed, so the whole button is given Apple's minimum.
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
     }
 }
 

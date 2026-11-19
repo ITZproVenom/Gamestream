@@ -142,7 +142,10 @@ struct StreamView: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                         .glassEffect(.regular, in: .rect(cornerRadius: 16))
-                        .padding(.bottom, 26)
+                        // The handle that brings the controls back sits at
+                        // the bottom of the screen too, and the two were on
+                        // top of each other. The message is above it.
+                        .padding(.bottom, stream.phase == .playing && !showingControls ? 56 : 26)
                         .padding(.horizontal, 20)
                 }
                 .allowsHitTesting(false)

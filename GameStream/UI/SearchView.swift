@@ -97,7 +97,9 @@ struct SearchView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Start it by its product id")
                                 .font(.subheadline.weight(.semibold))
-                            Text("This title is not in the app's catalogue, but it can be asked for directly. Whether the cloud streams it is Microsoft's decision.")
+                            Text(catalog.games.contains { $0.matches(id: direct.id) }
+                                 ? "It is in the catalogue, but it can also be started directly from here."
+                                 : "This title is not in the app's catalogue, but it can be asked for directly. Whether the cloud streams it is Microsoft's decision.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             Button {
@@ -206,13 +208,16 @@ struct SearchView: View {
                             HStack(spacing: 11) {
                                 Image(systemName: "clock.arrow.circlepath")
                                     .foregroundStyle(.tint)
+                                    .accessibilityHidden(true)
                                 Text(term).font(.subheadline)
                                 Spacer(minLength: 0)
                                 Image(systemName: "arrow.up.left")
                                     .font(.caption)
                                     .foregroundStyle(.tertiary)
+                                    .accessibilityHidden(true)
                             }
                             .padding(.vertical, 11)
+                            .accessibilityLabel("Search for \(term) again")
                         }
                         .buttonStyle(.plain)
                         if term != history.terms.last { Divider().opacity(0.4) }

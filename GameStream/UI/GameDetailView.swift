@@ -156,7 +156,12 @@ struct GameDetailView: View {
     // MARK: - Facts
 
     private var facts: some View {
-        HStack(spacing: 12) {
+        // Three cards side by side leave each of them about a hundred
+        // points wide on a phone, and the value has nowhere to go. They
+        // are laid out in a grid that gives each of them room, and wraps
+        // when there is not enough.
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 108), spacing: 12)],
+                  spacing: 12) {
             StatChip(value: playtime > 0 ? Format.duration(playtime) : "—",
                      caption: "Your playtime",
                      systemImage: "clock.fill")

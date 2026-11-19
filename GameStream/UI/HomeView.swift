@@ -32,7 +32,7 @@ struct HomeView: View {
 
                     if !library.recents.isEmpty {
                         section("Jump back in", subtitle: "Where you left off") {
-                            GameShelf(games: Array(library.recents.prefix(12))) { game in
+                            GameShelf(games: Array(library.recents.prefix(12)), width: 138) { game in
                                 let played = library.playtime(forGameID: game.id)
                                 return played > 0 ? Format.duration(played) : nil
                             }
@@ -41,13 +41,16 @@ struct HomeView: View {
 
                     if !library.queue.isEmpty {
                         section("Up next", subtitle: queueSummary) {
-                            GameShelf(games: library.queue)
+                            GameShelf(games: library.queue, width: 138) { game in
+                                let estimate = library.estimatedSessionLength(for: game.id)
+                                return estimate > 0 ? "about \(Format.duration(estimate))" : nil
+                            }
                         }
                     }
 
                     if !library.favorites.isEmpty {
-                        section("Favorites") {
-                            GameShelf(games: Array(library.favorites.prefix(14)))
+                        section("Favorites", subtitle: "\(library.favorites.count) saved") {
+                            GameShelf(games: Array(library.favorites.prefix(14)), width: 138)
                         }
                     }
 

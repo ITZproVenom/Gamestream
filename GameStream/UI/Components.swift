@@ -81,10 +81,11 @@ struct GameTile: View {
                     Button(action: play) {
                         Image(systemName: "play.fill")
                             .font(.footnote.weight(.bold))
-                            // The button is thirty-six points across, which
-                            // is under Apple's minimum; the touch area is
-                            // the full forty-four.
+                            // The glyph is small, but the target is not:
+                            // the touch area around it is the full
+                            // forty-four points.
                             .frame(width: 36, height: 36)
+                            .frame(minWidth: 44, minHeight: 44)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.glassProminent)

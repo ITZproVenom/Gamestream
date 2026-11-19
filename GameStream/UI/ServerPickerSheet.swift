@@ -18,6 +18,17 @@ struct ServerPickerSheet: View {
         NavigationStack {
             List {
                 Section {
+                    if servers.servers.isEmpty {
+                        // The list comes from the service's own answer, so
+                        // it may not have arrived yet.
+                        HStack(spacing: 10) {
+                            ProgressView().controlSize(.small)
+                            Text("Asking Xbox which servers it can use…")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 6)
+                    }
                     ForEach(servers.ranked) { server in
                         Button {
                             onPlay(server)

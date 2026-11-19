@@ -260,7 +260,11 @@ final class XboxAuth: NSObject, ObservableObject {
                     token = next["token"] as? String
                     source = next["source"] as? String ?? ""
                     expires = next["expires"] as? String ?? ""
-                    log.info("auth", "the session was there on the second look")
+                    // How many looks it took is worth saying: the first
+                    // look is often too early, and "second look" said so
+                    // even when it had taken five.
+                    log.info("auth", "the session was there on look "
+                             + "\(attempt + 1)")
                     break
                 }
                 if attempt == tries - 1 {

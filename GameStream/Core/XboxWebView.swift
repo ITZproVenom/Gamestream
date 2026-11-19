@@ -146,10 +146,16 @@ struct XboxWebView: UIViewRepresentable {
         // browser - the site gates cloud play on iOS behind the home-screen
         // app - but which desktop is a choice, and the service answers a
         // television differently in places.
+        // The device the app says it is.
+        //
+        // The player always says it is a desktop browser: Xbox gates cloud
+        // play behind the home-screen app on iOS, and a phone's own
+        // user agent is turned away at the door. Every other page says
+        // what the setting says, so the catalogue and the player agree.
         let profile = AppSettings.shared
         webView.customUserAgent = role == .stream
-            ? profile.userAgent
-            : (profile.deviceProfile == .windows ? XboxAuth.userAgent : profile.userAgent)
+            ? XboxAuth.desktopUserAgent
+            : profile.userAgent
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = role != .stream
@@ -449,11 +455,14 @@ struct XboxWebView: UIViewRepresentable {
                 }
                 onCloudCatalogue?(games)
             case "cloudServers":
-                guard role == .stream else { return }
+                // Any page that talks to Xbox can report the servers, not
+                // only the player: the list has to be known before a game
+                // is started.
+                guard role != .signIn else { return }
                 let regions = body["regions"] as? [[String: Any]] ?? []
                 CloudServers.shared.absorb(regions)
             case "cloudWait":
-                guard role == .stream else { return }
+                guard role != .signIn else { return }
                 CloudServers.shared.recordWait(
                     seconds: body["seconds"] as? Int ?? 0,
                     for: body["region"] as? String)

@@ -348,6 +348,10 @@ struct SettingsView: View {
                                 Circle()
                                     .fill(accent.color.gradient)
                                     .frame(width: 30, height: 30)
+                                    // The swatch is thirty points across;
+                                    // the target around it is not.
+                                    .frame(minWidth: 44, minHeight: 44)
+                                    .contentShape(Rectangle())
                                     .overlay {
                                         if settings.accent == accent {
                                             Image(systemName: "checkmark")
@@ -523,10 +527,20 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if settings.deviceProfile == .custom {
-                    TextField("User agent", text: $settings.customUserAgent)
+                    // A user agent is a long line of text; one narrow line
+                    // is no way to write one.
+                    TextField("User agent", text: $settings.customUserAgent, axis: .vertical)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .font(.caption.monospaced())
+                        .lineLimit(3...6)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 12))
+                    if !settings.customUserAgent.isEmpty {
+                        Button("Clear it") { settings.customUserAgent = "" }
+                            .font(.caption.weight(.semibold))
+                    }
                 }
                 Text("The cloud is asked as whatever this says. A television and a "
                      + "desktop browser are sometimes answered differently, and a "
