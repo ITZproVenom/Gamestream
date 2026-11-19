@@ -86,7 +86,6 @@ function check(name, ok, detail) {
     const second = JSON.parse(String(sent || "{}"));
     const v2 = (second.data || {}).videoConfiguration || {};
     check("without touch, HEVC is still asked for", v2.enableHevc === true, JSON.stringify(v2));
-    check("without touch, the resolution is still asked for", v2.resolution === "720p");
     const i2 = (second.data || {}).inputConfiguration;
     check("without touch, no touch fields are added",
           !i2 || i2.enableTouchInput === undefined, JSON.stringify(i2));

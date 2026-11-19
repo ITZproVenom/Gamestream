@@ -2563,8 +2563,12 @@ enum WebScripts {
             window.fetch = function(input, init) {
                 try {
                     if (init && typeof init.body === "string") {
-                        window.__gsPatchTarget = urlOf(input);
-                        var next = rewrite(init.body);
+                        var target = urlOf(input);
+                        window.__gsPatchTarget = target;
+                        // The address is needed: the resolution is asked
+                        // for on the request that starts the session, and
+                        // only that request.
+                        var next = rewrite(init.body, target);
                         window.__gsPatchTarget = "";
                         if (next !== null) {
                             init = Object.assign({}, init, { body: next });
@@ -2577,14 +2581,21 @@ enum WebScripts {
                         // has to be read before it can be replaced. Returning
                         // the promise keeps the call's own semantics.
                         var request = input;
+                        var target = urlOf(request);
                         return request.clone().text().then(function(text) {
-                            window.__gsPatchTarget = urlOf(request);
-                            var replacement = rewrite(text, url);
+                            window.__gsPatchTarget = target;
+                            var replacement = rewrite(text, target);
                             window.__gsPatchTarget = "";
                             if (replacement === null) {
                                 return nativeFetch.call(window, request, init);
                             }
+                            // The method and the headers are carried
+                            // over explicitly: a request that loses its
+                            // headers is a request the service answers
+                            // differently.
                             return nativeFetch.call(window, new Request(request, {
+                                method: request.method,
+                                headers: request.headers,
                                 body: replacement
                             }), init);
                         }).catch(function() {
