@@ -67,29 +67,36 @@ final class Catalog: ObservableObject {
 
         // Now their details: the genre, the description and the artwork.
         guard !missing.isEmpty else { return }
+        let wanted = missing
         Task { [weak self] in
-            guard let self else { return }
-            let details = await Self.fetchPage(missing,
+            let details = await Self.fetchPage(wanted,
                                               market: Self.market,
                                               language: Self.language) ?? []
             guard !details.isEmpty else { return }
-            var byID = Dictionary(uniqueKeysWithValues:
-                details.map { ($0.id.uppercased(), $0) })
-            var replaced: [Game] = []
-            var index = 0
-            while index < self.games.count {
-                let game = self.games[index]
-                if let full = byID[game.id.uppercased()] {
-                    replaced.append(full)
-                    self.games.remove(at: index)
-                    continue
+            // The catalogue is the main actor's, so the work comes back to
+            // it before anything is changed.
+            await MainActor.run {
+                guard let self else { return }
+                var byID = Dictionary(uniqueKeysWithValues:
+                    details.map { ($0.id.uppercased(), $0) })
+                var replaced: [Game] = []
+                var index = 0
+                while index < self.games.count {
+                    let game = self.games[index]
+                    if let full = byID[game.id.uppercased()] {
+                        replaced.append(full)
+                        self.games.remove(at: index)
+                        continue
+                    }
+                    index += 1
                 }
-                index += 1
+                guard !replaced.isEmpty else { return }
+                self.games.append(contentsOf: replaced)
+                self.games.sort {
+                    $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+                }
+                self.log.info("catalog", "filled in the details of \(replaced.count) titles")
             }
-            guard !replaced.isEmpty else { return }
-            self.games.append(contentsOf: replaced)
-            self.games.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-            log.info("catalog", "filled in the details of \(replaced.count) titles")
         }
     }
 

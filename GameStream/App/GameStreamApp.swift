@@ -37,11 +37,10 @@ struct GameStreamApp: App {
                         // The catalogue lags behind what the cloud can play,
                         // so a title that is not in it can still be started
                         // by its product id.
-                        if let direct = DirectLaunch.game(forID: identifier) {
-                            AppLog.shared.info("deeplink", "playing \(direct.title) by its product id")
-                            stream.play(direct)
-                            return
-                        }
+                        let direct = DirectLaunch.game(forID: identifier)
+                        AppLog.shared.info("deeplink", "playing \(direct.title) by its product id")
+                        stream.play(direct)
+                        return
                         AppLog.shared.warn("deeplink", "no game matches \(identifier)")
                         return
                     }
