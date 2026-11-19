@@ -448,15 +448,32 @@ enum WebScripts {
 
         function setChosen(name, client) {
             CHOSEN = name || "";
-            CLIENT = client || "";
+            if (client) CLIENT = client;
         }
 
         window.__gsSetCloudChoice = function(name, client) {
             setChosen(name, client);
         };
 
+        // The client the app says it is, on its own: the server may never
+        // be chosen, and the claim is wanted either way.
+        window.__gsSetClientClaim = function(client) {
+            if (client) CLIENT = client;
+        };
+
+        /// The client the app says it is.
+        ///
+        /// The service reads the operating system out of this to decide how
+        /// big a picture to send, so it has to be the same client the
+        /// request asks for.
+        function claimedClient() {
+            var claim = window.__gsClientClaim || "";
+            var os = claim.split("|")[0];
+            return os || "windows";
+        }
+
         function deviceInfo() {
-            var os = "windows";
+            var os = claimedClient();
             var browserName = "chrome";
             var browserVersion = "140.0.3485.54";
             var width = 3840;
@@ -466,7 +483,6 @@ enum WebScripts {
             if (CLIENT) {
                 try {
                     var parts = CLIENT.split("|");
-                    if (parts[0]) os = parts[0];
                     if (parts[1]) browserName = parts[1];
                     if (parts[2]) browserVersion = parts[2];
                     if (parts[3]) width = parseInt(parts[3], 10) || width;
@@ -534,6 +550,26 @@ enum WebScripts {
             try { return JSON.stringify(payload); } catch (e) { return null; }
         }
 
+        /// Reads the answer that carries the queue.
+        ///
+        /// The service says how long the wait is before the session is
+        /// ready: the time the player has been waiting, and the time it
+        /// expects to wait in all. The second one is what the picker shows.
+        function handleQueue(text) {
+            try {
+                var payload = JSON.parse(text);
+                var total = Number(payload.estimatedTotalWaitTimeInSeconds);
+                var allocation = Number(payload.estimatedAllocationTimeInSeconds);
+                if (!total && !allocation) return null;
+                post({ type: "cloudWait",
+                       seconds: Math.round(total || allocation),
+                       region: payload.region || "" });
+                return null;
+            } catch (e) {
+                return null;
+            }
+        }
+
         /// Reads the session answer: the estimated wait.
         function handleSession(text) {
             var payload;
@@ -546,7 +582,10 @@ enum WebScripts {
 
         function isSignIn(url) { return url.indexOf("/login/user") !== -1; }
         function isSession(url) {
-            return url.indexOf("/sessions") !== -1 || url.indexOf("/provisioning") !== -1;
+            return url.indexOf("/sessions") !== -1
+                || url.indexOf("/provisioning") !== -1
+                || url.indexOf("/play") !== -1
+                || url.indexOf("/allocation") !== -1;
         }
 
         /// Reads a response, reports what it holds, and hands back a new one
@@ -559,7 +598,7 @@ enum WebScripts {
                 return clone.text().then(function(text) {
                     var rewritten = null;
                     if (isSignIn(url)) rewritten = handleSignIn(text);
-                    else rewritten = handleSession(text);
+                    else rewritten = handleQueue(text) || handleSession(text);
                     if (rewritten === null) return response;
                     try {
                         return new Response(rewritten, {
@@ -2372,21 +2411,14 @@ enum WebScripts {
                 video.decoderType = 4;
                 changed = true;
             }
-            // The resolution and the bitrate ceiling are asked for here as
-            // well, so that "use less data on a cellular connection" works
-            // whether or not the enhancement script happens to be installed:
-            // its own preferences were the only place they were set, and
-            // without the script the limit did nothing at all.
-            var wantedResolution = window.__gsResolution;
-            if (wantedResolution && video.resolution !== wantedResolution) {
-                video.resolution = wantedResolution;
-                changed = true;
-            }
-            var wantedBitrate = Number(window.__gsMaxBitrateKbps) || 0;
-            if (wantedBitrate > 0 && Number(video.maxBitrateMbps || 0) !== wantedBitrate) {
-                video.maxBitrateMbps = wantedBitrate;
-                changed = true;
-            }
+            // The resolution and the bitrate are NOT asked for here: the
+            // session's configuration has no such fields, and sending
+            // them made the service answer with "Something went wrong" -
+            // the whole launch failed, not just the setting. The
+            // resolution is asked for on the play request instead (as the
+            // client the tier calls for), and the bitrate is written into
+            // the session description, which is the only place it is
+            // decided.
 
             var audio = node.audioConfiguration;
             if (audio && typeof audio === "object"
@@ -2395,6 +2427,47 @@ enum WebScripts {
                 changed = true;
             }
             return changed;
+        }
+
+        /// The client the resolution asks for.
+        ///
+        /// The service decides how big a picture to send from what the
+        /// client says it is: a television is given the high quality
+        /// picture, a desktop the ordinary one, and anything else the
+        /// smaller one. That is how the script asks for a resolution, and
+        /// it is asked on the request that starts the session - not in the
+        /// session's configuration, which has no such field.
+        function resolutionClient() {
+            var resolution = window.__gsResolution || "auto";
+            // "auto" means the service decides, which it does from the
+            // client the app claims to be. Nothing is asked for, and the
+            // claim is left as it is.
+            if (resolution === "auto") return "";
+            if (resolution === "1080p-hq") return "tizen";
+            if (resolution === "1080p") return "windows";
+            return "android";
+        }
+
+        /// The client the app says it is, as the service reads it.
+        function claimedClient() {
+            var claim = window.__gsClientClaim || "";
+            var os = claim.split("|")[0];
+            return os || "windows";
+        }
+
+        /// The play request, which is where the resolution is asked for.
+        function rewritePlay(body) {
+            var client = resolutionClient();
+            if (!client) return null;
+            try {
+                var payload = JSON.parse(body);
+                if (!payload.settings) payload.settings = {};
+                if (payload.settings.osName === client) return null;
+                payload.settings.osName = client;
+                return JSON.stringify(payload);
+            } catch (e) {
+                return null;
+            }
         }
 
         /// Finds the configuration object wherever it sits in the body.
@@ -2422,6 +2495,10 @@ enum WebScripts {
             // mention touch input at all, so the body is recognised by the
             // configuration it holds rather than by the field being asked
             // for.
+            // The request that starts the session carries the resolution.
+            var play = rewritePlay(body);
+            if (play !== null) return play;
+
             var isSession = body.indexOf("inputConfiguration") !== -1
                 || body.indexOf("videoConfiguration") !== -1
                 || body.indexOf("enableTouchInput") !== -1;

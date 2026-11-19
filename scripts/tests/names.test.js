@@ -29,7 +29,6 @@ const pairs = [
     ['__gsWantTouch', webview, session],
     ['__gsPreferHEVC', webview, session],
     ['__gsResolution', webview, session],
-    ['__gsMaxBitrateKbps', webview, session],
     ['__gsSetCloudChoice', webview, servers]
 ];
 

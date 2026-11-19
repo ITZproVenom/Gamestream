@@ -131,6 +131,8 @@ struct XboxWebView: UIViewRepresentable {
             existing.evaluateJavaScript(
                 "window.__gsSetCloudChoice && window.__gsSetCloudChoice(\""
                     + (CloudServers.shared.chosen) + "\", \""
+                    + AppSettings.shared.cloudClientClaim + "\");"
+                    + "window.__gsSetClientClaim && window.__gsSetClientClaim(\""
                     + AppSettings.shared.cloudClientClaim + "\");",
                 completionHandler: nil)
             // Adopt the current request state, otherwise the first update
@@ -261,12 +263,16 @@ struct XboxWebView: UIViewRepresentable {
         // configuration the app already patches.
         // The session is asked for the resolution and the bitrate ceiling
         // the player has chosen, so the cellular limit works on its own.
+        // The resolution is asked for on the request that starts the
+        // session, as the client that tier calls for. The bitrate is not
+        // asked for here at all: it is written into the session
+        // description, which is the only place it is decided.
         let quality = AppSettings.shared.effectiveQuality
-        let bitrate = AppSettings.shared.effectiveBitrateMbps
         controller.addUserScript(WKUserScript(
             source: "window.__gsPreferHEVC = \(AppSettings.shared.preferHEVC ? "true" : "false");"
                 + "window.__gsResolution = \"\(quality.sessionValue)\";"
-                + "window.__gsMaxBitrateKbps = \(bitrate > 0 ? bitrate * 1000 : 0);",
+                + "window.__gsClientClaim = \"\(AppSettings.shared.cloudClientClaim)\";"
+                + "window.__gsSetClientClaim && window.__gsSetClientClaim(\"\(AppSettings.shared.cloudClientClaim)\");",
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true))
         // The rumble bridge must wrap createDataChannel before the page opens

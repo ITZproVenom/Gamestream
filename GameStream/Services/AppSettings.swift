@@ -436,14 +436,17 @@ final class AppSettings: ObservableObject {
     /// opened, so the app and the page never disagree about what is
     /// asking.
     var cloudClientClaim: String {
+        // The client the app says it is has to agree with the client the
+        // resolution asks for: the service reads the operating system out
+        // of this to decide how big a picture to send, so claiming one thing
+        // here and another in the request would have the two arguing.
+        let os: String
         switch deviceProfile {
-        case .windows, .custom:
-            return "windows|chrome|140.0.3485.54|3840|2160|browser|26.1.97"
-        case .smartTV:
-            return "tizen|chrome|140.0.3485.54|3840|2160|browser|26.1.97"
-        case .tizenTV:
-            return "tizen|chrome|140.0.3485.54|3840|2160|tizen|26.1.97"
+        case .windows, .custom: os = "windows"
+        case .smartTV: os = "tizen"
+        case .tizenTV: os = "tizen"
         }
+        return "\(os)|chrome|140.0.3485.54|3840|2160|browser|26.1.97"
     }
 
     /// The user agent the app sends, whatever the profile is.

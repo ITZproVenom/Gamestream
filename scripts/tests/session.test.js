@@ -70,8 +70,11 @@ function check(name, ok, detail) {
     check("software decoding is not", video.decoderType === 4, String(video.decoderType));
     check("the sound is decoded in hardware",
           ((parsed.data || {}).audioConfiguration || {}).useHardwareAudioDecoding === true);
-    check("the resolution is asked for", video.resolution === "720p", String(video.resolution));
-    check("the bitrate ceiling is asked for", video.maxBitrateMbps === 5000000, String(video.maxBitrateMbps));
+    // The resolution and the bitrate are NOT fields of the session's
+    // configuration: sending them made the service answer with "Something
+    // went wrong" and the whole launch failed.
+    check("the resolution is not put in the session", video.resolution === undefined, String(video.resolution));
+    check("the bitrate is not put in the session", video.maxBitrateMbps === undefined, String(video.maxBitrateMbps));
     check("touch is asked for", input.enableTouchInput === true, JSON.stringify(input));
     check("the touch points are asked for", input.maxTouchPoints >= 10, String(input.maxTouchPoints));
 
@@ -87,6 +90,18 @@ function check(name, ok, detail) {
     const i2 = (second.data || {}).inputConfiguration;
     check("without touch, no touch fields are added",
           !i2 || i2.enableTouchInput === undefined, JSON.stringify(i2));
+
+    // 3. The play request carries the resolution, as the client that tier
+    //    calls for.
+    sent = null;
+    await sandbox.window.fetch("https://xhome.gssv-play-prod.xboxlive.com/v2/sessions/home/play", {
+        method: "POST", body: JSON.stringify({ offeringId: "xcloud", settings: {} })
+    });
+    const play = JSON.parse(String(sent || "{}"));
+    check("the play request asks for the resolution", play.settings && play.settings.osName === "android",
+          JSON.stringify(play.settings));
+    check("the session fields are left out of the play request",
+          !play.videoConfiguration && !play.inputConfiguration, JSON.stringify(play));
 
     sent = null;
     await sandbox.window.fetch("https://browser.events.data.microsoft.com/OneCollector/1.0/", {
