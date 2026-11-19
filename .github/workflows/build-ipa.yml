@@ -117,6 +117,16 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Scan the whole code
+        run: |
+          set -euo pipefail
+          # The scanner looks at every file at once: the braces balance, the
+          # switches cover their enums, the settings that are stored are
+          # read, the buttons are big enough and say what they do, and no
+          # actor reaches for main-actor state without going through the
+          # main actor. It has caught four mistakes that a build did not.
+          python3 scripts/scan.py
+
       - name: Check the scripts the page runs
         run: |
           set -euo pipefail
