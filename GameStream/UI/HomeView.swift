@@ -42,7 +42,7 @@ struct HomeView: View {
                     if !library.queue.isEmpty {
                         section("Up next", subtitle: queueSummary) {
                             GameShelf(games: library.queue, width: 138) { game in
-                                let estimate = library.estimatedSessionLength(for: game.id)
+                                let estimate = library.estimatedSessionLength(for: game)
                                 return estimate > 0 ? "about \(Format.duration(estimate))" : nil
                             }
                         }

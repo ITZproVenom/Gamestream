@@ -2,6 +2,29 @@ import SwiftUI
 import UIKit
 import CoreSpotlight
 
+/// Keeps the one observer the app needs, and replaces it rather than
+/// adding a second one when the app starts its work again.
+@MainActor
+final class MemoryWarningObserver {
+    private var observer: NSObjectProtocol?
+
+    func install() {
+        if let observer {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        observer = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated {
+                AppLog.shared.warn("app", "the system warned about memory"
+                                   + (StreamCoordinator.shared.phase.isActive
+                                      ? " during a stream" : ""))
+            }
+        }
+    }
+}
+
 @main
 struct GameStreamApp: App {
     @Environment(\.scenePhase) private var scenePhase
@@ -140,9 +163,13 @@ struct GameStreamApp: App {
 
     /// Start-up order matters: find out whether the user can stream before
     /// deciding which screen to show, and do the slower work alongside it.
-    /// The memory-warning observer, kept so it can be replaced rather than
-    /// added a second time.
-    private var warningObserver: NSObjectProtocol?
+    /// The memory-warning observer.
+    ///
+    /// It is kept in a box rather than in a property of the app itself,
+    /// because the app is a struct: a struct cannot change its own stored
+    /// properties from a method without mutating itself, and the method is
+    /// not called on a mutable copy.
+    private let memoryWarning = MemoryWarningObserver()
 
     private func startUp() async {
         AppLog.shared.info("app", "GameStream \(AppInfo.versionLine) starting")
@@ -157,19 +184,7 @@ struct GameStreamApp: App {
         // can run more than once when the scene is rebuilt, and each memory
         // warning would then be written to the log once per time it had
         // been added.
-        if let warningObserver {
-            NotificationCenter.default.removeObserver(warningObserver)
-        }
-        warningObserver = NotificationCenter.default.addObserver(
-            forName: UIApplication.didReceiveMemoryWarningNotification,
-            object: nil, queue: .main
-        ) { _ in
-            MainActor.assumeIsolated {
-                AppLog.shared.warn("app", "the system warned about memory"
-                                   + (StreamCoordinator.shared.phase.isActive
-                                      ? " during a stream" : ""))
-            }
-        }
+        memoryWarning.install()
         UIApplication.shared.isIdleTimerDisabled = settings.keepAwake
         rumble.start()
         Connectivity.shared.start()

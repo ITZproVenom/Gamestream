@@ -55,7 +55,7 @@ actor PosterCache {
             try? data.write(to: file, options: .atomic)
             // The cache is tidied as it grows, rather than waiting for the
             // player to clear it by hand.
-            trimDiskIfNeeded()
+            await trimDiskIfNeeded()
             return image
         }
 
@@ -79,7 +79,7 @@ actor PosterCache {
     }
 
     /// Removes the oldest artwork until the cache is back under its limit.
-    private func trimDiskIfNeeded() {
+    private func trimDiskIfNeeded() async {
         let keys: [URLResourceKey] = [.fileSizeKey, .contentAccessDateKey, .creationDateKey]
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: directory, includingPropertiesForKeys: keys) else { return }
@@ -100,7 +100,11 @@ actor PosterCache {
             try? FileManager.default.removeItem(at: entry.url)
             total -= entry.size
         }
-        AppLog.shared.info("cache", "the artwork cache was tidied back to its limit")
+        // The log belongs to the main actor, and the cache is an actor of
+        // its own, so the line is written from there.
+        await MainActor.run {
+            AppLog.shared.info("cache", "the artwork cache was tidied back to its limit")
+        }
     }
 
     func clear() {
