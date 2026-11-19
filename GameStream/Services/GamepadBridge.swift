@@ -25,6 +25,12 @@ final class GamepadBridge {
     /// the page only needs to hear about it a few times a second.
     private var pendingPush = false
     private var lastPayload = ""
+    /// The last thing the controller was doing, so nothing is sent when
+    /// nothing has moved.
+    private var lastConnected = false
+    private var lastAxes: [Double] = []
+    private var lastButtons: [Bool] = []
+    private var lastValues: [Double] = []
     /// The loop that keeps the page in step with the pad.
     private var pollTask: Task<Void, Never>?
     private let log = AppLog.shared
@@ -159,6 +165,22 @@ final class GamepadBridge {
         // controller the player does not have.
         let connected = !GCController.controllers().isEmpty
         let state = snapshot()
+
+        // Nothing has moved: there is nothing to send. The loop runs thirty
+        // times a second, and turning every reading into JSON thirty times
+        // a second is work the phone does for nothing - and it is work it
+        // was doing while a game was playing, which is when the phone was
+        // already hot.
+        if !force, connected == lastConnected, state.axes == lastAxes,
+           state.buttons == lastButtons, state.values == lastValues {
+            pendingPush = false
+            return
+        }
+        lastConnected = connected
+        lastAxes = state.axes
+        lastButtons = state.buttons
+        lastValues = state.values
+
         let payload: [String: Any] = [
             "connected": connected,
             "axes": state.axes,

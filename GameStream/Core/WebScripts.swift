@@ -221,8 +221,9 @@ enum WebScripts {
         window.addEventListener("popstate", function() { setTimeout(report, 60); });
         window.addEventListener("hashchange", function() { setTimeout(report, 60); });
         // Every report walks the page for its buttons and its dialogs, which
-        // costs a layout read. Four times a second is enough to notice a
-        // dialog that needs answering, and a quarter of the work.
+        // costs a layout read. Four seconds is often enough to notice a
+        // dialog that needs answering, and a fraction of the work: the
+        // report used to run twice a second.
         setInterval(report, 4000);
     })();
     """#
@@ -868,13 +869,24 @@ enum WebScripts {
             }
         }
 
+        // The styling only has to be applied when the page changes, and
+        // the overlay only has to be swept when one is there. Both were
+        // being done twice a second for the whole session, while the game
+        // was playing and the phone was already hot: the styling is
+        // compared against a long string of rules every time, and the page
+        // is searched for an overlay every time.
+        var lastURL = "";
         function tick() {
-            apply();
+            var href = location.href || "";
+            if (href !== lastURL) {
+                lastURL = href;
+                apply();
+            }
             sweepOverlay();
         }
 
         tick();
-        setInterval(tick, 500);
+        setInterval(tick, 1000);
     })();
     """#
 
