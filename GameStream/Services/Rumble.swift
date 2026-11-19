@@ -41,10 +41,28 @@ enum RumbleBridge {
             } catch (e) {}
         }
 
-        function actuatorGamepad() {
+        /// The pad a rumble is meant for.
+        ///
+        /// The packet says which pad it is for. The page has more than one
+        /// pad in it - the app's mirror of the real controller, and the
+        /// virtual pad the enhancement script makes for mouse and keyboard -
+        /// so the wrong one was being chosen: the rumble went to a pad that
+        /// had no motors, and the controller stayed still.
+        function actuatorGamepad(index) {
             var pads = navigator.getGamepads ? navigator.getGamepads() : [];
-            for (var i = 0; i < pads.length; i++) {
-                var pad = pads[i];
+            var wanted = (index === undefined || index === null) ? null : Number(index);
+            if (wanted !== null && !isNaN(wanted)) {
+                for (var i = 0; i < pads.length; i++) {
+                    var exact = pads[i];
+                    if (exact && exact.index === wanted && exact.connected
+                        && exact.vibrationActuator) return exact;
+                }
+            }
+            // The packet names a pad the page does not have. Fall back to
+            // the last pad that can actually rumble, which is the app's
+            // mirror of the real controller.
+            for (var j = pads.length - 1; j >= 0; j--) {
+                var pad = pads[j];
                 if (pad && pad.connected && pad.vibrationActuator) return pad;
             }
             return null;
@@ -75,7 +93,7 @@ enum RumbleBridge {
 
         function playInPage(data) {
             if (window.__gsRumbleMode !== "page") return false;
-            var pad = actuatorGamepad();
+            var pad = actuatorGamepad(data.gamepadIndex);
             if (!pad) return false;
 
             var scale = Number(window.__gsRumbleScale) || 1;

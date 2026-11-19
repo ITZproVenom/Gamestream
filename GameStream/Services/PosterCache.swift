@@ -15,6 +15,12 @@ actor PosterCache {
     private var inFlight: [URL: Task<UIImage?, Never>] = [:]
     /// Invalidates downloads that began before the user cleared the cache.
     private var clearGeneration = 0
+    /// How much artwork is kept on disk.
+    ///
+    /// The posters are large - a few hundred thousand bytes each - and a
+    /// catalogue of five hundred titles is a hundred megabytes of files
+    /// that were never tidied away. The cache now keeps itself to a size.
+    private let diskLimit = 240 * 1024 * 1024
 
     private init() {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
@@ -47,6 +53,9 @@ actor PosterCache {
             }
             guard generation == clearGeneration, !Task.isCancelled else { return nil }
             try? data.write(to: file, options: .atomic)
+            // The cache is tidied as it grows, rather than waiting for the
+            // player to clear it by hand.
+            trimDiskIfNeeded()
             return image
         }
 
@@ -67,6 +76,31 @@ actor PosterCache {
     private static func cost(of image: UIImage) -> Int {
         let pixels = Int(image.size.width * image.scale) * Int(image.size.height * image.scale)
         return max(1, pixels * 4)
+    }
+
+    /// Removes the oldest artwork until the cache is back under its limit.
+    private func trimDiskIfNeeded() {
+        let keys: [URLResourceKey] = [.fileSizeKey, .contentAccessDateKey, .creationDateKey]
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: keys) else { return }
+        var entries: [(url: URL, size: Int, date: Date)] = []
+        var total = 0
+        for file in files {
+            guard let values = try? file.resourceValues(forKeys: Set(keys)) else { continue }
+            let size = values.fileSize ?? 0
+            total += size
+            let date = values.contentAccessDate ?? values.creationDate ?? .distantPast
+            entries.append((file, size, date))
+        }
+        guard total > diskLimit else { return }
+        // The least recently used go first.
+        entries.sort { $0.date < $1.date }
+        for entry in entries {
+            guard total > diskLimit else { break }
+            try? FileManager.default.removeItem(at: entry.url)
+            total -= entry.size
+        }
+        AppLog.shared.info("cache", "the artwork cache was tidied back to its limit")
     }
 
     func clear() {

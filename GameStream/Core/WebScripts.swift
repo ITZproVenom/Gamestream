@@ -677,7 +677,12 @@ enum WebScripts {
 
         function scan() {
             attempts++;
-            var root = document.querySelector("#gamepass-root");
+            // The results live in an element the site names. If it is
+            // renamed - which it has been before - the whole page is read
+            // instead, and the same links are found in it.
+            var root = document.querySelector("#gamepass-root")
+                || document.querySelector("[id*=gamepass]")
+                || document.body;
             if (!root) {
                 if (attempts >= 30) {
                     finished = true;

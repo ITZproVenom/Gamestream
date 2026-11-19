@@ -96,6 +96,9 @@ final class StreamCoordinator: ObservableObject {
     private var bitrateTotal = 0
     private var poorSince: Date?
     private var reducedQuality = false
+    /// The last reading of the connection's lost-packet count, so the change
+    /// between two readings can be looked at.
+    private var lastPacketsLost: Int?
     /// Bumped when the player asks for the overlay.
     @Published var overlayRequest = 0
 
@@ -147,7 +150,11 @@ final class StreamCoordinator: ObservableObject {
         // When the player wants to pick a server, the choice is made before
         // anything starts: the session is created against the server that
         // was picked, and it cannot be moved afterwards.
-        if AppSettings.shared.pickServerBeforePlay, !CloudServers.shared.servers.isEmpty {
+        // The picker is not offered while a game is running: the player
+        // would be left looking at the old game with a sheet over it, and
+        // the session cannot be moved to another server once it exists.
+        if AppSettings.shared.pickServerBeforePlay, !CloudServers.shared.servers.isEmpty,
+           !phase.isActive {
             serverPickerGame = game
             return
         }
@@ -175,6 +182,15 @@ final class StreamCoordinator: ObservableObject {
         }
 
         log.info("stream", "launching \(game.title) (\(game.id))")
+        // Whatever was watching the previous session has to stop watching:
+        // the leave check would end the new game the moment the page
+        // reported itself, and the reconnect would start a second session.
+        watchdog?.cancel()
+        watchdog = nil
+        leaveCheck?.cancel()
+        leaveCheck = nil
+        reconnectTask?.cancel()
+        reconnectTask = nil
         self.game = game
         resolution = ""
         startedAt = Date()
@@ -303,9 +319,25 @@ final class StreamCoordinator: ObservableObject {
     }
 
     /// Ten seconds of genuinely bad numbers, not one unlucky sample.
+    ///
+    /// The lost packets are counted by the connection for the whole session,
+    /// so the total says nothing about how the connection is doing *now*:
+    /// a session that lost forty packets in its first minute was told its
+    //// connection was bad for the rest of its life, however well it ran
+    /// afterwards. What matters is how many were lost in the last second,
+    /// so the change between two readings is what is looked at.
     private func considerReducingQuality(for value: StreamStats) {
         guard AppSettings.shared.adaptiveQuality, !reducedQuality else { return }
-        let bad = value.rttMs > 140 || value.packetsLost > 40 || value.fps < 35
+        let lostNow: Int
+        if let previous = lastPacketsLost, value.packetsLost >= previous {
+            lostNow = value.packetsLost - previous
+        } else {
+            // The count went backwards - the connection was replaced - so
+            // this reading says nothing about the old one.
+            lostNow = 0
+        }
+        lastPacketsLost = value.packetsLost
+        let bad = value.rttMs > 140 || lostNow > 8 || value.fps < 35
         guard bad else {
             poorSince = nil
             return
@@ -364,14 +396,16 @@ final class StreamCoordinator: ObservableObject {
         queuedNext = next
         guard XboxAuth.shared.state.isSignedIn else {
             exit()
-            play(next)
+            launch(next, on: nil)
             return
         }
 
         log.info("stream", "moving on to \(next.title) (\(next.id))")
+        // The session that is ending is recorded and tidied up here; the
+        // new one is started by launch(), so there is only one place that
+        // starts a game. Two places meant every change to the start of a
+        // game had to be made twice, and once was not.
         recordFinishedSession()
-        watchdog?.cancel()
-        watchdog = nil
         leaveCheck?.cancel()
         leaveCheck = nil
         reconnectTask?.cancel()
@@ -380,26 +414,13 @@ final class StreamCoordinator: ObservableObject {
             Task { _ = await StreamRecorder.shared.stop() }
         }
         ControllerRumble.shared.stop()
-        ControllerRumble.shared.retryAllRoutes(reason: "next in queue")
-
-        game = next
-        resolution = ""
         stats = nil
         notice = nil
         enhancementMenuOpen = false
         offeredCodecs = ""
         codecOutcome = ""
         touchInputOutcome = ""
-        resetSessionMetrics()
-        startedAt = Date()
-        // The queue's next game has been taken; it only goes back if the
-        // launch fails.
-        queuedNext = nil
-        LibraryStore.shared.noteLaunch(next)
-        // The guard measures one sitting, not one game, so it keeps running.
-        phase = .connecting("Starting \(next.title)")
-        connectStage = .launching
-        startWatchdog()
+        launch(next, on: nil)
     }
 
     private func resetSessionMetrics() {
@@ -409,6 +430,7 @@ final class StreamCoordinator: ObservableObject {
         bitrateTotal = 0
         poorSince = nil
         reducedQuality = false
+        lastPacketsLost = nil
         reconnectAttempts = 0
     }
 

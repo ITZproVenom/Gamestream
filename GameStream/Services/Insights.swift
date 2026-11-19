@@ -47,19 +47,9 @@ extension LibraryStore {
     }
 
     func topGames(limit: Int = 5) -> [GameTotal] {
-        var totals: [String: GameTotal] = [:]
-        for record in activity {
-            let key = record.gameID.uppercased()
-            if let existing = totals[key] {
-                totals[key] = GameTotal(gameID: existing.gameID, title: existing.title,
-                                        seconds: existing.seconds + record.seconds,
-                                        sessions: existing.sessions + 1)
-            } else {
-                totals[key] = GameTotal(gameID: record.gameID, title: record.title,
-                                        seconds: record.seconds, sessions: 1)
-            }
-        }
-        return totals.values.sorted { $0.seconds > $1.seconds }.prefix(limit).map { $0 }
+        // The totals are kept by the store and only worked out again when
+        // the activity changes, rather than on every drawing of the screen.
+        gameTotals.values.sorted { $0.seconds > $1.seconds }.prefix(limit).map { $0 }
     }
 
     var playtimeThisWeek: TimeInterval {

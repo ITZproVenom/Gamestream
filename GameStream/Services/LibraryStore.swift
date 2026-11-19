@@ -248,6 +248,7 @@ final class LibraryStore: ObservableObject {
         }
         save(activity, Key.activity)
         rebuildIndexes()
+        totalsAreStale = true
     }
 
     /// Removes a single session. Clearing everything was the only way to
@@ -256,12 +257,15 @@ final class LibraryStore: ObservableObject {
         activity.removeAll { $0.id == record.id }
         save(activity, Key.activity)
         rebuildIndexes()
+        totalsAreStale = true
     }
 
     func clearActivity() {
         activity.removeAll()
+        totalsAreStale = true
         save(activity, Key.activity)
         rebuildIndexes()
+        totalsAreStale = true
     }
 
     var totalPlaytime: TimeInterval {
@@ -281,6 +285,37 @@ final class LibraryStore: ObservableObject {
         guard !activity.isEmpty else { return 30 * 60 }
         let total = activity.reduce(0) { $0 + $1.seconds }
         return total / Double(activity.count)
+    }
+
+    /// The totals the Insights screen shows, kept until the activity
+    /// changes.
+    ///
+    /// They were worked out from the whole activity log every time the
+    /// screen was drawn - the log holds three hundred records - and the
+    /// screen is drawn often.
+    private var totalsCache: [String: GameTotal] = [:]
+    private var totalsAreStale = true
+
+    /// The per-game totals, worked out once per change rather than once per
+    /// drawing.
+    var gameTotals: [String: GameTotal] {
+        if totalsAreStale {
+            var totals: [String: GameTotal] = [:]
+            for record in activity {
+                let key = record.gameID.uppercased()
+                if let existing = totals[key] {
+                    totals[key] = GameTotal(gameID: existing.gameID, title: existing.title,
+                                            seconds: existing.seconds + record.seconds,
+                                            sessions: existing.sessions + 1)
+                } else {
+                    totals[key] = GameTotal(gameID: record.gameID, title: record.title,
+                                            seconds: record.seconds, sessions: 1)
+                }
+            }
+            totalsCache = totals
+            totalsAreStale = false
+        }
+        return totalsCache
     }
 
     /// How many sessions this player has had with one game.
