@@ -322,14 +322,27 @@ jobs:
           # last known good one is one tap away instead of a search
           # through old releases.
           mkdir -p backup
-          if gh release download latest-ios-beta --pattern 'GameStream-unsigned.ipa' --dir backup 2>/dev/null \
-             && [ -s backup/GameStream-unsigned.ipa ]; then
+          # The rollback is fetched with the API rather than with the
+          # command line tool, and a failure here must never stop the
+          # build.
+          set +e
+          ASSET_URL=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases/tags/latest-ios-beta" \
+            | python3 -c "import sys,json;d=json.load(sys.stdin);print(next((a['browser_download_url'] for a in d.get('assets',[]) if a['name'].endswith('.ipa')),''))")
+          if [ -n "$ASSET_URL" ]; then
+            curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -o backup/GameStream-unsigned.ipa "$ASSET_URL"
+          fi
+          set -e
+          if [ -s backup/GameStream-unsigned.ipa ]; then
+            # Neither of these may stop the build: the rollback is there
+            # to be helpful, and the build is the point.
             gh release delete ios-known-good --yes --cleanup-tag 2>/dev/null || true
             gh release create ios-known-good \
               backup/GameStream-unsigned.ipa \
               --title "iOS - the build before the latest" \
               --notes "The build that was published before this one. Install it if the newest build does not work for you." \
-              --prerelease
+              --prerelease || echo "the rollback could not be published"
             echo "the previous build was kept as ios-known-good"
           else
             echo "there was no previous build to keep"
