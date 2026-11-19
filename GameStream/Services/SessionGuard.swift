@@ -74,6 +74,11 @@ final class SessionGuard: ObservableObject {
     // MARK: - Conditions
 
     private func readBattery() {
+        // The battery level reads as -1 unless monitoring has been asked
+        // for, and -1 is read here as "full". The guard was therefore
+        // never able to see a low battery: it was switched on nowhere in
+        // the app.
+        UIDevice.current.isBatteryMonitoringEnabled = true
         let level = UIDevice.current.batteryLevel
         batteryLevel = level < 0 ? 1 : Double(level)
         isCharging = UIDevice.current.batteryState == .charging

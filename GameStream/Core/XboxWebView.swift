@@ -125,6 +125,14 @@ struct XboxWebView: UIViewRepresentable {
             existing.navigationDelegate = context.coordinator
             existing.uiDelegate = context.coordinator
             context.coordinator.attach(to: existing)
+            // The page is kept between games, so it still has the last
+            // choice and the last client in it. They are handed over again
+            // now, or a server picked for the second game would be ignored.
+            existing.evaluateJavaScript(
+                "window.__gsSetCloudChoice && window.__gsSetCloudChoice(\""
+                    + (CloudServers.shared.chosen) + "\", \""
+                    + AppSettings.shared.cloudClientClaim + "\");",
+                completionHandler: nil)
             // Adopt the current request state, otherwise the first update
             // after re-presenting looks like a change and reloads the page
             // that is already playing.
