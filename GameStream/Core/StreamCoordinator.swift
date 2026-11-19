@@ -127,6 +127,22 @@ final class StreamCoordinator: ObservableObject {
     /// to be shown the servers before a launch.
     @Published var serverPickerGame: Game?
 
+    /// Puts a game back when the server picker is dismissed.
+    ///
+    /// The queue's next game is taken off the queue before it is played, so
+    /// a picker that is cancelled would lose it: the game would be neither
+    /// playing nor queued.
+    func serverPickerCancelled() {
+        guard let game = serverPickerGame else { return }
+        serverPickerGame = nil
+        if queuedNext?.id == game.id, let next = queuedNext {
+            queuedNext = nil
+            LibraryStore.shared.putBackOnQueue(next)
+            log.info("stream", "the server picker was cancelled; "
+                     + "\(next.title) went back on the queue")
+        }
+    }
+
     func play(_ game: Game) {
         // When the player wants to pick a server, the choice is made before
         // anything starts: the session is created against the server that
@@ -140,6 +156,7 @@ final class StreamCoordinator: ObservableObject {
 
     /// Starts a game, on the server the player chose.
     func launch(_ game: Game, on server: CloudServer?) {
+        serverPickerGame = nil
         if let server {
             CloudServers.shared.chosen = server.name
             AppLog.shared.info("servers", "playing on \(server.shortName)")

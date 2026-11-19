@@ -157,6 +157,7 @@ struct StreamView: View {
                 stream.launch(game, on: server)
             }
             .environmentObject(CloudServers.shared)
+            .onDisappear { stream.serverPickerCancelled() }
         }
         .statusBarHidden(stream.phase == .playing)
         .persistentSystemOverlays(stream.phase == .playing ? .hidden : .automatic)
