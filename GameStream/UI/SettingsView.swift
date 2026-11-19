@@ -810,9 +810,10 @@ struct SettingsView: View {
 
             setting("GameStream enhancements", icon: "slider.horizontal.3",
                        isOn: $settings.enhancerEnabled)
-            Text("Our own in-page layer. It edits the session description before the "
-                 + "stream is negotiated, which is the only place codec and bitrate "
-                 + "are actually decided.")
+            Text("Our own in-page layer. It edits the session description before "
+                 + "the stream is negotiated, which is where the codec and the "
+                 + "bitrate are decided, and it asks the session itself for "
+                 + "hardware decoding.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
