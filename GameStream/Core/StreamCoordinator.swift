@@ -63,6 +63,14 @@ final class StreamCoordinator: ObservableObject {
         var isActive: Bool { self != .idle }
     }
 
+    /// Whether the player has to sign in before the game can be tried
+    /// again.
+    ///
+    /// "Try again" cannot fix a session that is not there: the button did
+    /// nothing at all, and the player had no way to sign in from the screen
+    /// that told them to.
+    @Published private(set) var needsSignIn = false
+
     /// Where in the launch sequence the player currently is, so the loading
     /// screen can show real progress instead of one spinner for everything.
     enum ConnectStage: Equatable {
@@ -176,6 +184,7 @@ final class StreamCoordinator: ObservableObject {
         }
         guard XboxAuth.shared.state.isSignedIn else {
             log.warn("stream", "refused to launch \(game.title): not signed in")
+            needsSignIn = true
             phase = .failed("Sign in to your Microsoft account before starting a game.")
             self.game = game
             return
@@ -476,6 +485,7 @@ final class StreamCoordinator: ObservableObject {
         // Being bounced back to the store or sign-in page means the launch did
         // not take. Saying so beats leaving a spinner on screen.
         if kind == "login", case .connecting = phase {
+            needsSignIn = true
             phase = .failed("Xbox asked for a sign-in. Your session may have expired.")
             Task { await XboxAuth.shared.refresh(reason: "stream bounced to login") }
         }

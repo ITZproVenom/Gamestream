@@ -824,6 +824,12 @@ struct SettingsView: View {
                     Text(stream.offeredCodecs.isEmpty
                          ? "Start a game to see which codecs the server offers."
                          : "Server offered: \(stream.offeredCodecs).")
+                    // The asking happens when the session is set up, so a
+                    // change made now is used by the next game.
+                    Text("Asked for when the session starts, so a change takes "
+                         + "effect the next time a game is launched.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     // Asking is not the same as getting: the server decides.
                     if !stream.codecOutcome.isEmpty {
                         Text(stream.codecOutcome)

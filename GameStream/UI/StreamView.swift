@@ -287,9 +287,17 @@ struct StreamView: View {
                             .buttonStyle(.glass)
                             .buttonBorderShape(.capsule)
                             .tint(.white)
-                        Button("Try again") { stream.retry() }
-                            .buttonStyle(.glassProminent)
-                            .buttonBorderShape(.capsule)
+                        if stream.needsSignIn {
+                            // Trying again cannot fix a session that is not
+                            // there, so the button says what can.
+                            Button("Sign in") { stream.exit() }
+                                .buttonStyle(.glassProminent)
+                                .buttonBorderShape(.capsule)
+                        } else {
+                            Button("Try again") { stream.retry() }
+                                .buttonStyle(.glassProminent)
+                                .buttonBorderShape(.capsule)
+                        }
                     }
                     .padding(.top, 6)
                 }
