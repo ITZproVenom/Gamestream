@@ -47,6 +47,15 @@ final class GamepadBridge {
         guard pollTask == nil else { return }
         pollTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
+                // The loop only runs while there is a page to keep in step.
+                // It used to run for the whole life of the app, waking
+                // thirty times a second to do nothing at all whenever no
+                // game was running - and a game is not running most of the
+                // time.
+                guard XboxWebView.Registry.shared.streamView != nil else {
+                    try? await Task.sleep(for: .milliseconds(250))
+                    continue
+                }
                 self?.push(force: false)
                 try? await Task.sleep(for: .milliseconds(33))
             }

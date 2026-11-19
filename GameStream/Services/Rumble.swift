@@ -88,7 +88,13 @@ enum RumbleBridge {
 
         window.addEventListener("gamepadconnected", reportCapability);
         window.addEventListener("gamepaddisconnected", reportCapability);
-        setInterval(reportCapability, 4000);
+        // The pads are walked for their names and their motors, and nothing
+        // is sent unless that has changed - but the walk still happened
+        // every four seconds for the whole session. The events catch a
+        // controller being connected or disconnected, so the timer is only
+        // there for the case where the page changes its pads without
+        // saying, and it can be a slow check.
+        setInterval(reportCapability, 15000);
         reportCapability();
 
         function playInPage(data) {

@@ -141,6 +141,10 @@ struct GameStreamApp: App {
 
     /// Start-up order matters: find out whether the user can stream before
     /// deciding which screen to show, and do the slower work alongside it.
+    /// The memory-warning observer, kept so it can be replaced rather than
+    /// added a second time.
+    private var warningObserver: NSObjectProtocol?
+
     private func startUp() async {
         AppLog.shared.info("app", "GameStream \(AppInfo.versionLine) starting")
         if let summary = CrashReporter.pendingSummary {
@@ -150,7 +154,14 @@ struct GameStreamApp: App {
         // The app is most likely to be reclaimed for memory mid-stream, and
         // that death runs no code of ours. A warning beforehand is the only
         // trace left, so it goes in the log rather than being ignored.
-        NotificationCenter.default.addObserver(
+        // The observer is kept and replaced rather than added: the start-up
+        // can run more than once when the scene is rebuilt, and each memory
+        // warning would then be written to the log once per time it had
+        // been added.
+        if let warningObserver {
+            NotificationCenter.default.removeObserver(warningObserver)
+        }
+        warningObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification,
             object: nil, queue: .main
         ) { _ in
@@ -194,6 +205,8 @@ struct GameStreamApp: App {
         switch phase {
         case .active:
             AppLog.shared.debug("app", "foreground")
+            GamepadBridge.shared.attach()
+            Connectivity.shared.start()
             // Coming back from the background is exactly when a token is most
             // likely to have expired.
             Task {
@@ -208,6 +221,10 @@ struct GameStreamApp: App {
         case .background:
             AppLog.shared.debug("app", "background")
             ControllerRumble.shared.stop()
+            // Nothing is being watched while the app is in the background,
+            // so the controller does not need to be read at all.
+            GamepadBridge.shared.detach()
+            Connectivity.shared.stop()
         default:
             break
         }

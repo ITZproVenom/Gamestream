@@ -39,20 +39,58 @@ final class Catalog: ObservableObject {
     /// outside it, so a title that launched yesterday is missing from the
     /// catalogue and cannot be started from the app at all. The site's own
     /// pages have it, and they are added as they arrive.
+    /// Adds the titles Xbox's own cloud pages list and the subscription
+    /// feed does not.
+    ///
+    /// The pages give the product id and the title, but not the genre, the
+    /// description or the artwork - those come from the display catalogue,
+    /// which is where every other title's details come from too. So the
+    /// details are fetched for the new titles; until they arrive the title
+    /// is shown with what is known, rather than being left out of the
+    /// catalogue altogether.
     func addCloudSiteTitles(_ incoming: [Game]) {
         guard !incoming.isEmpty else { return }
         var known = Set(games.map { $0.id.uppercased() })
         var added: [Game] = []
+        var missing: [String] = []
         for game in incoming {
             guard !known.contains(game.id.uppercased()) else { continue }
             known.insert(game.id.uppercased())
             added.append(game)
+            missing.append(game.id)
         }
         guard !added.isEmpty else { return }
         games.append(contentsOf: added.sorted {
             $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
         })
         log.info("catalog", "added \(added.count) titles from Xbox's own cloud list")
+
+        // Now their details: the genre, the description and the artwork.
+        guard !missing.isEmpty else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            let details = await Self.fetchPage(missing,
+                                              market: Self.market,
+                                              language: Self.language) ?? []
+            guard !details.isEmpty else { return }
+            var byID = Dictionary(uniqueKeysWithValues:
+                details.map { ($0.id.uppercased(), $0) })
+            var replaced: [Game] = []
+            var index = 0
+            while index < self.games.count {
+                let game = self.games[index]
+                if let full = byID[game.id.uppercased()] {
+                    replaced.append(full)
+                    self.games.remove(at: index)
+                    continue
+                }
+                index += 1
+            }
+            guard !replaced.isEmpty else { return }
+            self.games.append(contentsOf: replaced)
+            self.games.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+            log.info("catalog", "filled in the details of \(replaced.count) titles")
+        }
     }
 
     private static func includingAdditionalCloudGames(_ source: [Game]) -> [Game] {

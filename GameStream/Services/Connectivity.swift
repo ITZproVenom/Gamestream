@@ -38,14 +38,30 @@ final class Connectivity: ObservableObject {
     @Published private(set) var isConstrained = false
     @Published private(set) var isExpensive = false
 
-    private let monitor = NWPathMonitor()
+    /// The watcher. A cancelled one cannot be started again, so a new one is
+    /// made whenever the app comes back to the front.
+    private var monitor: NWPathMonitor?
     private var started = false
 
     private init() {}
 
+    /// Stops watching the connection.
+    ///
+    /// The watcher is cheap, but it keeps the app awake while it is in the
+    /// background, and the cellular limit is only ever read when a session
+    /// is being set up.
+    func stop() {
+        guard started else { return }
+        started = false
+        monitor?.cancel()
+        monitor = nil
+    }
+
     func start() {
         guard !started else { return }
         started = true
+        let monitor = NWPathMonitor()
+        self.monitor = monitor
         monitor.pathUpdateHandler = { [weak self] path in
             let link: Link
             if path.usesInterfaceType(.wifi) {
