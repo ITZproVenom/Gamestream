@@ -121,11 +121,42 @@ final class CloudServers: ObservableObject {
     }
 
     /// Records the wait the service estimated for a session.
+    /// Records the wait the service estimated for a session.
+    ///
+    /// The name in the session's answer is not the name the server list
+    /// uses - one is a region code and the other a display name - so the
+    /// name is matched against the list, loosely, before it is used as a
+    /// key. Without that the queue was recorded under a name no server
+    /// had, and the picker said "queue unknown" for ever.
     func recordWait(seconds: Int, for name: String?) {
         guard seconds > 0 else { return }
-        let key = name ?? servers.first(where: \.isDefault)?.name ?? ""
-        guard !key.isEmpty else { return }
-        queues[key] = seconds
+        if let name, !name.isEmpty {
+            if let exact = servers.first(where: { $0.name == name }) {
+                queues[exact.name] = seconds
+                return
+            }
+            let wanted = name.lowercased()
+            for server in servers {
+                if server.name.lowercased() == wanted
+                    || server.title.lowercased() == wanted
+                    || server.shortName.lowercased() == wanted
+                    || server.name.lowercased().contains(wanted)
+                    || wanted.contains(server.name.lowercased()) {
+                    queues[server.name] = seconds
+                    return
+                }
+            }
+            // The name is not one of ours: the wait belongs to the server
+            // that was chosen, or to the one the service marked as its
+            // default.
+            if let chosen = servers.first(where: { $0.name == chosen }) {
+                queues[chosen.name] = seconds
+                return
+            }
+        }
+        if let fallback = servers.first(where: \.isDefault) ?? servers.first {
+            queues[fallback.name] = seconds
+        }
     }
 
     /// The servers, best first.
