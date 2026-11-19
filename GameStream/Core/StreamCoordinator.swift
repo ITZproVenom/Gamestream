@@ -143,6 +143,12 @@ final class StreamCoordinator: ObservableObject {
         if let server {
             CloudServers.shared.chosen = server.name
             AppLog.shared.info("servers", "playing on \(server.shortName)")
+            // The player page is kept alive between games, so the choice has
+            // to be handed to the page that is already there - not only to
+            // the next one that is made.
+            XboxWebView.Registry.shared.run(
+                "window.__gsSetCloudChoice && window.__gsSetCloudChoice(\""
+                    + server.name + "\", \"" + AppSettings.shared.cloudClientClaim + "\");")
         }
         guard XboxAuth.shared.state.isSignedIn else {
             log.warn("stream", "refused to launch \(game.title): not signed in")

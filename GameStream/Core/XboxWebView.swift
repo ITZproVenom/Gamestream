@@ -324,17 +324,23 @@ struct XboxWebView: UIViewRepresentable {
         // is. This has to be in place before the page signs in, because the
         // sign-in answer is what says which servers exist and what the
         // session is created against.
-        controller.addUserScript(WKUserScript(source: WebScripts.cloudServersJS,
-                                              injectionTime: .atDocumentStart,
-                                              forMainFrameOnly: true))
-        // The server the player picked and the client the app says it is
-        // are handed to the page as it loads.
-        controller.addUserScript(WKUserScript(
-            source: "window.__gsSetCloudChoice && window.__gsSetCloudChoice(\""
-                + (CloudServers.shared.chosen) + "\", \""
-                + AppSettings.shared.cloudClientClaim + "\");",
-            injectionTime: .atDocumentStart,
-            forMainFrameOnly: true))
+        //
+        // It goes into every page that talks to Xbox, not just the player:
+        // the list has to be known before a game is started, or the picker
+        // has nothing to show the first time it is asked for.
+        if role != .signIn {
+            controller.addUserScript(WKUserScript(source: WebScripts.cloudServersJS,
+                                                  injectionTime: .atDocumentStart,
+                                                  forMainFrameOnly: true))
+            // The server the player picked and the client the app says it
+            // is are handed to the page as it loads.
+            controller.addUserScript(WKUserScript(
+                source: "window.__gsSetCloudChoice && window.__gsSetCloudChoice(\""
+                    + (CloudServers.shared.chosen) + "\", \""
+                    + AppSettings.shared.cloudClientClaim + "\");",
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: true))
+        }
 
         for source in [WebScripts.streamStateJS, WebScripts.streamChromeJS,
                        WebScripts.streamStatsJS, WebScripts.streamCommandsJS,

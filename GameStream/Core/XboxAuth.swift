@@ -326,6 +326,8 @@ final class XboxAuth: NSObject, ObservableObject {
 
     func signOut() async {
         log.info("auth", "signing out")
+        // The servers belong to the account that is leaving.
+        CloudServers.shared.reset()
         authGeneration &+= 1
         refreshTask?.cancel()
         refreshTask = nil

@@ -47,6 +47,19 @@ final class CloudServers: ObservableObject {
 
     private init() {}
 
+    /// Forgets everything: the servers, the pings and the choice.
+    ///
+    /// The servers belong to an account. When it changes, they are not the
+    /// account's any more, and a server that was picked for the old one
+    /// would be asked for on behalf of the new one.
+    func reset() {
+        servers = []
+        pings = [:]
+        queues = [:]
+        chosen = ""
+        measuredAt = nil
+    }
+
     /// Takes the server list from the service's answer.
     func absorb(_ regions: [[String: Any]]) {
         var parsed: [CloudServer] = []
