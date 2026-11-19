@@ -467,8 +467,18 @@ enum WebScripts {
         /// big a picture to send, so it has to be the same client the
         /// request asks for.
         function claimedClient() {
-            // The claim the app has already given comes first; the one the
-            // app set on the page is the fallback.
+            // The operating system the service is asked for comes from the
+            // resolution that is wanted, which is how the script that works
+            // does it. The header and the request must say the same thing:
+            // the service reads the operating system to decide how big a
+            // picture to send, and a header that says one thing while the
+            // request says another has the two arguing.
+            var resolution = window.__gsResolution || "auto";
+            if (resolution === "1080p-hq") return "tizen";
+            if (resolution === "1080p") return "windows";
+            if (resolution === "720p") return "android";
+            // Nothing has been asked for, so the claim the app gave is the
+            // one the service sees.
             var claim = CLIENT || window.__gsClientClaim || "";
             var os = claim.split("|")[0];
             return os || "windows";
@@ -2452,8 +2462,18 @@ enum WebScripts {
 
         /// The client the app says it is, as the service reads it.
         function claimedClient() {
-            // The claim the app has already given comes first; the one the
-            // app set on the page is the fallback.
+            // The operating system the service is asked for comes from the
+            // resolution that is wanted, which is how the script that works
+            // does it. The header and the request must say the same thing:
+            // the service reads the operating system to decide how big a
+            // picture to send, and a header that says one thing while the
+            // request says another has the two arguing.
+            var resolution = window.__gsResolution || "auto";
+            if (resolution === "1080p-hq") return "tizen";
+            if (resolution === "1080p") return "windows";
+            if (resolution === "720p") return "android";
+            // Nothing has been asked for, so the claim the app gave is the
+            // one the service sees.
             var claim = CLIENT || window.__gsClientClaim || "";
             var os = claim.split("|")[0];
             return os || "windows";

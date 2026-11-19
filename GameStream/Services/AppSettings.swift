@@ -440,12 +440,25 @@ final class AppSettings: ObservableObject {
         // resolution asks for: the service reads the operating system out
         // of this to decide how big a picture to send, so claiming one thing
         // here and another in the request would have the two arguing.
+        // The operating system the service is asked for comes from the
+        // resolution that is wanted, which is how the script that works
+        // does it: the header and the request must say the same thing,
+        // because the service reads the operating system to decide how big
+        // a picture to send.
         let os: String
-        switch deviceProfile {
-        case .windows, .custom: os = "windows"
-        case .smartTV: os = "tizen"
-        case .tizenTV: os = "tizen"
+        switch effectiveQuality {
+        case .p1080hq: os = "tizen"
+        case .p1080: os = "windows"
+        case .p720: os = "android"
+        case .auto:
+            switch deviceProfile {
+            case .windows, .custom: os = "windows"
+            case .smartTV, .tizenTV: os = "tizen"
+            }
         }
+        // The client type is always the browser: the service is a web
+        // client, and the television profiles change the user agent, not
+        // the kind of client.
         return "\(os)|chrome|140.0.3485.54|3840|2160|browser|26.1.97"
     }
 
