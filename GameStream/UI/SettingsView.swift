@@ -1123,7 +1123,7 @@ struct SettingsGroup<Content: View>: View {
             content
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
+        .padding(Theme.groupedSurfaceInset)
         .glassEffect(.regular, in: Theme.cardShape)
     }
 }
@@ -1140,9 +1140,9 @@ struct SettingsRowLabel: View {
     var destructive = false
 
     var body: some View {
-        HStack(spacing: 11) {
+        HStack(spacing: Theme.iconLabelSpacing) {
             Image(systemName: icon)
-                .frame(width: 22)
+                .frame(width: Theme.iconSlotWidth)
                 .foregroundStyle(destructive ? Color.red : Color.accentColor)
             Text(title)
                 .font(.subheadline)

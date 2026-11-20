@@ -10,6 +10,7 @@ struct HomeView: View {
     @Binding var showingBrowser: Bool
 
     @State private var showingActivity = false
+    @ScaledMetric(relativeTo: .caption) private var quickTileMinimumWidth = 104
 
     var body: some View {
         NavigationStack {
@@ -22,6 +23,7 @@ struct HomeView: View {
                         .padding(.horizontal, Theme.pageInset)
                     } else if catalog.games.isEmpty && catalog.isLoading {
                         LoadingNotice()
+                            .padding(.horizontal, Theme.pageInset)
                     }
 
                     if !catalog.featured.isEmpty {
@@ -63,10 +65,10 @@ struct HomeView: View {
                 }
                 .padding(.vertical, 8)
                 .padding(.bottom, 36)
-                // The page is exactly as wide as the screen, whatever a
-                // child would prefer. Without this one greedy row drags
-                // every other row off the right edge with it.
-                .containerRelativeFrame(.horizontal)
+                // Every part of Home shares one centred column. The outer
+                // frame still fills the screen; only the content is limited.
+                .frame(maxWidth: Theme.homeContentMaxWidth)
+                .frame(maxWidth: .infinity)
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .background { AuroraBackground() }
@@ -111,10 +113,10 @@ struct HomeView: View {
 
     private var heroCarousel: some View {
         ScrollView(.horizontal) {
-            LazyHStack(spacing: 14) {
+            LazyHStack(spacing: Theme.pageInset) {
                 ForEach(catalog.featured) { game in
                     HeroCard(game: game) { stream.play(game) }
-                        .containerRelativeFrame(.horizontal, count: 1, spacing: 14)
+                        .containerRelativeFrame(.horizontal, count: 1, spacing: 0)
                         .scrollTransition { content, phase in
                             content
                                 .opacity(phase.isIdentity ? 1 : 0.55)
@@ -140,7 +142,11 @@ struct HomeView: View {
     // MARK: - Quick actions
 
     private var quickActions: some View {
-        HStack(spacing: 12) {
+        // Three columns are used only when the scaled minimum fits. Narrow
+        // phones and larger text naturally fall back to two columns or one.
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: quickTileMinimumWidth),
+                                     spacing: 12, alignment: .top)],
+                  alignment: .leading, spacing: 12) {
             StatChip(value: Format.duration(library.playtimeToday),
                      caption: "Played today",
                      systemImage: "clock.fill")
@@ -157,6 +163,9 @@ struct HomeView: View {
                          systemImage: "list.bullet.rectangle")
             }
             .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityLabel("Sessions logged")
+            .accessibilityValue("\(library.activity.count)")
         }
         .padding(.horizontal, Theme.pageInset)
     }
@@ -170,7 +179,7 @@ struct HomeView: View {
     @ViewBuilder
     private func section<Content: View>(_ title: String, subtitle: String? = nil,
                                         @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 13) {
+        VStack(alignment: .leading, spacing: Theme.headerSpacing) {
             SectionHeader(title: title, subtitle: subtitle)
                 .padding(.horizontal, Theme.pageInset)
             content()
@@ -199,16 +208,25 @@ struct HeroCard: View {
     let play: () -> Void
 
     @Namespace private var glass
-    /// A phone held sideways has about 390 points of height; a hero card
-    /// of two hundred and sixty took two thirds of the screen.
     @Environment(\.verticalSizeClass) private var heightClass
+    @State private var availableWidth: CGFloat = 0
 
-    private var height: CGFloat { heightClass == .compact ? 190 : 260 }
+    /// A width-derived 16:9 portrait hero, with a shallower ratio and tighter
+    /// limits in compact landscape. These are minimums: scaled content may
+    /// always make the complete card taller.
+    private var height: CGFloat {
+        let compact = heightClass == .compact
+        let lower: CGFloat = compact ? 180 : 190
+        let upper: CGFloat = compact ? 250 : 340
+        guard availableWidth > 0 else { return lower }
+        let proportional = availableWidth * (compact ? 0.42 : 0.5625)
+        return min(max(proportional, lower), upper)
+    }
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             GameArtwork(url: game.heroURL ?? game.posterURL, cornerRadius: Theme.heroRadius)
-                .frame(height: height)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay {
                     LinearGradient(
                         stops: [.init(color: .black.opacity(0), location: 0.3),
@@ -218,9 +236,9 @@ struct HeroCard: View {
                     .clipShape(Theme.heroShape)
                 }
 
-            VStack(alignment: .leading, spacing: 11) {
+            VStack(alignment: .leading, spacing: 12) {
                 Text(game.genre.uppercased())
-                    .font(.caption2.weight(.bold))
+                    .font(.caption.weight(.bold))
                     .tracking(1.4)
                     .foregroundStyle(.white.opacity(0.75))
 
@@ -234,9 +252,14 @@ struct HeroCard: View {
                 GlassEffectContainer(spacing: 12) {
                     HStack(spacing: 12) {
                         Button(action: play) {
-                            Label("Play", systemImage: "play.fill")
-                                .font(.subheadline.weight(.semibold))
-                                .padding(.horizontal, 6)
+                            HStack(spacing: Theme.iconLabelSpacing) {
+                                Image(systemName: "play.fill")
+                                    .frame(width: Theme.iconSlotWidth)
+                                Text("Play")
+                            }
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 6)
+                            .frame(minHeight: 44)
                         }
                         .buttonStyle(.glassProminent)
                         .buttonBorderShape(.capsule)
@@ -246,6 +269,7 @@ struct HeroCard: View {
                             Text("Details")
                                 .font(.subheadline.weight(.semibold))
                                 .padding(.horizontal, 6)
+                                .frame(minHeight: 44)
                         }
                         .buttonStyle(.glass)
                         .buttonBorderShape(.capsule)
@@ -254,6 +278,15 @@ struct HeroCard: View {
                 }
             }
             .padding(20)
+        }
+        // The minimum belongs to the whole card, not just its artwork. Large
+        // titles and controls can increase it without escaping the surface.
+        .frame(maxWidth: .infinity, minHeight: height, alignment: .bottomLeading)
+        .clipShape(Theme.heroShape)
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { width in
+            availableWidth = width
         }
     }
 }
