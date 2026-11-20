@@ -217,7 +217,7 @@ struct HeroCard: View {
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             GameArtwork(url: game.heroURL ?? game.posterURL, cornerRadius: Theme.heroRadius)
-                .frame(height: height)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay {
                     LinearGradient(
                         stops: [.init(color: .black.opacity(0), location: 0.3),
@@ -227,9 +227,9 @@ struct HeroCard: View {
                     .clipShape(Theme.heroShape)
                 }
 
-            VStack(alignment: .leading, spacing: 11) {
+            VStack(alignment: .leading, spacing: 12) {
                 Text(game.genre.uppercased())
-                    .font(.caption2.weight(.bold))
+                    .font(.caption.weight(.bold))
                     .tracking(1.4)
                     .foregroundStyle(.white.opacity(0.75))
 
@@ -243,9 +243,14 @@ struct HeroCard: View {
                 GlassEffectContainer(spacing: 12) {
                     HStack(spacing: 12) {
                         Button(action: play) {
-                            Label("Play", systemImage: "play.fill")
-                                .font(.subheadline.weight(.semibold))
-                                .padding(.horizontal, 6)
+                            HStack(spacing: Theme.iconLabelSpacing) {
+                                Image(systemName: "play.fill")
+                                    .frame(width: Theme.iconSlotWidth)
+                                Text("Play")
+                            }
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 6)
+                            .frame(minHeight: 44)
                         }
                         .buttonStyle(.glassProminent)
                         .buttonBorderShape(.capsule)
@@ -255,6 +260,7 @@ struct HeroCard: View {
                             Text("Details")
                                 .font(.subheadline.weight(.semibold))
                                 .padding(.horizontal, 6)
+                                .frame(minHeight: 44)
                         }
                         .buttonStyle(.glass)
                         .buttonBorderShape(.capsule)
@@ -264,5 +270,9 @@ struct HeroCard: View {
             }
             .padding(20)
         }
+        // The minimum belongs to the whole card, not just its artwork. Large
+        // titles and controls can increase it without escaping the surface.
+        .frame(maxWidth: .infinity, minHeight: height, alignment: .bottomLeading)
+        .clipShape(Theme.heroShape)
     }
 }
