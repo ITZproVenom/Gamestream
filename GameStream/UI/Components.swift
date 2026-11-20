@@ -57,9 +57,10 @@ struct GameTile: View {
     let play: () -> Void
 
     @EnvironmentObject private var library: LibraryStore
+    @ScaledMetric(relativeTo: .subheadline) private var titleSlotHeight = 40
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: 8) {
             ZStack(alignment: .bottomTrailing) {
                 NavigationLink(value: game) {
                     GameArtwork(url: game.posterURL)
@@ -99,10 +100,11 @@ struct GameTile: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(game.title)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(2)
+                    .frame(height: titleSlotHeight, alignment: .topLeading)
                 Text(game.genre)
                     .font(.caption)
                     .foregroundStyle(.secondary)
