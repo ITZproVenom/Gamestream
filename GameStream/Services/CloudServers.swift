@@ -146,13 +146,13 @@ final class CloudServers: ObservableObject {
                     return
                 }
             }
-            // The name is not one of ours: the wait belongs to the server
-            // that was chosen, or to the one the service marked as its
-            // default.
-            if let chosen = servers.first(where: { $0.name == chosen }) {
-                queues[chosen.name] = seconds
-                return
-            }
+        }
+        // The answer did not name a server, or named one we do not have:
+        // the wait belongs to the server that was chosen, and failing that
+        // to the one the service marked as its own default.
+        if let picked = servers.first(where: { $0.name == self.chosen }) {
+            queues[picked.name] = seconds
+            return
         }
         if let fallback = servers.first(where: \.isDefault) ?? servers.first {
             queues[fallback.name] = seconds

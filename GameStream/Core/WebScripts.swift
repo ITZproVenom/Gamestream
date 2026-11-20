@@ -568,12 +568,16 @@ enum WebScripts {
         function handleQueue(text) {
             try {
                 var payload = JSON.parse(text);
+                // The service's answer names the total wait and when it was
+                // measured. It does not name a region: the wait belongs to
+                // the server the session was asked for, which is the one
+                // that was chosen - so that is what it is reported against.
                 var total = Number(payload.estimatedTotalWaitTimeInSeconds);
                 var allocation = Number(payload.estimatedAllocationTimeInSeconds);
                 if (!total && !allocation) return null;
                 post({ type: "cloudWait",
                        seconds: Math.round(total || allocation),
-                       region: payload.region || "" });
+                       region: CHOSEN || "" });
                 return null;
             } catch (e) {
                 return null;
