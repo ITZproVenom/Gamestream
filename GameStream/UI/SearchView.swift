@@ -203,7 +203,12 @@ struct SearchView: View {
                 VStack(spacing: 0) {
                     ForEach(history.terms, id: \.self) { term in
                         Button {
+                            // The button says "search for this again", so it
+                            // searches: it only filled the field before, and
+                            // the results did not appear until something
+                            // else was pressed.
                             query = term
+                            openXboxResults(for: term)
                         } label: {
                             HStack(spacing: 11) {
                                 Image(systemName: "clock.arrow.circlepath")
