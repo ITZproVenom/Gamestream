@@ -70,9 +70,10 @@ struct GameTile: View {
                                 Image(systemName: "heart.fill")
                                     .font(.caption2.weight(.bold))
                                     .foregroundStyle(.pink)
-                                    .padding(7)
+                                    .frame(width: 44, height: 44)
                                     .glassEffect(.regular, in: Circle())
-                                    .padding(8)
+                                    .padding(Theme.badgeInset)
+                                    .accessibilityHidden(true)
                             }
                         }
                 }
@@ -95,7 +96,7 @@ struct GameTile: View {
                     }
                     .buttonStyle(.glassProminent)
                     .buttonBorderShape(.circle)
-                    .padding(9)
+                    .padding(Theme.badgeInset)
                     .accessibilityLabel("Play \(game.title)")
                 }
             }
@@ -112,7 +113,7 @@ struct GameTile: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(10)
+        .padding(Theme.cardContentInset)
         .modifier(CardSurfaceModifier(shape: Theme.tileShape))
     }
 }
@@ -123,24 +124,34 @@ struct GameCard: View {
     var width: CGFloat = 128
     var caption: String?
 
+    @ScaledMetric(relativeTo: .subheadline) private var titleSlotHeight = 40
+    @ScaledMetric(relativeTo: .caption) private var captionSlotHeight = 18
+
     var body: some View {
         NavigationLink(value: game) {
-            VStack(alignment: .leading, spacing: 7) {
+            VStack(alignment: .leading, spacing: 8) {
                 GameArtwork(url: game.posterURL)
                     .aspectRatio(3 / 4, contentMode: .fit)
                 Text(game.title)
-                    .font(.footnote.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                if let caption {
-                    Text(caption)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
+                    .frame(height: titleSlotHeight, alignment: .topLeading)
+                // A blank caption still occupies its row. This keeps every
+                // card bottom and every following shelf on the same guide.
+                Text(caption ?? " ")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: captionSlotHeight, alignment: .topLeading)
+                    .accessibilityHidden(caption == nil)
             }
+            .padding(Theme.cardContentInset)
+            // The caller's width is the complete card width, not just the
+            // content width before padding is added.
             .frame(width: width)
-            .padding(9)
+            .frame(maxHeight: .infinity, alignment: .topLeading)
             .modifier(CardSurfaceModifier(shape: Theme.tileShape))
         }
         .buttonStyle(.plain)
@@ -177,7 +188,7 @@ struct GameShelf: View {
 
     var body: some View {
         ScrollView(.horizontal) {
-            LazyHStack(alignment: .top, spacing: 14) {
+            LazyHStack(alignment: .top, spacing: Theme.shelfGutter) {
                 ForEach(games) { game in
                     GameCard(game: game, width: width, caption: caption(game))
                         .scrollTransition(axis: .horizontal) { content, phase in
@@ -188,10 +199,12 @@ struct GameShelf: View {
                 }
             }
             .scrollTargetLayout()
-            .padding(.horizontal, Theme.pageInset)
         }
         .scrollIndicators(.hidden)
         .scrollTargetBehavior(.viewAligned)
+        // Safe-area padding preserves both the leading card guide and the
+        // trailing scroll inset without changing the snapping card width.
+        .safeAreaPadding(.horizontal, Theme.pageInset)
     }
 }
 
