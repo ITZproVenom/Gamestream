@@ -163,10 +163,10 @@ struct GameRow: View {
     var caption: String?
 
     var body: some View {
-        HStack(spacing: 13) {
-            GameArtwork(url: game.posterURL, cornerRadius: 10)
+        HStack(spacing: 12) {
+            GameArtwork(url: game.posterURL, cornerRadius: Theme.tileRadius)
                 .frame(width: 46, height: 62)
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(game.title)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(2)
@@ -217,10 +217,14 @@ struct ErrorNotice: View {
 
     var body: some View {
         GlassCard {
-            VStack(alignment: .leading, spacing: 11) {
-                Label(title, systemImage: "exclamationmark.triangle.fill")
-                    .font(.headline)
-                    .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: Theme.iconLabelSpacing) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .frame(width: Theme.iconSlotWidth)
+                    Text(title)
+                }
+                .font(.headline)
+                .foregroundStyle(.orange)
                 Text(message)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -238,7 +242,7 @@ struct LoadingNotice: View {
     var title = "Loading the Xbox catalog…"
 
     var body: some View {
-        VStack(spacing: 13) {
+        VStack(spacing: 12) {
             ProgressView()
                 .accessibilityLabel(title)
             Text(title).font(.subheadline).foregroundStyle(.secondary)
@@ -291,8 +295,8 @@ struct Pill: View {
             if let systemImage { Image(systemName: systemImage) }
         }
         .font(.caption.weight(.semibold))
-        .padding(.horizontal, 11)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .glassEffect(.regular, in: Capsule())
     }
 }

@@ -132,7 +132,7 @@ struct CardSurfaceModifier<S: Shape>: ViewModifier {
 
 /// A raised surface for content that sits above the backdrop.
 struct GlassCard<Content: View>: View {
-    var padding: CGFloat = 18
+    var padding: CGFloat = Theme.groupedSurfaceInset
     var tinted = false
     @ViewBuilder var content: Content
 
@@ -208,8 +208,8 @@ struct StatChip: View {
                 .frame(height: captionSlotHeight, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(14)
-        .modifier(CardSurfaceModifier(shape: Theme.tileShape))
+        .padding(Theme.groupedSurfaceInset)
+        .modifier(CardSurfaceModifier(shape: Theme.cardShape))
     }
 }
 
@@ -225,8 +225,8 @@ struct FilterChip: View {
         Button(action: action) {
             Text(title)
                 .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
                 .foregroundStyle(isSelected ? Color.white : Color.primary)
                 // The chip was thirty-eight points tall, which is under
                 // Apple's minimum: a filter is tapped one-handed, so the
@@ -249,7 +249,7 @@ struct SectionHeader: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.title3.weight(.bold))
                 if let subtitle {
