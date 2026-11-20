@@ -589,11 +589,17 @@ final class StreamCoordinator: ObservableObject {
     /// letting a switch in Settings imply a result.
     @Published private(set) var touchInputOutcome = ""
 
+    /// What the session was actually asked for.
+    ///
+    /// The page reports this when it rewrites the session request, and it
+    /// is the only way to tell whether a setting reached the service at
+    /// all: a setting that did nothing and one that worked used to look the
+    /// same from here.
     func touchInputReported(state: String, detail: String) {
         let text = detail.isEmpty ? state : detail
         guard !text.isEmpty, touchInputOutcome != text else { return }
         touchInputOutcome = text
-        log.info("stream", "touch input: \(text)")
+        log.info("stream", "session: \(text)")
     }
 
     func enhancementReported(codecs: String, notes: String) {

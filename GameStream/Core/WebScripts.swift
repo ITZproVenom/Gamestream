@@ -2570,13 +2570,14 @@ enum WebScripts {
                 rebuilt.push(patched);
             }
             if (changed > 0) {
-                post("forced", "the session asked for touch input"
+                post("session changed", "the session now asks for"
+                     + (window.__gsWantTouch ? " touch input" : "")
                      + (window.__gsPreferHEVC ? " and HEVC" : "")
                      + ", with hardware rendering"
                      + (window.__gsPatchTarget ? " - in " + window.__gsPatchTarget : ""));
                 return rebuilt.join("\n");
             }
-            post("not changed", "the session configuration was left as it was");
+            post("session unchanged", "the session configuration was left as it was");
             return null;
         }
 
