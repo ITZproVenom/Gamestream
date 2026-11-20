@@ -127,8 +127,8 @@ final class NetworkCheck: ObservableObject {
             let sorted = samples.sorted()
             // The middle half of the samples, not the whole range: one slow
             // packet is a hiccup, not the shape of the connection.
-            let lower = sorted[(sorted.count - 1) / 4]
-            let upper = sorted[(sorted.count * 3) / 4]
+            let lower = sorted[sorted.count / 4]
+            let upper = sorted[sorted.count - 1 - sorted.count / 4]
             reading = Reading(latencyMs: sorted[sorted.count / 2],
                               spreadMs: max(0, upper - lower),
                               reachable: true,
