@@ -27,9 +27,20 @@ enum Theme {
     static let tileShape = RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
     static let heroShape = RoundedRectangle(cornerRadius: heroRadius, style: .continuous)
 
-    /// Section spacing used by every scrolling screen.
-    static let sectionSpacing: CGFloat = 30
+    /// The shared spacing and surface guides used by scrolling screens.
+    static let sectionSpacing: CGFloat = 32
+    static let headerSpacing: CGFloat = 12
     static let pageInset: CGFloat = 20
+    static let cardContentInset: CGFloat = 12
+    static let shelfGutter: CGFloat = 16
+    static let groupedSurfaceInset: CGFloat = 18
+    static let iconSlotWidth: CGFloat = 22
+    static let iconLabelSpacing: CGFloat = 11
+    static let badgeInset: CGFloat = 8
+    static let homeContentMaxWidth: CGFloat = 760
+
+    /// Concentric artwork corners inside an inset tile surface.
+    static var posterRadius: CGFloat { tileRadius - cardContentInset }
 }
 
 /// The animated backdrop every screen sits on.
@@ -172,23 +183,31 @@ struct StatChip: View {
     let caption: String
     var systemImage: String?
 
+    @ScaledMetric(relativeTo: .title3) private var valueSlotHeight = 30
+    @ScaledMetric(relativeTo: .caption) private var captionSlotHeight = 32
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if let systemImage {
-                Image(systemName: systemImage)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tint)
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: systemImage ?? "square")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tint)
+                .opacity(systemImage == nil ? 0 : 1)
+                .frame(width: Theme.iconSlotWidth, height: Theme.iconSlotWidth)
+                .accessibilityHidden(true)
             Text(value)
                 .font(.title3.weight(.bold))
                 .monospacedDigit()
                 .contentTransition(.numericText())
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .frame(height: valueSlotHeight, alignment: .topLeading)
             Text(caption)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(2)
+                .frame(height: captionSlotHeight, alignment: .topLeading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(14)
         .modifier(CardSurfaceModifier(shape: Theme.tileShape))
     }
