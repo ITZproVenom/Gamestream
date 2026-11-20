@@ -346,10 +346,17 @@ struct LibraryView: View {
     /// games at a time, which walked the entire activity log. On a
     /// catalogue of five hundred games that was thousands of string
     /// comparisons a frame, and the grid stuttered under the thumb.
-    private var refreshKey: String {
-        "\(shelf.rawValue)|\(sort.rawValue)|\(genre ?? "")|"
-            + "\(library.favorites.count)|\(library.recents.count)|\(library.queue.count)|"
-            + "\(catalog.games.count)|\(library.activity.count)"
+    private var refreshKey: Int {
+        var hasher = Hasher()
+        shelf.hash(into: &hasher)
+        sort.hash(into: &hasher)
+        genre.hash(into: &hasher)
+        library.favorites.hash(into: &hasher)
+        library.recents.hash(into: &hasher)
+        library.queue.hash(into: &hasher)
+        catalog.games.hash(into: &hasher)
+        library.activity.hash(into: &hasher)
+        return hasher.finalize()
     }
 
     private func refresh() async {
