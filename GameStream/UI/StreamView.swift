@@ -289,8 +289,14 @@ struct StreamView: View {
                             .tint(.white)
                         if stream.needsSignIn {
                             // Trying again cannot fix a session that is not
-                            // there, so the button says what can.
-                            Button("Sign in") { stream.exit() }
+                            // there, so the button says what can. Ending
+                            // the session takes the player back to the
+                            // sign-in screen, which is where the session
+                            // can be replaced.
+                            Button("Sign in") {
+                                stream.exit()
+                                Task { await XboxAuth.shared.signOut() }
+                            }
                                 .buttonStyle(.glassProminent)
                                 .buttonBorderShape(.capsule)
                         } else {

@@ -487,7 +487,12 @@ final class StreamCoordinator: ObservableObject {
         if kind == "login", case .connecting = phase {
             needsSignIn = true
             phase = .failed("Xbox asked for a sign-in. Your session may have expired.")
-            Task { await XboxAuth.shared.refresh(reason: "stream bounced to login") }
+            // The session is not merely stale - the service has just turned
+            // it away - so it is ended rather than checked again. A check
+            // finds the same token in the storage and reports a session
+            // that the service has already refused, and the next launch
+            // fails the same way.
+            Task { await XboxAuth.shared.signOut() }
         }
         // A launch URL that settles on the store page (/play/games, /products)
         // or the /play home never starts a stream by itself; the auto-start
