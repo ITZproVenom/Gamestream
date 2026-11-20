@@ -45,6 +45,15 @@ actually used with.
 
 ### Fixed
 
+- The launch failed with Xbox's own "Something went wrong" page. Two
+  fields had been added to the session request that the service does not
+  have, and it answered with an error. The resolution is asked for where
+  the service reads it, and the bitrate is written into the session
+  description, which is the only place it is decided.
+- A request made as an object lost its own headers, and one made with
+  XMLHttpRequest was rewritten with an address that was not in scope - so
+  the settings that ask the session for touch input, for hardware decoding
+  and for a resolution were quietly doing nothing.
 - The controller's sticks were upside down, and the trigger was always
   full. The stick can also be turned over, or used as the direction pad,
   from the settings.

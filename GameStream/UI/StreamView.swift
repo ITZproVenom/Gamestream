@@ -6,15 +6,14 @@ struct StreamView: View {
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var rumble: ControllerRumble
     @EnvironmentObject private var settings: AppSettings
-    /// Compact means a phone held upright, where the width is the scarce
-    /// dimension and the controls have to be laid out differently.
-    @Environment(\.horizontalSizeClass) private var sizeClass
+    /// The vertical size class says whether the phone is held upright:
+    /// landscape is compact height even when the width is also compact.
+    @Environment(\.verticalSizeClass) private var sizeClass
 
     @State private var showingControls = true
     @StateObject private var guardian = SessionGuard.shared
     @State private var hideTask: Task<Void, Never>?
     @State private var elapsed: TimeInterval = 0
-    @State private var startedAt = Date()
     @State private var showingStats = false
     @StateObject private var recorder = StreamRecorder.shared
 
@@ -153,15 +152,6 @@ struct StreamView: View {
             }
         }
         .animation(.smooth(duration: 0.2), value: stream.notice)
-        // The servers a game can be streamed from, when the player asked to
-        // be shown them before a launch.
-        .sheet(item: $stream.serverPickerGame) { game in
-            ServerPickerSheet(game: game) { server in
-                stream.launch(game, on: server)
-            }
-            .environmentObject(CloudServers.shared)
-            .onDisappear { stream.serverPickerCancelled() }
-        }
         .statusBarHidden(stream.phase == .playing)
         .persistentSystemOverlays(stream.phase == .playing ? .hidden : .automatic)
         // There is deliberately no tap gesture over the whole view.
@@ -184,13 +174,12 @@ struct StreamView: View {
         }
         .onChange(of: stream.phase) { _, phase in
             if phase == .playing {
-                startedAt = Date()
                 showingStats = AppSettings.shared.showStreamStats
                 scheduleHide()
             }
         }
         .task(id: stream.phase == .playing) {
-            guard stream.phase == .playing else { return }
+            guard stream.phase == .playing, let startedAt = stream.startedAt else { return }
             // A visible session timer, ticking once a second and no faster.
             while !Task.isCancelled {
                 elapsed = Date().timeIntervalSince(startedAt)
@@ -329,8 +318,8 @@ struct StreamView: View {
 
     private var hud: some View {
         GlassEffectContainer(spacing: 10) {
-            if sizeClass == .compact {
-                // Portrait on a phone leaves about 390 points of width. One
+            if sizeClass == .regular {
+                // A phone held upright leaves about 390 points of width. One
                 // row put the three fixed controls beside a scrolling strip
                 // that had almost no room left, so everything was pressed
                 // together and the read-outs could not be told apart. Two

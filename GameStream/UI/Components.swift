@@ -28,6 +28,10 @@ struct GameArtwork: View {
                     Image(systemName: "gamecontroller.fill")
                         .font(.system(size: 24))
                         .foregroundStyle(.tertiary)
+                        // A placeholder is a picture of nothing: a screen
+                        // reader should say the title, not "game controller
+                        // fill", before it.
+                        .accessibilityHidden(true)
                 }
             }
             .clipped()

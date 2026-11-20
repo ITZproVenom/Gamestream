@@ -186,12 +186,7 @@ struct StatChip: View {
             Text(caption)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .lineLimit(2)
-                // Two lines are always reserved, so a row of chips is the
-                // same height whichever captions it holds - "Day streak" and
-                // "Sessions logged" are not the same length, and the cards
-                // were ending at different heights.
-                .frame(height: 30, alignment: .top)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
@@ -214,6 +209,11 @@ struct FilterChip: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
                 .foregroundStyle(isSelected ? Color.white : Color.primary)
+                // The chip was thirty-eight points tall, which is under
+                // Apple's minimum: a filter is tapped one-handed, so the
+                // target is given the height a finger can find.
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .modifier(CardSurfaceModifier(shape: Capsule()))

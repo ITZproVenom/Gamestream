@@ -315,6 +315,32 @@ for p, s in sources.items():
                 continue
             add("missing-js", f"{os.path.basename(p)}:{name}", f"{fn}() is called but not defined")
 
+
+# 20. A call that leaves out a required argument label.
+#
+# Swift names an argument, and a call that leaves the name out is a
+# compile error. It happened here: a function that takes "message:" was
+# called with the message alone.
+import re as _re2
+signatures = {}
+for _p, _s in sources.items():
+    for _m in _re2.finditer(r'func ([A-Za-z_]\w*)\(\s*([a-zA-Z_]\w*):', _s):
+        signatures.setdefault(_m.group(1), set()).add(_m.group(2))
+for _p, _s in sources.items():
+    # the JavaScript inside the page scripts is not Swift
+    _swift = _re2.sub(r'#""".*?"""#', '""', _s, flags=_re2.S)
+    for _name, _labels in signatures.items():
+        # the call may be on self, so the name is not required to stand
+        # alone; what matters is that it is not a definition and that the
+        # argument after it has no label
+        for _m in _re2.finditer(r'(?<![.\w])(?:self\.)?' + _name + r'\(\s*\n?\s*"', _swift):
+            _line = _swift[:_m.start()].count("\n") + 1
+            _after = _swift[_m.end():_m.end() + 80]
+            if ":" in _after.split("\n")[0][:24]:
+                continue
+            add("missing-label", f"{os.path.basename(_p)}:{_line}",
+                f"{_name}() is called without the label it needs")
+
 print("=" * 66)
 print(f"whole-code scan: {len(files)} Swift files, {len(findings)} findings")
 

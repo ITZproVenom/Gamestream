@@ -35,6 +35,11 @@ struct GameStreamApp: App {
     @StateObject private var library = LibraryStore.shared
     @StateObject private var stream = StreamCoordinator.shared
     @StateObject private var rumble = ControllerRumble.shared
+    /// Bumped when the catalogue's market changes, so the hidden page is
+    /// asked again. The market the app reads its own list from is the
+    /// phone's, but the live list - the one with the titles outside the
+    /// subscription - is the service's answer, and that follows the market.
+    @State private var catalogueReloadToken = 0
 
     init() {
         // Before anything else, so the first thing that can fail is already
@@ -63,8 +68,6 @@ struct GameStreamApp: App {
                         let direct = DirectLaunch.game(forID: identifier)
                         AppLog.shared.info("deeplink", "playing \(direct.title) by its product id")
                         stream.play(direct)
-                        return
-                        AppLog.shared.warn("deeplink", "no game matches \(identifier)")
                         return
                     }
                     AppLog.shared.info("deeplink", "playing \(found.title)")
@@ -112,7 +115,7 @@ struct GameStreamApp: App {
                     XboxWebView(
                         role: .cloudCatalogue,
                         url: URL(string: "https://play.xbox.com/")!,
-                        reloadToken: 0,
+                        reloadToken: catalogueReloadToken,
                         onCloudCatalogue: { games in
                             CloudCatalogue.shared.absorb(games)
                         }
@@ -147,6 +150,15 @@ struct GameStreamApp: App {
                 // Without this the catalogue was only ever loaded at launch,
                 // so the first run after a sign-in showed an empty Home and
                 // pull-to-refresh was the only way out of it.
+                .onChange(of: settings.catalogRegion) { _, _ in
+                    // The catalogue the app shows is the phone's own
+                    // market, but the live list is the service's answer,
+                    // and the answer follows the market that was asked
+                    // for. Without this the change did nothing until the
+                    // app was opened again.
+                    catalogueReloadToken &+= 1
+                    Task { await catalog.refresh() }
+                }
                 .onChange(of: auth.state) { _, state in
                     guard state.isSignedIn else { return }
                     Task { await loadCatalogueIfNeeded(maximumAge: 0) }

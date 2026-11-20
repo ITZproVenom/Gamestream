@@ -13,6 +13,11 @@ struct SearchView: View {
     @State private var liveSearchStatus = "idle"
     @State private var liveSearchMessage = ""
     @State private var searchReloadToken = 0
+    /// The genre being browsed, when the player picked one from the grid.
+    @State private var genreFilter: String?
+    /// Game counts by genre, worked out when the catalogue changes rather
+    /// than once for every genre whenever the screen is drawn.
+    @State private var genreCounts: [String: Int] = [:]
     @StateObject private var navigator = RootView.Navigator.shared
 
     private let columns = [GridItem(.adaptive(minimum: 116, maximum: 190), spacing: 16)]
@@ -60,6 +65,13 @@ struct SearchView: View {
                     query = seed
                     navigator.searchSeed = nil
                     openXboxResults(for: seed)
+                }
+                .onChange(of: catalog.games, initial: true) { _, games in
+                    var counts: [String: Int] = [:]
+                    for game in games {
+                        counts[game.genre, default: 0] += 1
+                    }
+                    genreCounts = counts
                 }
                 .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
             }
@@ -165,6 +177,7 @@ struct SearchView: View {
         liveGames = []
         liveSearchMessage = ""
         liveSearchStatus = "loading"
+        searchReloadToken &+= 1
         submittedSearchURL = url
     }
 
@@ -203,7 +216,12 @@ struct SearchView: View {
                 VStack(spacing: 0) {
                     ForEach(history.terms, id: \.self) { term in
                         Button {
+                            // The button says "search for this again", so it
+                            // searches: it only filled the field before, and
+                            // the results did not appear until something
+                            // else was pressed.
                             query = term
+                            openXboxResults(for: term)
                         } label: {
                             HStack(spacing: 11) {
                                 Image(systemName: "clock.arrow.circlepath")
@@ -229,7 +247,30 @@ struct SearchView: View {
             }
         }
 
-        if !catalog.genres.isEmpty {
+        if let genre = genreFilter {
+            let games = catalog.games(inGenre: genre)
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader(title: genre, actionTitle: "All genres") {
+                    genreFilter = nil
+                }
+                .padding(.horizontal, Theme.pageInset)
+
+                if games.isEmpty {
+                    EmptyNotice(systemImage: "square.stack",
+                                title: "Nothing in \(genre)",
+                                message: "The catalogue has no games in this genre right now.",
+                                actionTitle: "All genres") { genreFilter = nil }
+                        .padding(.horizontal, Theme.pageInset)
+                } else {
+                    LazyVGrid(columns: columns, spacing: 16) {
+                        ForEach(games) { game in
+                            GameTile(game: game) { stream.play(game) }
+                        }
+                    }
+                    .padding(.horizontal, Theme.pageInset)
+                }
+            }
+        } else if !catalog.genres.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(title: "Browse by genre")
                     .padding(.horizontal, Theme.pageInset)
@@ -237,7 +278,10 @@ struct SearchView: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
                     ForEach(catalog.genres, id: \.self) { name in
                         Button {
-                            query = name
+                            // The tile says how many games are in the genre,
+                            // so it shows them: it asked Xbox for a search
+                            // of the genre's name before.
+                            genreFilter = name
                         } label: {
                             HStack {
                                 Text(name)

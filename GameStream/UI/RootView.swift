@@ -151,6 +151,17 @@ struct RootView: View {
         )) {
             StreamView()
         }
+        // The servers a game can be streamed from, when the player asked to
+        // be shown them before a launch. It is here and not in the player:
+        // the player only appears once a session is under way, and the
+        // choice has to be made before that.
+        .sheet(item: $stream.serverPickerGame) { game in
+            ServerPickerSheet(game: game) { server in
+                stream.launch(game, on: server)
+            }
+            .environmentObject(CloudServers.shared)
+            .onDisappear { stream.serverPickerCancelled() }
+        }
         .onChange(of: stream.phase.isActive) { _, active in
             guard active else {
                 showingPlayer = false
