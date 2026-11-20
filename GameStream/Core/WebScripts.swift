@@ -445,7 +445,6 @@ enum WebScripts {
         window.__gsCloudServers = true;
 
         var CHOSEN = "";
-        var CLIENT = "";
         var SEEN = {};
 
         function post(payload) {
@@ -454,88 +453,9 @@ enum WebScripts {
             } catch (e) {}
         }
 
-        function setChosen(name, client) {
+        window.__gsSetCloudChoice = function(name) {
             CHOSEN = name || "";
-            if (client) CLIENT = client;
-        }
-
-        window.__gsSetCloudChoice = function(name, client) {
-            setChosen(name, client);
         };
-
-        // The client the app says it is, on its own: the server may never
-        // be chosen, and the claim is wanted either way.
-        window.__gsSetClientClaim = function(client) {
-            if (client) CLIENT = client;
-        };
-
-        /// The client the app says it is.
-        ///
-        /// The operating system the service is asked for comes from the
-        /// resolution that is wanted, which is how the script that works
-        /// does it. The header and the request must say the same thing: the
-        /// service reads the operating system to decide how big a picture to
-        /// send, and a header that says one thing while the request says
-        /// another has the two arguing.
-        function claimedClient() {
-            var resolution = window.__gsResolution || "auto";
-            if (resolution === "1080p-hq") return "tizen";
-            if (resolution === "1080p") return "windows";
-            if (resolution === "720p") return "android";
-            // Nothing has been asked for, so the claim the app gave is the
-            // one the service sees.
-            var claim = CLIENT || window.__gsClientClaim || "";
-            var os = claim.split("|")[0];
-            return os || "windows";
-        }
-
-        function deviceInfo() {
-            // The client the app says it is, as the service reads it.
-            var os = claimedClient();
-            var browserName = "chrome";
-            var browserVersion = "140.0.3485.54";
-            var width = 3840;
-            var height = 2160;
-            var clientType = "browser";
-            var appVersion = "26.1.97";
-            if (CLIENT) {
-                try {
-                    var parts = CLIENT.split("|");
-                    if (parts[1]) browserName = parts[1];
-                    if (parts[2]) browserVersion = parts[2];
-                    if (parts[3]) width = parseInt(parts[3], 10) || width;
-                    if (parts[4]) height = parseInt(parts[4], 10) || height;
-                    if (parts[5]) clientType = parts[5];
-                    if (parts[6]) appVersion = parts[6];
-                } catch (e) {}
-            }
-            return {
-                appInfo: { env: { clientAppId: window.location.host,
-                                  clientAppType: clientType,
-                                  clientAppVersion: appVersion,
-                                  clientSdkVersion: "10.3.7",
-                                  httpEnvironment: "prod",
-                                  sdkInstallId: "" } },
-                dev: { os: { name: os, ver: "22631.2715", platform: "desktop" },
-                       hw: { make: "Microsoft", model: "unknown", sdktype: "web" },
-                       browser: { browserName: browserName, browserVersion: browserVersion },
-                       displayInfo: { dimensions: { widthInPixels: width, heightInPixels: height },
-                                      pixelDensity: { dpiX: 1, dpiY: 1 } } }
-            };
-        }
-
-        function headersOf(init) {
-            var headers = {};
-            try {
-                if (init && init.headers) {
-                    var list = init.headers instanceof Headers
-                        ? Array.from(init.headers.entries())
-                        : Object.entries(init.headers);
-                    for (var i = 0; i < list.length; i++) headers[list[i][0]] = list[i][1];
-                }
-            } catch (e) {}
-            return headers;
-        }
 
         function narrow(regions) {
             if (!CHOSEN || !regions || !regions.length) return regions;
@@ -642,57 +562,12 @@ enum WebScripts {
             window.fetch = function(input, init) {
                 try {
                     var url = (typeof input === "string") ? input : ((input && input.url) || "");
-                    var headers = headersOf(init);
-                    headers["x-ms-device-info"] = JSON.stringify(deviceInfo());
-                    var options = Object.assign({}, init || {});
-                    options.headers = headers;
-
-                    var body = options.body;
-                    if (typeof body !== "string" && input && typeof input.clone === "function"
-                        && input.method && input.method !== "GET") {
-                        var request = input;
-                        // The clone keeps the body; the original has already
-                        // been read, so the request that goes out is made from
-                        // the clone.
-                        var clone = request.clone();
-                        return clone.text().then(function(text) {
-                            // The headers of the request itself are kept,
-                            // and the ones the caller added are added to
-                            // them. Building the headers from the call alone
-                            // lost the content type and the authorisation
-                            // of every request made as an object, and the
-                            // service answers those differently.
-                            var merged = {};
-                            try {
-                                var own = clone.headers;
-                                if (own && typeof own.entries === "function") {
-                                    var list = Array.from(own.entries());
-                                    for (var h = 0; h < list.length; h++) {
-                                        merged[list[h][0]] = list[h][1];
-                                    }
-                                }
-                            } catch (e) {}
-                            for (var name in headers) {
-                                var key = String(name).toLowerCase();
-                                var already = false;
-                                for (var existing in merged) {
-                                    if (String(existing).toLowerCase() === key) { already = true; break; }
-                                }
-                                if (!already) merged[name] = headers[name];
-                            }
-                            return nativeFetch.call(window, new Request(clone, {
-                                method: clone.method,
-                                headers: merged,
-                                body: text
-                            })).then(function(response) {
-                                return handleResponse(response, url);
-                            });
-                        }).catch(function() {
-                            return nativeFetch.call(window, request, init);
-                        });
-                    }
-
-                    return nativeFetch.call(window, input, options).then(function(response) {
+                    // The request is passed on exactly as the page made it.
+                    // Nothing is added to it and nothing is taken from it:
+                    // the app does not say what it is to the service, and a
+                    // request that is rebuilt here loses the headers the
+                    // service answers differently.
+                    return nativeFetch.call(window, input, init).then(function(response) {
                         return handleResponse(response, url);
                     });
                 } catch (e) {
@@ -703,25 +578,15 @@ enum WebScripts {
 
         var nativeOpen = XMLHttpRequest.prototype.open;
         var nativeSend = XMLHttpRequest.prototype.send;
-        var nativeSetHeader = XMLHttpRequest.prototype.setRequestHeader;
         XMLHttpRequest.prototype.open = function(method, url) {
             try {
                 this.__gsUrl = String(url || "");
-                this.__gsHeaders = {};
             } catch (e) {}
             return nativeOpen.apply(this, arguments);
-        };
-        XMLHttpRequest.prototype.setRequestHeader = function(name, value) {
-            try { this.__gsHeaders[String(name).toLowerCase()] = value; } catch (e) {}
-            return nativeSetHeader.apply(this, arguments);
         };
         XMLHttpRequest.prototype.send = function(body) {
             var xhr = this;
             try {
-                // Only when the page has not already said what it is.
-                if (!xhr.__gsHeaders || !xhr.__gsHeaders["x-ms-device-info"]) {
-                    nativeSetHeader.call(xhr, "x-ms-device-info", JSON.stringify(deviceInfo()));
-                }
                 xhr.addEventListener("load", function() {
                     try {
                         var url = xhr.__gsUrl || "";
@@ -2475,66 +2340,21 @@ enum WebScripts {
             return changed;
         }
 
-        /// The client the resolution asks for.
-        ///
-        /// The service decides how big a picture to send from what the
-        /// client says it is: a television is given the high quality
-        /// picture, a desktop the ordinary one, and anything else the
-        /// smaller one. That is how the script asks for a resolution, and
-        /// it is asked on the request that starts the session - not in the
-        /// session's configuration, which has no such field.
-        function resolutionClient() {
-            // "auto" means the service decides, which it does from the
-            // client the app claims to be. Nothing is asked for, and the
-            // claim is left as it is.
-            if ((window.__gsResolution || "auto") === "auto") return "";
-            return claimedClient();
-        }
-
-        /// The client the app says it is, as the service reads it.
-        /// The client the service is asked for.
-        ///
-        /// It comes from the resolution that is wanted, which is how the
-        /// script that works does it: the header and the request must say
-        /// the same thing, because the service reads the operating system
-        /// to decide how big a picture to send.
-        function claimedClient() {
-            var resolution = window.__gsResolution || "auto";
-            if (resolution === "1080p-hq") return "tizen";
-            if (resolution === "1080p") return "windows";
-            if (resolution === "720p") return "android";
-            // Nothing has been asked for, so the claim the app gave is the
-            // one the service sees.
-            var claim = CLIENT || window.__gsClientClaim || "";
-            var os = claim.split("|")[0];
-            return os || "windows";
-        }
-
-        /// The play request, which is where the resolution is asked for.
-        function rewritePlay(body) {
-            var client = resolutionClient();
-            if (!client) return null;
-            try {
-                var payload = JSON.parse(body);
-                if (!payload.settings) payload.settings = {};
-                if (payload.settings.osName === client) return null;
-                payload.settings.osName = client;
-                return JSON.stringify(payload);
-            } catch (e) {
-                return null;
-            }
-        }
-
         /// Finds the configuration object wherever it sits in the body.
-        function applySettings(parsed) {
-            if (!parsed || typeof parsed !== "object") return false;
-            var changed = sessionSettings(parsed, 0);
-            var paths = ["data", "configuration", "sessionConfiguration", "request",
-                         "session", "payload", "body"];
-            for (var i = 0; i < paths.length; i++) {
-                var child = parsed[paths[i]];
+        function applySettings(parsed, depth) {
+            depth = depth || 0;
+            if (!parsed || typeof parsed !== "object" || depth > 6) return false;
+            var changed = sessionSettings(parsed, depth);
+            // The configuration can sit inside data, configuration,
+            // sessionConfiguration or another wrapper, so the body is
+            // walked rather than guessed at. sessionSettings only touches
+            // an object that already holds a configuration, so the wrappers
+            // themselves are passed over unchanged.
+            for (var key in parsed) {
+                if (!Object.prototype.hasOwnProperty.call(parsed, key)) continue;
+                var child = parsed[key];
                 if (child && typeof child === "object") {
-                    if (sessionSettings(child, 1)) changed = true;
+                    if (applySettings(child, depth + 1)) changed = true;
                 }
             }
             return changed;
@@ -2542,28 +2362,33 @@ enum WebScripts {
 
         /// Rewrites a request body, or returns null when there is nothing in
         /// it that concerns touch input.
+        /// The request that creates or configures a session, told by where
+        /// it is going - never by a word that happens to be in its body.
+        function isSessionRequest(url) {
+            if (!url) return false;
+            var target = String(url).toLowerCase();
+            // A telemetry event can quote a session configuration word for
+            // word. Rewriting one of those is how the app came to log that
+            // it had changed a session when it had changed an analytics
+            // upload to browser.events.data.microsoft.com.
+            if (target.indexOf("xboxlive.com") === -1) return false;
+            return target.indexOf("/sessions") !== -1;
+        }
+
         function rewrite(body, url) {
             if (!body || typeof body !== "string" || body.length === 0) return null;
-
-            // The session request is the one that matters: it carries the
-            // configuration the server sets the stream up with. It does not
-            // mention touch input at all, so the body is recognised by the
-            // configuration it holds rather than by the field being asked
-            // for.
-            // The request that starts the session carries the resolution.
-            // Only that request: the rule was being applied to every body,
-            // and the session's own settings - hardware decoding, the
-            // touch request - were never reached because it answered
-            // first.
-            if (url && url.indexOf("/play") !== -1) {
-                var play = rewritePlay(body);
-                if (play !== null) return play;
-            }
+            if (!isSessionRequest(url)) return null;
 
             var isSession = body.indexOf("inputConfiguration") !== -1
                 || body.indexOf("videoConfiguration") !== -1
                 || body.indexOf("enableTouchInput") !== -1;
-            if (!isSession) return null;
+            if (!isSession) {
+                // Say which request this was, so a session that carries no
+                // configuration is visible instead of looking like a script
+                // that never ran.
+                post("session unchanged", "no session configuration in " + (url || ""));
+                return null;
+            }
 
             // The body is often a stream of JSON events, one after another,
             // which JSON.parse refuses because of what follows the first

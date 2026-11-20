@@ -28,7 +28,6 @@ const servers = fs.readFileSync(path.join(outdir, 'cloudServersJS.js'), 'utf8');
 const pairs = [
     ['__gsWantTouch', webview, session],
     ['__gsPreferHEVC', webview, session],
-    ['__gsResolution', webview, session],
     ['__gsSetCloudChoice', webview, servers]
 ];
 

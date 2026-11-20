@@ -180,7 +180,7 @@ final class StreamCoordinator: ObservableObject {
             // the next one that is made.
             XboxWebView.Registry.shared.run(
                 "window.__gsSetCloudChoice && window.__gsSetCloudChoice(\""
-                    + server.name + "\", \"" + AppSettings.shared.cloudClientClaim + "\");")
+                    + server.name + "\");")
         }
         guard XboxAuth.shared.state.isSignedIn else {
             log.warn("stream", "refused to launch \(game.title): not signed in")
