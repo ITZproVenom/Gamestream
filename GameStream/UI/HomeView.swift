@@ -208,11 +208,20 @@ struct HeroCard: View {
     let play: () -> Void
 
     @Namespace private var glass
-    /// A phone held sideways has about 390 points of height; a hero card
-    /// of two hundred and sixty took two thirds of the screen.
     @Environment(\.verticalSizeClass) private var heightClass
+    @State private var availableWidth: CGFloat = 0
 
-    private var height: CGFloat { heightClass == .compact ? 190 : 260 }
+    /// A width-derived 16:9 portrait hero, with a shallower ratio and tighter
+    /// limits in compact landscape. These are minimums: scaled content may
+    /// always make the complete card taller.
+    private var height: CGFloat {
+        let compact = heightClass == .compact
+        let lower: CGFloat = compact ? 180 : 190
+        let upper: CGFloat = compact ? 250 : 340
+        guard availableWidth > 0 else { return lower }
+        let proportional = availableWidth * (compact ? 0.42 : 0.5625)
+        return min(max(proportional, lower), upper)
+    }
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -274,5 +283,10 @@ struct HeroCard: View {
         // titles and controls can increase it without escaping the surface.
         .frame(maxWidth: .infinity, minHeight: height, alignment: .bottomLeading)
         .clipShape(Theme.heroShape)
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { width in
+            availableWidth = width
+        }
     }
 }
