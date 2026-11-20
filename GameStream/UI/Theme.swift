@@ -27,20 +27,41 @@ enum Theme {
     static let tileShape = RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
     static let heroShape = RoundedRectangle(cornerRadius: heroRadius, style: .continuous)
 
+    /// The only spacing stops used by shared surfaces and their callers.
+    enum Spacing {
+        static let xxxSmall: CGFloat = 4
+        static let xxSmall: CGFloat = 8
+        static let xSmall: CGFloat = 12
+        static let small: CGFloat = 16
+        static let medium: CGFloat = 20
+        static let large: CGFloat = 24
+        static let xLarge: CGFloat = 32
+        static let xxLarge: CGFloat = 40
+    }
+
     /// The shared spacing and surface guides used by scrolling screens.
-    static let sectionSpacing: CGFloat = 32
-    static let headerSpacing: CGFloat = 12
-    static let pageInset: CGFloat = 20
-    static let cardContentInset: CGFloat = 12
-    static let shelfGutter: CGFloat = 16
-    static let groupedSurfaceInset: CGFloat = 18
-    static let iconSlotWidth: CGFloat = 22
-    static let iconLabelSpacing: CGFloat = 11
-    static let badgeInset: CGFloat = 8
-    static let homeContentMaxWidth: CGFloat = 760
+    static let sectionSpacing = Spacing.xLarge
+    static let headerSpacing = Spacing.xSmall
+    static let pageInset = Spacing.medium
+    static let playerControlInset = Spacing.small
+    static let cardContentInset = Spacing.xSmall
+    static let groupedSurfaceInset = Spacing.medium
+    static let shelfGutter = Spacing.small
+    static let pageBottomClearance = Spacing.xxLarge
+    static let iconSlotWidth = Spacing.large
+    static let iconLabelSpacing = Spacing.xSmall
+    static let badgeInset = Spacing.xxSmall
+    static let readableContentMaxWidth: CGFloat = 760
+    static let homeContentMaxWidth = readableContentMaxWidth
 
     /// Concentric artwork corners inside an inset tile surface.
-    static var posterRadius: CGFloat { tileRadius - cardContentInset }
+    static func nestedRadius(outer: CGFloat, inset: CGFloat) -> CGFloat {
+        max(4, outer - inset)
+    }
+
+    static var posterRadius: CGFloat {
+        nestedRadius(outer: tileRadius, inset: cardContentInset)
+    }
 }
 
 /// The animated backdrop every screen sits on.
