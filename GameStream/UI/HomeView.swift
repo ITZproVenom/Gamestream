@@ -10,6 +10,7 @@ struct HomeView: View {
     @Binding var showingBrowser: Bool
 
     @State private var showingActivity = false
+    @ScaledMetric(relativeTo: .caption) private var quickTileMinimumWidth = 104
 
     var body: some View {
         NavigationStack {
@@ -22,6 +23,7 @@ struct HomeView: View {
                         .padding(.horizontal, Theme.pageInset)
                     } else if catalog.games.isEmpty && catalog.isLoading {
                         LoadingNotice()
+                            .padding(.horizontal, Theme.pageInset)
                     }
 
                     if !catalog.featured.isEmpty {
@@ -63,10 +65,10 @@ struct HomeView: View {
                 }
                 .padding(.vertical, 8)
                 .padding(.bottom, 36)
-                // The page is exactly as wide as the screen, whatever a
-                // child would prefer. Without this one greedy row drags
-                // every other row off the right edge with it.
-                .containerRelativeFrame(.horizontal)
+                // Every part of Home shares one centred column. The outer
+                // frame still fills the screen; only the content is limited.
+                .frame(maxWidth: Theme.homeContentMaxWidth)
+                .frame(maxWidth: .infinity)
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .background { AuroraBackground() }
@@ -111,10 +113,10 @@ struct HomeView: View {
 
     private var heroCarousel: some View {
         ScrollView(.horizontal) {
-            LazyHStack(spacing: 14) {
+            LazyHStack(spacing: Theme.pageInset) {
                 ForEach(catalog.featured) { game in
                     HeroCard(game: game) { stream.play(game) }
-                        .containerRelativeFrame(.horizontal, count: 1, spacing: 14)
+                        .containerRelativeFrame(.horizontal, count: 1, spacing: 0)
                         .scrollTransition { content, phase in
                             content
                                 .opacity(phase.isIdentity ? 1 : 0.55)
@@ -140,7 +142,11 @@ struct HomeView: View {
     // MARK: - Quick actions
 
     private var quickActions: some View {
-        HStack(spacing: 12) {
+        // Three columns are used only when the scaled minimum fits. Narrow
+        // phones and larger text naturally fall back to two columns or one.
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: quickTileMinimumWidth),
+                                     spacing: 12, alignment: .top)],
+                  alignment: .leading, spacing: 12) {
             StatChip(value: Format.duration(library.playtimeToday),
                      caption: "Played today",
                      systemImage: "clock.fill")
@@ -157,6 +163,9 @@ struct HomeView: View {
                          systemImage: "list.bullet.rectangle")
             }
             .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityLabel("Sessions logged")
+            .accessibilityValue("\(library.activity.count)")
         }
         .padding(.horizontal, Theme.pageInset)
     }
@@ -170,7 +179,7 @@ struct HomeView: View {
     @ViewBuilder
     private func section<Content: View>(_ title: String, subtitle: String? = nil,
                                         @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 13) {
+        VStack(alignment: .leading, spacing: Theme.headerSpacing) {
             SectionHeader(title: title, subtitle: subtitle)
                 .padding(.horizontal, Theme.pageInset)
             content()
