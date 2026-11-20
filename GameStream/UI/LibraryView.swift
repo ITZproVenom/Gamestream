@@ -134,6 +134,7 @@ struct LibraryView: View {
                     library.createList(named: newListName)
                     newListName = ""
                 }
+                .disabled(newListName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 Button("Cancel", role: .cancel) { newListName = "" }
             } message: {
                 Text("Group games however you like — a backlog, co-op night, anything.")
