@@ -214,6 +214,11 @@ struct FilterChip: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
                 .foregroundStyle(isSelected ? Color.white : Color.primary)
+                // The chip was thirty-eight points tall, which is under
+                // Apple's minimum: a filter is tapped one-handed, so the
+                // target is given the height a finger can find.
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .modifier(CardSurfaceModifier(shape: Capsule()))
