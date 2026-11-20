@@ -13,6 +13,8 @@ struct SearchView: View {
     @State private var liveSearchStatus = "idle"
     @State private var liveSearchMessage = ""
     @State private var searchReloadToken = 0
+    /// The genre being browsed, when the player picked one from the grid.
+    @State private var genreFilter: String?
     @StateObject private var navigator = RootView.Navigator.shared
 
     private let columns = [GridItem(.adaptive(minimum: 116, maximum: 190), spacing: 16)]
@@ -234,7 +236,30 @@ struct SearchView: View {
             }
         }
 
-        if !catalog.genres.isEmpty {
+        if let genre = genreFilter {
+            let games = catalog.games(inGenre: genre)
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader(title: genre, actionTitle: "All genres") {
+                    genreFilter = nil
+                }
+                .padding(.horizontal, Theme.pageInset)
+
+                if games.isEmpty {
+                    EmptyNotice(systemImage: "square.stack",
+                                title: "Nothing in \(genre)",
+                                message: "The catalogue has no games in this genre right now.",
+                                actionTitle: "All genres") { genreFilter = nil }
+                        .padding(.horizontal, Theme.pageInset)
+                } else {
+                    LazyVGrid(columns: columns, spacing: 16) {
+                        ForEach(games) { game in
+                            GameTile(game: game) { stream.play(game) }
+                        }
+                    }
+                    .padding(.horizontal, Theme.pageInset)
+                }
+            }
+        } else if !catalog.genres.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(title: "Browse by genre")
                     .padding(.horizontal, Theme.pageInset)
@@ -242,7 +267,10 @@ struct SearchView: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
                     ForEach(catalog.genres, id: \.self) { name in
                         Button {
-                            query = name
+                            // The tile says how many games are in the genre,
+                            // so it shows them: it asked Xbox for a search
+                            // of the genre's name before.
+                            genreFilter = name
                         } label: {
                             HStack {
                                 Text(name)
