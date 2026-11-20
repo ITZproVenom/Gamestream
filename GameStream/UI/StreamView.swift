@@ -6,10 +6,6 @@ struct StreamView: View {
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var rumble: ControllerRumble
     @EnvironmentObject private var settings: AppSettings
-    /// The vertical size class says whether the phone is held upright:
-    /// landscape is compact height even when the width is also compact.
-    @Environment(\.verticalSizeClass) private var sizeClass
-
     @State private var showingControls = true
     @StateObject private var guardian = SessionGuard.shared
     @State private var hideTask: Task<Void, Never>?
@@ -317,47 +313,33 @@ struct StreamView: View {
     }
 
     private var hud: some View {
+        // Each cluster owns the full available width. Putting the session
+        // controls and a horizontal ScrollView in the same HStack made their
+        // layout depend on which cluster won SwiftUI's width negotiation: on
+        // narrow phones the glass buttons were drawn over one another.
+        // Independent rows have no sibling to compete with, and each row can
+        // scroll when its contents are wider than the screen.
         GlassEffectContainer(spacing: 10) {
-            if sizeClass == .regular {
-                // A phone held upright leaves about 390 points of width. One
-                // row put the three fixed controls beside a scrolling strip
-                // that had almost no room left, so everything was pressed
-                // together and the read-outs could not be told apart. Two
-                // rows: the read-outs above, the controls that must never
-                // scroll away below them.
-                VStack(spacing: 8) {
-                    ScrollView(.horizontal) {
-                        HStack(spacing: 10) {
-                            hudReadouts
-                        }
-                    }
-                    .scrollIndicators(.visible)
-                    .defaultScrollAnchor(.trailing)
-
+            VStack(spacing: 8) {
+                ScrollView(.horizontal) {
                     HStack(spacing: 10) {
                         hudSessionControls
                     }
-                    .fixedSize(horizontal: false, vertical: true)
                 }
-            } else {
-                HStack(spacing: 10) {
-                    hudSessionControls
+                .scrollIndicators(.visible)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                    // Fourteen controls do not fit across a phone held in
-                    // landscape, and the last of them was being cut off by the
-                    // edge of the screen. They scroll now instead of falling off
-                    // it, anchored to the trailing edge so the buttons stay put
-                    // and the read-outs are what slide away.
-                    ScrollView(.horizontal) {
-                        HStack(spacing: 10) {
-                            hudReadouts
-                        }
+                ScrollView(.horizontal) {
+                    HStack(spacing: 10) {
+                        hudReadouts
                     }
-                    .scrollIndicators(.visible)
-                    .defaultScrollAnchor(.trailing)
                 }
+                .scrollIndicators(.visible)
+                .defaultScrollAnchor(.trailing)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
         .padding(.top, 12)
     }
