@@ -2184,26 +2184,10 @@ enum WebScripts {
     })();
     """#
 
-    /// Makes Xbox Cloud offer its on-screen controls for every game.
-    ///
-    /// Whether the touch pad appears is not the page's decision: the session
-    /// is set up with an input configuration, and the server only sends the
-    /// touch overlay for a game when that configuration asked for touch
-    /// input. The web client asks for it on the handful of titles Microsoft
-    /// built layouts for and declines it everywhere else, which is why a game
-    /// with no controller attached simply does nothing on a phone.
-    ///
-    /// Better xCloud reaches this by rewriting the site's own JavaScript
-    /// bundle. That means tracking the shape of minified code that changes
-    /// without warning. The configuration has to leave the device over the
-    /// network either way, so this edits the request instead: any JSON body
-    /// on its way to Xbox that carries `enableTouchInput` is rewritten to ask
-    /// for it, and the touch point count is raised to a number a phone can
-    /// actually report.
-    ///
-    /// Nothing here can invent a layout. For a game Microsoft never built one
-    /// for, the server answers with the generic overlay, and if it refuses
-    /// outright the app says so rather than pretending the setting worked.
+    /// Applies the player's touch and decoding choices where this web client
+    /// reads them: clientStreamingConfigOverrides in the /configuration answer.
+    /// Session request bodies are passed through unchanged. Existing override
+    /// sections are edited in place; missing sections are never invented.
     static let touchInputJS = #"""
     (function() {
         if (window.__gsTouchInput) return;
@@ -2223,10 +2207,6 @@ enum WebScripts {
             } catch (e) {}
         }
 
-        /// The address a request is going to, so the log can say which
-        /// request was changed. A session configuration can travel in
-        /// several places, and without the address there is no telling
-        /// whether the one that was patched is the one the server reads.
         function urlOf(input) {
             try {
                 if (!input) return "";
@@ -2236,293 +2216,113 @@ enum WebScripts {
             return "";
         }
 
-        /// True when the object had a touch configuration to change.
-        function force(node, depth) {
-            if (!node || typeof node !== "object" || depth > 6) return false;
+        function isConfigurationRequest(url) {
+            return /\/configuration(?:[?#]|$)/i.test(String(url || ""));
+        }
+
+        function setValue(node, key, value) {
+            if (node[key] === value) return false;
+            node[key] = value;
+            return true;
+        }
+
+        // Only edit configurations that the service actually supplied. In
+        // particular, do not create clientStreamingConfigOverrides, or one of
+        // its video/input/audio children, when the answer does not contain it.
+        function applyOverrides(answer) {
+            if (!answer || typeof answer !== "object" || Array.isArray(answer)) {
+                return { changed: false, reason: "the /configuration answer is not an object" };
+            }
+            var overrides = answer.clientStreamingConfigOverrides;
+            if (!overrides || typeof overrides !== "object" || Array.isArray(overrides)) {
+                return { changed: false, reason: "no clientStreamingConfigOverrides in the /configuration answer" };
+            }
+
             var changed = false;
-            if (Object.prototype.hasOwnProperty.call(node, "enableTouchInput")) {
-                if (node.enableTouchInput !== true) {
-                    node.enableTouchInput = true;
-                    changed = true;
+            var present = [];
+            var video = overrides.videoConfiguration;
+            if (video && typeof video === "object" && !Array.isArray(video)) {
+                present.push("videoConfiguration");
+                if (window.__gsPreferHEVC) {
+                    if (setValue(video, "enableHevc", true)) changed = true;
+                    if (setValue(video, "useSoftwareRendering", false)) changed = true;
+                    if (setValue(video, "decoderType", 4)) changed = true;
                 }
             }
-            if (Object.prototype.hasOwnProperty.call(node, "maxTouchPoints")) {
-                if (Number(node.maxTouchPoints) < MAX_TOUCH_POINTS) {
-                    node.maxTouchPoints = MAX_TOUCH_POINTS;
-                    changed = true;
+
+            var input = overrides.inputConfiguration;
+            if (input && typeof input === "object" && !Array.isArray(input)) {
+                present.push("inputConfiguration");
+                if (window.__gsWantTouch) {
+                    if (setValue(input, "enableTouchInput", true)) changed = true;
+                    if (setValue(input, "maxTouchPoints", MAX_TOUCH_POINTS)) changed = true;
                 }
             }
-            for (var key in node) {
-                if (!Object.prototype.hasOwnProperty.call(node, key)) continue;
-                var value = node[key];
-                if (value && typeof value === "object") {
-                    if (force(value, depth + 1)) changed = true;
-                }
+
+            var audio = overrides.audioConfiguration;
+            if (audio && typeof audio === "object" && !Array.isArray(audio)) {
+                present.push("audioConfiguration");
+                if (setValue(audio, "useHardwareAudioDecoding", true)) changed = true;
             }
-            return changed;
+
+            if (present.length === 0) {
+                return { changed: false, reason: "clientStreamingConfigOverrides has no video, input or audio configuration" };
+            }
+            return { changed: changed, reason: "existing " + present.join(", ") };
         }
 
-        /// The session's own configuration, and what the app asks of it.
-        ///
-        /// Xbox's cloud session carries the knobs that decide how the
-        /// picture is decoded and drawn: "enableHevc" (HEVC is decoded in
-        /// hardware far more cheaply than H.264 at the same size),
-        /// "useSoftwareRendering" (false means the GPU draws it),
-        /// "decoderType" (Auto or WebCodecs, never Software), and
-        /// "useHardwareAudioDecoding".
-        ///
-        /// The session request does not contain the touch fields at all -
-        /// the site's own configuration has "enableGamepadInput" and
-        /// "sensorInputPollingRateInHz" - so the touch request has to be
-        /// added rather than flipped.
-        function sessionSettings(node, depth) {
-            if (!node || typeof node !== "object" || depth > 4) return false;
-            // Only an object that already carries a session configuration is
-            // one. The body that wraps it - offeringId, data, titleId - is
-            // not, and giving that wrapper a videoConfiguration or an
-            // inputConfiguration of its own adds fields the service does
-            // not have. It answers that with "Something went wrong".
-            var hasConfiguration = (node.videoConfiguration && typeof node.videoConfiguration === "object")
-                || (node.audioConfiguration && typeof node.audioConfiguration === "object")
-                || (node.inputConfiguration && typeof node.inputConfiguration === "object");
-            if (!hasConfiguration) return false;
-            var changed = false;
-
-            // The touch fields are only asked for when the player wants the
-            // on-screen controls. The video and sound settings are asked
-            // for whatever the player has chosen, so they are not tied to
-            // the touch setting - which is what used to happen: with the
-            // touch controls hidden, the session was never asked for HEVC,
-            // for the resolution or for the bitrate ceiling either.
-            var input = node.inputConfiguration;
-            if (window.__gsWantTouch) {
-                if (!input || typeof input !== "object") {
-                    input = {};
-                    node.inputConfiguration = input;
-                    changed = true;
-                }
-            } else {
-                input = null;
-            }
-            if (input && input.enableTouchInput !== true) {
-                input.enableTouchInput = true;
-                changed = true;
-            }
-            if (input && Number(input.maxTouchPoints || 0) < MAX_TOUCH_POINTS) {
-                input.maxTouchPoints = MAX_TOUCH_POINTS;
-                changed = true;
-            }
-
-            // The video configuration is changed where the page put it. If
-            // the page did not send one, none is invented for it.
-            var video = node.videoConfiguration;
-            if (video && window.__gsPreferHEVC && video.enableHevc !== true) {
-                video.enableHevc = true;
-                changed = true;
-            }
-            if (video && video.useSoftwareRendering === true) {
-                video.useSoftwareRendering = false;
-                changed = true;
-            }
-            if (video && video.decoderType === 1) {
-                video.decoderType = 4;
-                changed = true;
-            }
-            // Neither a resolution nor a bitrate is a field of this
-            // configuration. Adding fields the schema does not have makes
-            // the service refuse the session.
-
-            var audio = node.audioConfiguration;
-            if (audio && typeof audio === "object"
-                && audio.useHardwareAudioDecoding === false) {
-                audio.useHardwareAudioDecoding = true;
-                changed = true;
-            }
-            return changed;
-        }
-
-        /// Finds the configuration object wherever it sits in the body.
-        function applySettings(parsed, depth) {
-            depth = depth || 0;
-            if (!parsed || typeof parsed !== "object" || depth > 6) return false;
-            var changed = sessionSettings(parsed, depth);
-            // The configuration can sit inside data, configuration,
-            // sessionConfiguration or another wrapper, so the body is
-            // walked rather than guessed at. sessionSettings only touches
-            // an object that already holds a configuration, so the wrappers
-            // themselves are passed over unchanged.
-            for (var key in parsed) {
-                if (!Object.prototype.hasOwnProperty.call(parsed, key)) continue;
-                var child = parsed[key];
-                if (child && typeof child === "object") {
-                    if (applySettings(child, depth + 1)) changed = true;
-                }
-            }
-            return changed;
-        }
-
-        /// Rewrites a request body, or returns null when there is nothing in
-        /// it that concerns touch input.
-        /// The request that creates or configures a session, told by where
-        /// it is going - never by a word that happens to be in its body.
-        function isSessionRequest(url) {
-            if (!url) return false;
-            var target = String(url).toLowerCase();
-            // A telemetry event can quote a session configuration word for
-            // word. Rewriting one of those is how the app came to log that
-            // it had changed a session when it had changed an analytics
-            // upload to browser.events.data.microsoft.com.
-            if (target.indexOf("xboxlive.com") === -1) return false;
-            return target.indexOf("/sessions") !== -1;
-        }
-
-        function rewrite(body, url) {
-            if (!body || typeof body !== "string" || body.length === 0) return null;
-            if (!isSessionRequest(url)) return null;
-
-            var isSession = body.indexOf("inputConfiguration") !== -1
-                || body.indexOf("videoConfiguration") !== -1
-                || body.indexOf("enableTouchInput") !== -1;
-            if (!isSession) {
-                // Say which request this was, so a session that carries no
-                // configuration is visible instead of looking like a script
-                // that never ran.
-                post("session unchanged", "no session configuration in " + (url || ""));
+        function rewriteConfigurationResponse(body, url) {
+            if (typeof body !== "string" || body.length === 0) return null;
+            var answer;
+            try { answer = JSON.parse(body); } catch (e) {
+                post("configuration unchanged", "could not parse the /configuration answer " + url);
                 return null;
             }
-
-            // The body is often a stream of JSON events, one after another,
-            // which JSON.parse refuses because of what follows the first
-            // object. Each line is tried on its own, and if that fails the
-            // text is patched where it lies: the point is to change the one
-            // field, and the field is written out in full.
-            var lines = body.split("\n");
-            var changed = 0;
-            var rebuilt = [];
-            for (var i = 0; i < lines.length; i++) {
-                var line = lines[i];
-                var parsed = null;
-                try { parsed = JSON.parse(line); } catch (e) { parsed = null; }
-                if (parsed && applySettings(parsed)) {
-                    rebuilt.push(JSON.stringify(parsed));
-                    changed++;
-                    continue;
-                }
-                if (line.indexOf("enableTouchInput") === -1
-                    && line.indexOf("enableHevc") === -1
-                    && line.indexOf("useSoftwareRendering") === -1) {
-                    rebuilt.push(line);
-                    continue;
-                }
-                var patched = line
-                    .replace(/("enableTouchInput"\s*:\s*)false/g, "$1true")
-                    .replace(/("enableTouchInput"\s*:\s*)0/g, "$1true")
-                    .replace(/("maxTouchPoints"\s*:\s*)\d+/g, "$1" + MAX_TOUCH_POINTS)
-                    .replace(/("enableHevc"\s*:\s*)false/g, "$1true")
-                    .replace(/("useSoftwareRendering"\s*:\s*)true/g, "$1false")
-                    .replace(/("useHardwareAudioDecoding"\s*:\s*)false/g, "$1true");
-                if (patched !== line) changed++;
-                rebuilt.push(patched);
+            var result = applyOverrides(answer);
+            if (!result.changed) {
+                post("configuration unchanged", result.reason + " - " + url);
+                return null;
             }
-            if (changed > 0) {
-                post("session changed", "the session now asks for"
-                     + (window.__gsWantTouch ? " touch input" : "")
-                     + (window.__gsPreferHEVC ? " and HEVC" : "")
-                     + ", with hardware rendering"
-                     + (window.__gsPatchTarget ? " - in " + window.__gsPatchTarget : ""));
-                return rebuilt.join("\n");
-            }
-            post("session unchanged", "the session configuration was left as it was - in "
-                 + (url || ""));
-            return null;
+            post("configuration changed", "changed /configuration answer " + url
+                 + " (" + result.reason + ")");
+            return JSON.stringify(answer);
         }
 
         var nativeFetch = window.fetch;
         if (typeof nativeFetch === "function") {
             window.fetch = function(input, init) {
+                var target = urlOf(input);
+                if (!isConfigurationRequest(target)) {
+                    // Session requests pass through byte-for-byte. Their body
+                    // is not where this web client accepts these overrides.
+                    return nativeFetch.call(window, input, init);
+                }
                 try {
-                    if (init && typeof init.body === "string") {
-                        var target = urlOf(input);
-                        window.__gsPatchTarget = target;
-                        // The address is needed: the resolution is asked
-                        // for on the request that starts the session, and
-                        // only that request.
-                        var next = rewrite(init.body, target);
-                        window.__gsPatchTarget = "";
-                        if (next !== null) {
-                            init = Object.assign({}, init, { body: next });
+                    return nativeFetch.call(window, input, init).then(function(response) {
+                        if (!response || response.ok === false || typeof response.clone !== "function") {
+                            return response;
                         }
-                    } else if (input && typeof input === "object" &&
-                               typeof input.clone === "function" &&
-                               typeof input.url === "string" &&
-                               input.method && input.method !== "GET") {
-                        // A Request object carries its body as a stream, so it
-                        // has to be read before it can be replaced. Returning
-                        // the promise keeps the call's own semantics.
-                        var request = input;
-                        var target = urlOf(request);
-                        return request.clone().text().then(function(text) {
-                            window.__gsPatchTarget = target;
-                            var replacement = rewrite(text, target);
-                            window.__gsPatchTarget = "";
-                            if (replacement === null) {
-                                return nativeFetch.call(window, request, init);
-                            }
-                            // The method and the headers are carried
-                            // over explicitly: a request that loses its
-                            // headers is a request the service answers
-                            // differently.
-                            return nativeFetch.call(window, new Request(request, {
-                                method: request.method,
-                                headers: request.headers,
-                                body: replacement
-                            }), init);
-                        }).catch(function() {
-                            return nativeFetch.call(window, request, init);
-                        });
-                    }
-                } catch (e) {}
-                // Passed on explicitly rather than through `arguments`, so
-                // the rewritten init is the one that actually goes out.
-                return nativeFetch.call(window, input, init);
+                        var copy = response.clone();
+                        if (!copy || typeof copy.text !== "function") return response;
+                        return copy.text().then(function(body) {
+                            var replacement = rewriteConfigurationResponse(body, target);
+                            if (replacement === null) return response;
+                            return new Response(replacement, {
+                                status: response.status,
+                                statusText: response.statusText,
+                                headers: response.headers
+                            });
+                        }).catch(function() { return response; });
+                    });
+                } catch (e) {
+                    return nativeFetch.call(window, input, init);
+                }
             };
         }
 
-        var nativeSend = window.XMLHttpRequest &&
-            window.XMLHttpRequest.prototype && window.XMLHttpRequest.prototype.send;
-        var nativeOpen = window.XMLHttpRequest &&
-            window.XMLHttpRequest.prototype && window.XMLHttpRequest.prototype.open;
-        if (typeof nativeOpen === "function") {
-            window.XMLHttpRequest.prototype.open = function(method, url) {
-                try { this.__gsUrl = url; } catch (e) {}
-                return nativeOpen.apply(this, arguments);
-            };
-        }
-        if (typeof nativeSend === "function") {
-            window.XMLHttpRequest.prototype.send = function(body) {
-                try {
-                    var target = this.__gsUrl || "";
-                    window.__gsPatchTarget = target;
-                    // The address of the request is the one the XHR was
-                    // opened with: the rule for the resolution applies to
-                    // the request that starts the session, and nothing
-                    // else.
-                    var next = rewrite(body, target);
-                    window.__gsPatchTarget = "";
-                    if (next !== null) return nativeSend.call(this, next);
-                } catch (e) {}
-                return nativeSend.apply(this, arguments);
-            };
-        }
-
-        // If a session starts and nothing ever carried an input
-        // configuration, the setting did not apply and saying nothing would
-        // be the same as claiming it did.
         setTimeout(function() {
             if (reported === "") {
-                post("not offered",
-                     "the session never sent an input configuration, so touch "
-                     + "controls could not be forced on");
+                post("not offered", "no /configuration answer supplied clientStreamingConfigOverrides");
             }
         }, 30000);
     })();
