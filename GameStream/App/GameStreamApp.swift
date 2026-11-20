@@ -69,8 +69,6 @@ struct GameStreamApp: App {
                         AppLog.shared.info("deeplink", "playing \(direct.title) by its product id")
                         stream.play(direct)
                         return
-                        AppLog.shared.warn("deeplink", "no game matches \(identifier)")
-                        return
                     }
                     AppLog.shared.info("deeplink", "playing \(found.title)")
                     stream.play(found)
