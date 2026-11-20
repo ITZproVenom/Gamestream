@@ -463,16 +463,13 @@ enum WebScripts {
 
         /// The client the app says it is.
         ///
-        /// The service reads the operating system out of this to decide how
-        /// big a picture to send, so it has to be the same client the
-        /// request asks for.
+        /// The operating system the service is asked for comes from the
+        /// resolution that is wanted, which is how the script that works
+        /// does it. The header and the request must say the same thing: the
+        /// service reads the operating system to decide how big a picture to
+        /// send, and a header that says one thing while the request says
+        /// another has the two arguing.
         function claimedClient() {
-            // The operating system the service is asked for comes from the
-            // resolution that is wanted, which is how the script that works
-            // does it. The header and the request must say the same thing:
-            // the service reads the operating system to decide how big a
-            // picture to send, and a header that says one thing while the
-            // request says another has the two arguing.
             var resolution = window.__gsResolution || "auto";
             if (resolution === "1080p-hq") return "tizen";
             if (resolution === "1080p") return "windows";
@@ -485,6 +482,7 @@ enum WebScripts {
         }
 
         function deviceInfo() {
+            // The client the app says it is, as the service reads it.
             var os = claimedClient();
             var browserName = "chrome";
             var browserVersion = "140.0.3485.54";

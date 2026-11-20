@@ -272,6 +272,49 @@ for p, s in sources.items():
             add("actor-crossing", f"{os.path.basename(p)}:{line}",
                 f"{t}.shared is main-actor state, reached from an actor")
 
+
+# 19. A script that calls a function it does not define.
+#
+# The two page scripts are separate programs in the same page: one wraps
+# the fetch and answers the sign-in, the other rewrites the session. A
+# function one of them calls but does not have is a ReferenceError at the
+# first request, and the thing it was doing silently stops happening -
+# which is how the client the app says it is stopped being sent.
+import re as _re
+for p, s in sources.items():
+    for m in _re.finditer(r'static let (\w+) = #"""\n(.*?)\n    """#', s, _re.S):
+        name, body = m.group(1), m.group(2)
+        defined = set(_re.findall(r'function ([A-Za-z_][\w]*)\s*\(', body))
+        # only the code, not the comments
+        code = _re.sub(r'//[^\n]*', '', body)
+        code = _re.sub(r'/\*.*?\*/', '', code, flags=_re.S)
+        code = _re.sub(r'"(?:\\.|[^"\\\n])*"', '""', code)
+        called = set(_re.findall(r'(?<![.\w])([a-z][A-Za-z_]\w*)\s*\(', code))
+        # names the script holds in a variable are its own
+        local = set(_re.findall(r'(?:var|let|const)\s+([A-Za-z_]\w*)\s*=', code))
+        # the built-in ones the scripts use
+        builtin = {"if", "for", "while", "switch", "catch", "return", "typeof", "function",
+                   "new", "parseInt", "parseFloat", "setTimeout", "setInterval", "clearTimeout",
+                   "clearInterval", "isNaN", "Math", "JSON", "Object", "Array", "String",
+                   "Number", "Boolean", "Date", "Promise", "Error", "encodeURIComponent",
+                   "decodeURIComponent", "postMessage", "event", "resolve", "reject", "require",
+                   "matchMedia", "getComputedStyle", "querySelector", "querySelectorAll",
+                   "createElement", "getElementById", "appendChild", "removeChild",
+                   "addEventListener", "removeEventListener", "dispatchEvent", "clone",
+                   "text", "json", "cloneNode", "scrollIntoView", "getBoundingClientRect",
+                   "setAttribute", "getAttribute", "removeAttribute", "observe", "disconnect",
+                   "push", "shift", "unshift", "splice", "map", "filter", "reduce", "forEach",
+                   "some", "every", "find", "findIndex", "includes", "indexOf", "join",
+                   "slice", "concat", "sort", "keys", "values", "entries", "now", "floor",
+                   "ceil", "round", "max", "min", "abs", "sqrt", "log", "warn", "error",
+                   "assign", "fromEntries", "stringify", "parse", "replace", "replaceAll",
+                   "toUpperCase", "toLowerCase", "trim", "split", "charAt", "charCodeAt",
+                   "startsWith", "endsWith", "padStart", "padEnd", "repeat", "toFixed"}
+        for fn in sorted(called - defined - builtin - local):
+            if fn in ("_", "it", "e"):
+                continue
+            add("missing-js", f"{os.path.basename(p)}:{name}", f"{fn}() is called but not defined")
+
 print("=" * 66)
 print(f"whole-code scan: {len(files)} Swift files, {len(findings)} findings")
 
