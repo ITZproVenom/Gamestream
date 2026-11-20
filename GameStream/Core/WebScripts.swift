@@ -2452,24 +2452,21 @@ enum WebScripts {
         /// it is asked on the request that starts the session - not in the
         /// session's configuration, which has no such field.
         function resolutionClient() {
-            var resolution = window.__gsResolution || "auto";
             // "auto" means the service decides, which it does from the
             // client the app claims to be. Nothing is asked for, and the
             // claim is left as it is.
-            if (resolution === "auto") return "";
-            if (resolution === "1080p-hq") return "tizen";
-            if (resolution === "1080p") return "windows";
-            return "android";
+            if ((window.__gsResolution || "auto") === "auto") return "";
+            return claimedClient();
         }
 
         /// The client the app says it is, as the service reads it.
+        /// The client the service is asked for.
+        ///
+        /// It comes from the resolution that is wanted, which is how the
+        /// script that works does it: the header and the request must say
+        /// the same thing, because the service reads the operating system
+        /// to decide how big a picture to send.
         function claimedClient() {
-            // The operating system the service is asked for comes from the
-            // resolution that is wanted, which is how the script that works
-            // does it. The header and the request must say the same thing:
-            // the service reads the operating system to decide how big a
-            // picture to send, and a header that says one thing while the
-            // request says another has the two arguing.
             var resolution = window.__gsResolution || "auto";
             if (resolution === "1080p-hq") return "tizen";
             if (resolution === "1080p") return "windows";
