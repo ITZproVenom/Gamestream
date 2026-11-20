@@ -130,10 +130,7 @@ struct XboxWebView: UIViewRepresentable {
             // now, or a server picked for the second game would be ignored.
             existing.evaluateJavaScript(
                 "window.__gsSetCloudChoice && window.__gsSetCloudChoice(\""
-                    + (CloudServers.shared.chosen) + "\", \""
-                    + AppSettings.shared.cloudClientClaim + "\");"
-                    + "window.__gsSetClientClaim && window.__gsSetClientClaim(\""
-                    + AppSettings.shared.cloudClientClaim + "\");",
+                    + (CloudServers.shared.chosen) + "\");",
                 completionHandler: nil)
             // Adopt the current request state, otherwise the first update
             // after re-presenting looks like a change and reloads the page
@@ -151,21 +148,8 @@ struct XboxWebView: UIViewRepresentable {
         // The stream player must look like a desktop PC browser: on an iOS
         // UA the site demands the home-screen PWA (navigator.standalone) and
         // bounces the launch to the store page. Every other role keeps the
-        // mobile Safari UA.
-        // The device the app says it is. The player is always a desktop
-        // browser - the site gates cloud play on iOS behind the home-screen
-        // app - but which desktop is a choice, and the service answers a
-        // television differently in places.
-        // The device the app says it is.
-        //
-        // The player always says it is a desktop browser: Xbox gates cloud
-        // play behind the home-screen app on iOS, and a phone's own
-        // user agent is turned away at the door. Every other page says
-        // what the setting says, so the catalogue and the player agree.
-        let profile = AppSettings.shared
-        webView.customUserAgent = role == .stream
-            ? XboxAuth.desktopUserAgent
-            : profile.userAgent
+        // phone's own user agent.
+        webView.customUserAgent = role == .stream ? XboxAuth.desktopUserAgent : nil
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = role != .stream
@@ -254,8 +238,7 @@ struct XboxWebView: UIViewRepresentable {
             // is are handed to the page as it loads.
             controller.addUserScript(WKUserScript(
                 source: "window.__gsSetCloudChoice && window.__gsSetCloudChoice(\""
-                    + (CloudServers.shared.chosen) + "\", \""
-                    + AppSettings.shared.cloudClientClaim + "\");",
+                    + (CloudServers.shared.chosen) + "\");",
                 injectionTime: .atDocumentStart,
                 forMainFrameOnly: true))
         }
@@ -282,19 +265,10 @@ struct XboxWebView: UIViewRepresentable {
                                               forMainFrameOnly: true))
         // The app's own setting is read here, so the session can be asked
         // for HEVC: the site's own "enableHevc" switch lives in the same
-        // configuration the app already patches.
-        // The session is asked for the resolution and the bitrate ceiling
-        // the player has chosen, so the cellular limit works on its own.
-        // The resolution is asked for on the request that starts the
-        // session, as the client that tier calls for. The bitrate is not
-        // asked for here at all: it is written into the session
-        // description, which is the only place it is decided.
-        let quality = AppSettings.shared.effectiveQuality
+        // configuration the app already patches. The bitrate is written
+        // into the session description, which is the only place it is decided.
         controller.addUserScript(WKUserScript(
-            source: "window.__gsPreferHEVC = \(AppSettings.shared.preferHEVC ? "true" : "false");"
-                + "window.__gsResolution = \"\(quality.sessionValue)\";"
-                + "window.__gsClientClaim = \"\(AppSettings.shared.cloudClientClaim)\";"
-                + "window.__gsSetClientClaim && window.__gsSetClientClaim(\"\(AppSettings.shared.cloudClientClaim)\");",
+            source: "window.__gsPreferHEVC = \(AppSettings.shared.preferHEVC ? "true" : "false");",
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true))
         // The rumble bridge must wrap createDataChannel before the page opens

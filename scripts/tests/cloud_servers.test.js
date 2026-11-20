@@ -101,10 +101,17 @@ function check(name, ok, detail) {
     check("the servers are reported", !!servers, servers ? servers.regions.length + " servers" : "nothing reported");
     check("all three servers arrive", servers && servers.regions.length === 3);
 
-    // 2. The client the app says it is goes on the request.
-    const info = JSON.parse(lastHeaders["x-ms-device-info"]);
-    check("the client claim is sent", !!info, info.dev.os.name + "/" + info.dev.browser.browserName);
-    check("it says windows by default", info.dev.os.name === "windows");
+    // 2. The app does not say what it is to the service. The header the
+    //    third-party script invented is not sent, and the headers the
+    //    page sent are left alone.
+    check("no client identity header is sent",
+          !lastHeaders || !lastHeaders["x-ms-device-info"], JSON.stringify(lastHeaders));
+    await sandbox.window.fetch("https://xhome.gssv-play-prod.xboxlive.com/v2/login/user", {
+        method: "POST", body: "{}", headers: { Authorization: "Bearer page-token" }
+    });
+    check("the page's own headers survive",
+          !!lastHeaders && lastHeaders["Authorization"] === "Bearer page-token",
+          JSON.stringify(lastHeaders));
 
     // 3. With no choice, the answer is not changed.
     let answer = await sandbox.window.fetch("https://xhome.gssv-play-prod.xboxlive.com/v2/login/user", { method: "POST", body: "{}" });
@@ -119,8 +126,8 @@ function check(name, ok, detail) {
     check("with a choice the answer is narrowed", narrowed.length === 1, narrowed.length + " region");
     check("it is the one that was chosen", narrowed[0] && narrowed[0].name === "NewZealand");
     check("it is marked as the default", narrowed[0] && narrowed[0].isDefault === true);
-    const claim = JSON.parse(lastHeaders["x-ms-device-info"]);
-    check("the chosen client is sent", claim.dev.os.name === "tizen" && claim.appInfo.env.clientAppType === "tizen");
+    check("still no client identity header",
+          !lastHeaders || !lastHeaders["x-ms-device-info"], JSON.stringify(lastHeaders));
 
     // 5. The queue is reported from the session answer.
     await sandbox.window.fetch("https://xhome.gssv-play-prod.xboxlive.com/v2/sessions/abc", { method: "GET" });

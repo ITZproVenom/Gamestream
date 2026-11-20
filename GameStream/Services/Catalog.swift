@@ -308,9 +308,6 @@ final class Catalog: ObservableObject {
         var request = URLRequest(url: url)
         request.timeoutInterval = 20
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        // The app's own requests say the same thing the page says, so the
-        // two are not asking the service as different devices.
-        request.setValue(AppSettings.shared.userAgent, forHTTPHeaderField: "User-Agent")
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse,
@@ -386,9 +383,6 @@ final class Catalog: ObservableObject {
         var request = URLRequest(url: url)
         request.timeoutInterval = 20
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        // The app's own requests say the same thing the page says, so the
-        // two are not asking the service as different devices.
-        request.setValue(AppSettings.shared.userAgent, forHTTPHeaderField: "User-Agent")
 
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               let http = response as? HTTPURLResponse,

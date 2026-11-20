@@ -168,18 +168,6 @@ final class AppSettings: ObservableObject {
             }
         }
 
-        /// The value the cloud session itself expects.
-        ///
-        /// The session's own configuration names the resolution differently
-        /// from the script's preference, so the two are kept apart.
-        var sessionValue: String {
-            switch self {
-            case .auto: return "auto"
-            case .p720: return "720p"
-            case .p1080: return "1080p"
-            case .p1080hq: return "1080p-hq"
-            }
-        }
     }
 
     /// What the site's on-screen controls should do.
@@ -276,8 +264,6 @@ final class AppSettings: ObservableObject {
         static let invertLeftStick = "settings.invertLeftStick"
         static let invertRightStick = "settings.invertRightStick"
         static let stickAsButtons = "settings.stickAsButtons"
-        static let deviceProfile = "settings.deviceProfile"
-        static let customUserAgent = "settings.customUserAgent"
         static let catalogRegion = "settings.catalogRegion"
         static let pickServerBeforePlay = "settings.pickServerBeforePlay"
         static let touchControls = "settings.touchControls"
@@ -402,19 +388,6 @@ final class AppSettings: ObservableObject {
     @Published var invertRightStick: Bool {
         didSet { store(invertRightStick, Key.invertRightStick) }
     }
-    /// The device the app says it is.
-    ///
-    /// The cloud answers a television and a desktop browser differently in
-    /// places, and the app can ask as either. It is the same choice the
-    /// enhancement script offers in its own settings.
-    @Published var deviceProfile: DeviceProfile {
-        didSet { store(deviceProfile.rawValue, Key.deviceProfile) }
-    }
-    /// The user agent to send when the profile is "custom".
-    @Published var customUserAgent: String {
-        didSet { store(customUserAgent, Key.customUserAgent) }
-    }
-
     /// Shows the cloud servers before a game starts, so one can be picked.
     ///
     /// The queue on one side of the world can be much shorter than the
@@ -427,43 +400,6 @@ final class AppSettings: ObservableObject {
     @Published var catalogRegion: CatalogRegion {
         didSet { store(catalogRegion.rawValue, Key.catalogRegion) }
     }
-
-    /// The client the app says it is, in the form the service expects:
-    /// the operating system, the browser, the browser's version, the
-    /// screen's size, the kind of client and the client's version.
-    ///
-    /// The service is asked as the same thing whichever way the page is
-    /// opened, so the app and the page never disagree about what is
-    /// asking.
-    var cloudClientClaim: String {
-        // The client the app says it is has to agree with the client the
-        // resolution asks for: the service reads the operating system out
-        // of this to decide how big a picture to send, so claiming one thing
-        // here and another in the request would have the two arguing.
-        // The operating system the service is asked for comes from the
-        // resolution that is wanted, which is how the script that works
-        // does it: the header and the request must say the same thing,
-        // because the service reads the operating system to decide how big
-        // a picture to send.
-        let os: String
-        switch effectiveQuality {
-        case .p1080hq: os = "tizen"
-        case .p1080: os = "windows"
-        case .p720: os = "android"
-        case .auto:
-            switch deviceProfile {
-            case .windows, .custom: os = "windows"
-            case .smartTV, .tizenTV: os = "tizen"
-            }
-        }
-        // The client type is always the browser: the service is a web
-        // client, and the television profiles change the user agent, not
-        // the kind of client.
-        return "\(os)|chrome|140.0.3485.54|3840|2160|browser|26.1.97"
-    }
-
-    /// The user agent the app sends, whatever the profile is.
-    var userAgent: String { deviceProfile.userAgent(custom: customUserAgent) }
 
     /// Uses the stick as the direction pad instead of as an axis.
     ///
@@ -582,8 +518,6 @@ final class AppSettings: ObservableObject {
         invertLeftStick = defaults.object(forKey: Key.invertLeftStick) as? Bool ?? false
         invertRightStick = defaults.object(forKey: Key.invertRightStick) as? Bool ?? false
         stickAsButtons = defaults.object(forKey: Key.stickAsButtons) as? Bool ?? false
-        deviceProfile = DeviceProfile(rawValue: defaults.string(forKey: Key.deviceProfile) ?? "") ?? .windows
-        customUserAgent = defaults.string(forKey: Key.customUserAgent) ?? ""
         catalogRegion = CatalogRegion(rawValue: defaults.string(forKey: Key.catalogRegion) ?? "") ?? .defaultRegion
         pickServerBeforePlay = defaults.object(forKey: Key.pickServerBeforePlay) as? Bool ?? false
         cellularBitrateMbps = defaults.object(forKey: Key.cellularBitrate) as? Int ?? 5
