@@ -704,7 +704,7 @@ final class StreamCoordinator: ObservableObject {
             // watchdog used to fail the session by itself, and the game
             // quietly left the queue.
             self.streamFailed(
-                "Xbox did not start the stream. This usually means the service is busy, "
+                message: "Xbox did not start the stream. This usually means the service is busy, "
                 + "or the game is not available in your region."
             )
             self.log.warn("stream", "watchdog timed out")
