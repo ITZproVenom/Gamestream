@@ -190,6 +190,11 @@ final class StreamCoordinator: ObservableObject {
             return
         }
 
+        // A launch that is allowed to go ahead clears the sign-in flag: it
+        // was only ever set, so one refused launch left every later failure
+        // screen offering "Sign in" instead of "Try again", even after the
+        // player had signed in and the failure was something else entirely.
+        needsSignIn = false
         log.info("stream", "launching \(game.title) (\(game.id))")
         // Whatever was watching the previous session has to stop watching:
         // the leave check would end the new game the moment the page
