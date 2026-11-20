@@ -715,6 +715,9 @@ struct XboxWebView: UIViewRepresentable {
                 if role == .stream {
                     StreamCoordinator.shared.loadingChanged(false)
                     StreamCoordinator.shared.streamFailed(message: detail)
+                } else if role == .searchResults, let loadedURL {
+                    onSearchResults?(loadedURL, [], "error",
+                                    "Xbox's search page could not be loaded. Check your connection and try again.")
                 }
             }
         }

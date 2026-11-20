@@ -177,6 +177,7 @@ struct SearchView: View {
         liveGames = []
         liveSearchMessage = ""
         liveSearchStatus = "loading"
+        searchReloadToken &+= 1
         submittedSearchURL = url
     }
 
