@@ -48,18 +48,6 @@ enum CatalogRegion: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// The continent the region belongs to, which is how the script's own
-    /// region setting is written.
-    var continent: String {
-        switch self {
-        case .defaultRegion: return "default"
-        case .unitedStates: return "america-north"
-        case .brazil: return "america-south"
-        case .japan, .korea: return "asia"
-        case .poland: return "europe"
-        }
-    }
-
     var detail: String {
         switch self {
         case .defaultRegion:

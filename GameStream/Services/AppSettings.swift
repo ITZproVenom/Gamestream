@@ -649,8 +649,17 @@ final class AppSettings: ObservableObject {
         // which is where titles that are not offered in the phone's own
         // market can be found.
         if catalogRegion != .defaultRegion {
+            // The bypass answers the login request with the address of
+            // another region's cloud server, so the service answers with
+            // that region's catalogue.
+            //
+            // The script's own region setting is not written: it wants the
+            // name the service gives its regions ("WestUs"), not a
+            // continent, so what was sent was a value the script did not
+            // recognise and it quietly used its own default. The server
+            // the app picks is chosen by the app itself, when it narrows
+            // the sign-in answer.
             values["server.bypassRestriction"] = catalogRegion.bypassCode
-            values["server.region"] = catalogRegion.continent
         }
         if matchStreamStyle {
             // The dark base is the only one of its themes that a translucent
