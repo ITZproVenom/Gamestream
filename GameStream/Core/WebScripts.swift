@@ -2277,6 +2277,15 @@ enum WebScripts {
         /// added rather than flipped.
         function sessionSettings(node, depth) {
             if (!node || typeof node !== "object" || depth > 4) return false;
+            // Only an object that already carries a session configuration is
+            // one. The body that wraps it - offeringId, data, titleId - is
+            // not, and giving that wrapper a videoConfiguration or an
+            // inputConfiguration of its own adds fields the service does
+            // not have. It answers that with "Something went wrong".
+            var hasConfiguration = (node.videoConfiguration && typeof node.videoConfiguration === "object")
+                || (node.audioConfiguration && typeof node.audioConfiguration === "object")
+                || (node.inputConfiguration && typeof node.inputConfiguration === "object");
+            if (!hasConfiguration) return false;
             var changed = false;
 
             // The touch fields are only asked for when the player wants the
@@ -2304,32 +2313,24 @@ enum WebScripts {
                 changed = true;
             }
 
+            // The video configuration is changed where the page put it. If
+            // the page did not send one, none is invented for it.
             var video = node.videoConfiguration;
-            if (!video || typeof video !== "object") {
-                video = {};
-                node.videoConfiguration = video;
-                changed = true;
-            }
-            if (window.__gsPreferHEVC && video.enableHevc !== true) {
+            if (video && window.__gsPreferHEVC && video.enableHevc !== true) {
                 video.enableHevc = true;
                 changed = true;
             }
-            if (video.useSoftwareRendering === true) {
+            if (video && video.useSoftwareRendering === true) {
                 video.useSoftwareRendering = false;
                 changed = true;
             }
-            if (video.decoderType === 1) {
+            if (video && video.decoderType === 1) {
                 video.decoderType = 4;
                 changed = true;
             }
-            // The resolution and the bitrate are NOT asked for here: the
-            // session's configuration has no such fields, and sending
-            // them made the service answer with "Something went wrong" -
-            // the whole launch failed, not just the setting. The
-            // resolution is asked for on the play request instead (as the
-            // client the tier calls for), and the bitrate is written into
-            // the session description, which is the only place it is
-            // decided.
+            // Neither a resolution nor a bitrate is a field of this
+            // configuration. Adding fields the schema does not have makes
+            // the service refuse the session.
 
             var audio = node.audioConfiguration;
             if (audio && typeof audio === "object"
@@ -2431,7 +2432,8 @@ enum WebScripts {
                      + (window.__gsPatchTarget ? " - in " + window.__gsPatchTarget : ""));
                 return rebuilt.join("\n");
             }
-            post("session unchanged", "the session configuration was left as it was");
+            post("session unchanged", "the session configuration was left as it was - in "
+                 + (url || ""));
             return null;
         }
 
