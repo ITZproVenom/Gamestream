@@ -100,9 +100,17 @@ final class CloudServers: ObservableObject {
                         request.httpMethod = "HEAD"
                         request.timeoutInterval = 6
                         request.cachePolicy = .reloadIgnoringLocalCacheData
-                        _ = try? await URLSession.shared.data(for: request)
-                        let elapsed = Int(Date().timeIntervalSince(start) * 1000)
-                        return (name, elapsed)
+                        // A server that did not answer has no ping. The
+                        // time it took to fail was recorded as if it had
+                        // answered, so an unreachable server could be
+                        // counted as a quick one.
+                        do {
+                            _ = try await URLSession.shared.data(for: request)
+                            let elapsed = Int(Date().timeIntervalSince(start) * 1000)
+                            return (name, elapsed)
+                        } catch {
+                            return (name, nil)
+                        }
                     }
                 }
                 var results: [String: Int] = [:]

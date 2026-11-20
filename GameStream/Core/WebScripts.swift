@@ -104,7 +104,15 @@ enum WebScripts {
                     var info = JSON.parse(raw);
                     out.gamertag = readGamertag(info);
                     var direct = info && info.tokens && info.tokens["http://gssv.xboxlive.com/"];
-                    if (direct && usable(direct.token)) {
+                    // The expiry is checked here as it is in the fallback
+                    // below: a token that has run out is still sitting in
+                    // the storage, and believing it is signed in meant the
+                    // app showed the library and then bounced the launch
+                    // back to the sign-in page.
+                    var expiresAt = direct && direct.expiration
+                        ? Date.parse(direct.expiration) : 0;
+                    if (direct && usable(direct.token)
+                        && (!expiresAt || expiresAt > Date.now())) {
                         out.signedIn = true;
                         out.source = "xboxcom_xbl_user_info";
                         out.expires = direct.expiration || "";
@@ -648,9 +656,33 @@ enum WebScripts {
                         // the clone.
                         var clone = request.clone();
                         return clone.text().then(function(text) {
+                            // The headers of the request itself are kept,
+                            // and the ones the caller added are added to
+                            // them. Building the headers from the call alone
+                            // lost the content type and the authorisation
+                            // of every request made as an object, and the
+                            // service answers those differently.
+                            var merged = {};
+                            try {
+                                var own = clone.headers;
+                                if (own && typeof own.entries === "function") {
+                                    var list = Array.from(own.entries());
+                                    for (var h = 0; h < list.length; h++) {
+                                        merged[list[h][0]] = list[h][1];
+                                    }
+                                }
+                            } catch (e) {}
+                            for (var name in headers) {
+                                var key = String(name).toLowerCase();
+                                var already = false;
+                                for (var existing in merged) {
+                                    if (String(existing).toLowerCase() === key) { already = true; break; }
+                                }
+                                if (!already) merged[name] = headers[name];
+                            }
                             return nativeFetch.call(window, new Request(clone, {
                                 method: clone.method,
-                                headers: headers,
+                                headers: merged,
                                 body: text
                             })).then(function(response) {
                                 return handleResponse(response, url);
@@ -2642,8 +2674,13 @@ enum WebScripts {
         if (typeof nativeSend === "function") {
             window.XMLHttpRequest.prototype.send = function(body) {
                 try {
-                    window.__gsPatchTarget = this.__gsUrl || "";
-                    var next = rewrite(body, url);
+                    var target = this.__gsUrl || "";
+                    window.__gsPatchTarget = target;
+                    // The address of the request is the one the XHR was
+                    // opened with: the rule for the resolution applies to
+                    // the request that starts the session, and nothing
+                    // else.
+                    var next = rewrite(body, target);
                     window.__gsPatchTarget = "";
                     if (next !== null) return nativeSend.call(this, next);
                 } catch (e) {}

@@ -694,7 +694,11 @@ final class StreamCoordinator: ObservableObject {
             try? await Task.sleep(for: .seconds(75))
             guard !Task.isCancelled, let self else { return }
             guard case .connecting = self.phase else { return }
-            self.phase = .failed(
+            // The failure goes through the same path as any other, so a
+            // game taken off the queue to be played next is put back: the
+            // watchdog used to fail the session by itself, and the game
+            // quietly left the queue.
+            self.streamFailed(
                 "Xbox did not start the stream. This usually means the service is busy, "
                 + "or the game is not available in your region."
             )
