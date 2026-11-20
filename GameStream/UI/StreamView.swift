@@ -14,7 +14,6 @@ struct StreamView: View {
     @StateObject private var guardian = SessionGuard.shared
     @State private var hideTask: Task<Void, Never>?
     @State private var elapsed: TimeInterval = 0
-    @State private var startedAt = Date()
     @State private var showingStats = false
     @StateObject private var recorder = StreamRecorder.shared
 
@@ -175,13 +174,12 @@ struct StreamView: View {
         }
         .onChange(of: stream.phase) { _, phase in
             if phase == .playing {
-                startedAt = Date()
                 showingStats = AppSettings.shared.showStreamStats
                 scheduleHide()
             }
         }
         .task(id: stream.phase == .playing) {
-            guard stream.phase == .playing else { return }
+            guard stream.phase == .playing, let startedAt = stream.startedAt else { return }
             // A visible session timer, ticking once a second and no faster.
             while !Task.isCancelled {
                 elapsed = Date().timeIntervalSince(startedAt)

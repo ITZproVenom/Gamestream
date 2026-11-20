@@ -116,7 +116,7 @@ final class StreamCoordinator: ObservableObject {
     /// The live WebRTC numbers, or nil before the first sample arrives.
     @Published private(set) var stats: StreamStats?
 
-    private var startedAt: Date?
+    private(set) var startedAt: Date?
     /// The game that came off the queue to be played next, kept until the
     /// launch either starts or fails.
     private var queuedNext: Game?
