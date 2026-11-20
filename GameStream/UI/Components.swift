@@ -1,6 +1,43 @@
 import SwiftUI
 import UIKit
 
+/// The reading container shared by scrolling pages.
+///
+/// It owns the page inset, the centred maximum width and the clearance below
+/// the last card so content never disappears under the home indicator.
+struct PageContainer<Content: View>: View {
+    var spacing: CGFloat = Theme.Spacing.large
+    var alignment: HorizontalAlignment = .leading
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: alignment, spacing: spacing) {
+            content
+        }
+        .padding(.horizontal, Theme.pageInset)
+        .padding(.bottom, Theme.pageBottomClearance)
+        .frame(maxWidth: Theme.readableContentMaxWidth)
+        .frame(maxWidth: .infinity)
+    }
+}
+
+/// A vertical page whose width and bottom clearance cannot drift between
+/// screens. Only video and artwork are allowed to ignore safe areas.
+struct PageScroll<Content: View>: View {
+    var spacing: CGFloat = Theme.Spacing.large
+    var alignment: HorizontalAlignment = .leading
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        ScrollView {
+            PageContainer(spacing: spacing, alignment: alignment) {
+                content
+            }
+        }
+        .containerRelativeFrame(.horizontal)
+    }
+}
+
 /// Artwork that loads through the shared cache and never blocks the interface.
 struct GameArtwork: View {
     let url: URL?
@@ -57,10 +94,12 @@ struct GameTile: View {
     let play: () -> Void
 
     @EnvironmentObject private var library: LibraryStore
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .subheadline) private var titleSlotHeight = 40
+    @ScaledMetric(relativeTo: .caption) private var captionSlotHeight = 18
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xxSmall) {
             ZStack(alignment: .bottomTrailing) {
                 NavigationLink(value: game) {
                     GameArtwork(url: game.posterURL, cornerRadius: Theme.posterRadius)
@@ -101,15 +140,19 @@ struct GameTile: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.xxxSmall) {
                 Text(game.title)
                     .font(.subheadline.weight(.semibold))
-                    .lineLimit(2)
-                    .frame(height: titleSlotHeight, alignment: .topLeading)
-                Text(game.genre)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                    .frame(minHeight: titleSlotHeight, alignment: .topLeading)
+                    .fixedSize(horizontal: false, vertical: dynamicTypeSize.isAccessibilitySize)
+                Text(game.genre.isEmpty ? " " : game.genre)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                    .frame(minHeight: captionSlotHeight, alignment: .topLeading)
+                    .fixedSize(horizontal: false, vertical: dynamicTypeSize.isAccessibilitySize)
+                    .accessibilityHidden(game.genre.isEmpty)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -121,36 +164,38 @@ struct GameTile: View {
 /// The smaller card used in horizontal rows.
 struct GameCard: View {
     let game: Game
-    var width: CGFloat = 128
+    var width: CGFloat?
     var caption: String?
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .subheadline) private var defaultWidth = 144
     @ScaledMetric(relativeTo: .subheadline) private var titleSlotHeight = 40
     @ScaledMetric(relativeTo: .caption) private var captionSlotHeight = 18
 
     var body: some View {
         NavigationLink(value: game) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.xxSmall) {
                 GameArtwork(url: game.posterURL, cornerRadius: Theme.posterRadius)
                     .aspectRatio(3 / 4, contentMode: .fit)
                 Text(game.title)
                     .font(.subheadline.weight(.semibold))
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(height: titleSlotHeight, alignment: .topLeading)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                    .frame(maxWidth: .infinity, minHeight: titleSlotHeight,
+                           alignment: .topLeading)
+                    .fixedSize(horizontal: false, vertical: dynamicTypeSize.isAccessibilitySize)
                 // A blank caption still occupies its row. This keeps every
                 // card bottom and every following shelf on the same guide.
                 Text(caption ?? " ")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(height: captionSlotHeight, alignment: .topLeading)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                    .frame(maxWidth: .infinity, minHeight: captionSlotHeight,
+                           alignment: .topLeading)
+                    .fixedSize(horizontal: false, vertical: dynamicTypeSize.isAccessibilitySize)
                     .accessibilityHidden(caption == nil)
             }
             .padding(Theme.cardContentInset)
-            // The caller's width is the complete card width, not just the
-            // content width before padding is added.
-            .frame(width: width)
+            .frame(width: width ?? defaultWidth)
             .frame(maxHeight: .infinity, alignment: .topLeading)
             .modifier(CardSurfaceModifier(shape: Theme.tileShape))
         }
@@ -183,7 +228,7 @@ struct GameRow: View {
 /// A horizontally scrolling shelf of cards, with snapping.
 struct GameShelf: View {
     let games: [Game]
-    var width: CGFloat = 128
+    var width: CGFloat?
     var caption: (Game) -> String? = { _ in nil }
 
     var body: some View {
@@ -238,17 +283,57 @@ struct ErrorNotice: View {
     }
 }
 
+/// One state surface for loading and empty content. It owns the page inset,
+/// readable text measure and the centred action so every caller lines up.
+private struct StateNotice: View {
+    var systemImage: String?
+    var title: String
+    var message: String?
+    var isLoading = false
+    var actionTitle: String?
+    var action: (() -> Void)?
+
+    var body: some View {
+        VStack(spacing: Theme.Spacing.xSmall) {
+            if isLoading {
+                ProgressView()
+                    .accessibilityLabel(title)
+            } else if let systemImage {
+                Image(systemName: systemImage)
+                    .font(.system(size: 34, weight: .semibold))
+                    .foregroundStyle(.tint)
+                    .accessibilityHidden(true)
+            }
+            Text(title)
+                .font(isLoading ? .subheadline : .headline)
+                .foregroundStyle(isLoading ? .secondary : .primary)
+                .multilineTextAlignment(.center)
+            if let message {
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .buttonStyle(.glassProminent)
+                    .buttonBorderShape(.capsule)
+                    .padding(.top, Theme.Spacing.xxxSmall)
+            }
+        }
+        .frame(maxWidth: 360)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, Theme.pageInset)
+        .padding(.vertical, Theme.Spacing.xxLarge)
+    }
+}
+
 struct LoadingNotice: View {
     var title = "Loading the Xbox catalog…"
 
     var body: some View {
-        VStack(spacing: 12) {
-            ProgressView()
-                .accessibilityLabel(title)
-            Text(title).font(.subheadline).foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 56)
+        StateNotice(title: title, isLoading: true)
     }
 }
 
@@ -261,26 +346,8 @@ struct EmptyNotice: View {
     var action: (() -> Void)?
 
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.system(size: 34, weight: .semibold))
-                .foregroundStyle(.tint)
-            Text(title).font(.headline)
-            Text(message)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-            if let actionTitle, let action {
-                Button(actionTitle, action: action)
-                    .buttonStyle(.glassProminent)
-                    .buttonBorderShape(.capsule)
-                    .padding(.top, 2)
-            }
-        }
-        .frame(maxWidth: 360)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 46)
+        StateNotice(systemImage: systemImage, title: title, message: message,
+                    actionTitle: actionTitle, action: action)
     }
 }
 
