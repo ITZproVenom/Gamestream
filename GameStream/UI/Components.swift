@@ -63,7 +63,7 @@ struct GameTile: View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack(alignment: .bottomTrailing) {
                 NavigationLink(value: game) {
-                    GameArtwork(url: game.posterURL)
+                    GameArtwork(url: game.posterURL, cornerRadius: Theme.posterRadius)
                         .aspectRatio(3 / 4, contentMode: .fit)
                         .overlay(alignment: .topLeading) {
                             if library.isFavorite(game) {
@@ -130,7 +130,7 @@ struct GameCard: View {
     var body: some View {
         NavigationLink(value: game) {
             VStack(alignment: .leading, spacing: 8) {
-                GameArtwork(url: game.posterURL)
+                GameArtwork(url: game.posterURL, cornerRadius: Theme.posterRadius)
                     .aspectRatio(3 / 4, contentMode: .fit)
                 Text(game.title)
                     .font(.subheadline.weight(.semibold))
