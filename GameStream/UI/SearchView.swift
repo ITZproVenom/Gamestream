@@ -15,6 +15,9 @@ struct SearchView: View {
     @State private var searchReloadToken = 0
     /// The genre being browsed, when the player picked one from the grid.
     @State private var genreFilter: String?
+    /// Game counts by genre, worked out when the catalogue changes rather
+    /// than once for every genre whenever the screen is drawn.
+    @State private var genreCounts: [String: Int] = [:]
     @StateObject private var navigator = RootView.Navigator.shared
 
     private let columns = [GridItem(.adaptive(minimum: 116, maximum: 190), spacing: 16)]
@@ -62,6 +65,13 @@ struct SearchView: View {
                     query = seed
                     navigator.searchSeed = nil
                     openXboxResults(for: seed)
+                }
+                .onChange(of: catalog.games, initial: true) { _, games in
+                    var counts: [String: Int] = [:]
+                    for game in games {
+                        counts[game.genre, default: 0] += 1
+                    }
+                    genreCounts = counts
                 }
                 .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
             }
