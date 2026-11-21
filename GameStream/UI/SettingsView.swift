@@ -1124,7 +1124,7 @@ struct SettingsGroup<Content: View>: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Theme.groupedSurfaceInset)
-        .glassEffect(.regular, in: Theme.cardShape)
+        .modifier(CardSurfaceModifier(shape: Theme.cardShape))
     }
 }
 

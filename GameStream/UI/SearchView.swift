@@ -241,8 +241,8 @@ struct SearchView: View {
                         if term != history.terms.last { Divider().opacity(0.4) }
                     }
                 }
-                .padding(.horizontal, 16)
-                .glassEffect(.regular, in: Theme.cardShape)
+                .padding(.horizontal, Theme.Spacing.small)
+                .modifier(CardSurfaceModifier(shape: Theme.cardShape))
                 .padding(.horizontal, Theme.pageInset)
             }
         }
@@ -295,7 +295,7 @@ struct SearchView: View {
                             .padding(.vertical, 14)
                         }
                         .buttonStyle(.plain)
-                        .glassEffect(.regular.interactive(), in: Theme.tileShape)
+                        .modifier(CardSurfaceModifier(shape: Theme.tileShape))
                     }
                 }
                 .padding(.horizontal, Theme.pageInset)

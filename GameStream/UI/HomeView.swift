@@ -10,7 +10,6 @@ struct HomeView: View {
     @Binding var showingBrowser: Bool
 
     @State private var showingActivity = false
-    @ScaledMetric(relativeTo: .caption) private var quickTileMinimumWidth = 104
 
     var body: some View {
         NavigationStack {
@@ -144,9 +143,7 @@ struct HomeView: View {
     private var quickActions: some View {
         // Three columns are used only when the scaled minimum fits. Narrow
         // phones and larger text naturally fall back to two columns or one.
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: quickTileMinimumWidth),
-                                     spacing: 12, alignment: .top)],
-                  alignment: .leading, spacing: 12) {
+        ResponsiveStatGrid {
             StatChip(value: Format.duration(library.playtimeToday),
                      caption: "Played today",
                      systemImage: "clock.fill")
