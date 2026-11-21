@@ -15,6 +15,31 @@ struct StreamView: View {
 
     @Namespace private var glass
 
+    // The read-outs move while a game is playing: the clock ticks, the
+    // numbers change and the badges come and go. Each live value is given a
+    // slot of a fixed width - wide enough for the largest value it can
+    // show, and scaled with the text - and each optional badge a slot that
+    // is there whether the badge is or not, so nothing beside them ever
+    // moves.
+    @ScaledMetric(relativeTo: .caption) private var clockSlot: CGFloat = 62
+    @ScaledMetric(relativeTo: .caption2) private var recorderClockSlot: CGFloat = 52
+    @ScaledMetric(relativeTo: .caption) private var fpsSlot: CGFloat = 52
+    @ScaledMetric(relativeTo: .caption) private var numberSlot: CGFloat = 44
+    @ScaledMetric(relativeTo: .caption2) private var unitSlot: CGFloat = 44
+    @ScaledMetric(relativeTo: .caption2) private var codecSlot: CGFloat = 56
+    @ScaledMetric(relativeTo: .caption2) private var resolutionSlot: CGFloat = 80
+    @ScaledMetric(relativeTo: .caption) private var badgeDot: CGFloat = 7
+    @ScaledMetric(relativeTo: .caption2) private var recorderDot: CGFloat = 6
+
+    // The slots of the optional badges are the badge itself - the dot, the
+    // gap and the value - in a capsule with the theme's padding around it.
+    private var limitSlot: CGFloat { clockSlot + Theme.space4 * 2 }
+    private var qualitySlot: CGFloat { badgeDot + fpsSlot + Theme.space4 * 3 }
+    private var recorderSlot: CGFloat { recorderDot + recorderClockSlot + Theme.space4 * 3 }
+
+    private static let readOutFont = Font.caption.weight(.semibold).monospacedDigit()
+    private static let smallReadOutFont = Font.caption2.weight(.semibold).monospacedDigit()
+
     var body: some View {
         // While the session is starting the page can be shown as it is, with
         // the app's own loading screen out of the way. Xbox puts dialogs up
@@ -363,26 +388,34 @@ struct StreamView: View {
     /// Read-outs and the controls that press the site's own buttons.
     @ViewBuilder
     private var hudReadouts: some View {
-                    Text(Format.clock(elapsed))
-                        .font(.caption.weight(.semibold).monospacedDigit())
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 9)
-                        .glassEffect(.regular, in: Capsule())
+                    readOutCapsule(liveValue(Format.clock(elapsed),
+                                              font: Self.readOutFont,
+                                              width: clockSlot))
                         .glassEffectID("timer", in: glass)
 
-                    if let remaining = guardian.remaining {
-                        Text("−\(Format.clock(remaining))")
-                            .font(.caption.weight(.semibold).monospacedDigit())
-                            .foregroundStyle(remaining < 300 ? .orange : .secondary)
-                            .padding(.horizontal, 11)
-                            .padding(.vertical, 9)
-                            .glassEffect(.regular, in: Capsule())
+                    // The limit badge comes and goes; the slot it lives in
+                    // does not, so nothing beside it moves when it does.
+                    ZStack {
+                        if let remaining = guardian.remaining {
+                            readOutCapsule(
+                                liveValue("−\(Format.clock(remaining))",
+                                          font: Self.readOutFont,
+                                          width: clockSlot)
+                                    .foregroundStyle(remaining < 300 ? .orange : .secondary)
+                            )
                             .glassEffectID("limit", in: glass)
+                        }
                     }
+                    .frame(width: limitSlot)
 
-                    if let stats = stream.stats {
-                        qualityBadge(stats)
+                    // The quality badge is there when the stream reports and
+                    // gone when it does not, so it gets a slot as well.
+                    ZStack {
+                        if let stats = stream.stats {
+                            qualityBadge(stats)
+                        }
                     }
+                    .frame(width: qualitySlot)
 
                     hudIcon("logo.xbox", label: "Xbox guide", id: "guide") {
                         stream.pressGuide()
@@ -396,17 +429,24 @@ struct StreamView: View {
                         stream.toggleEnhancementMenu()
                     }
 
-                    if recorder.isRecording {
-                        HStack(spacing: 5) {
-                            Circle().fill(.red).frame(width: 6, height: 6)
-                            Text(Format.clock(recorder.elapsed))
-                                .font(.caption2.weight(.semibold).monospacedDigit())
+                    // The recording badge is a badge too: it appears when
+                    // the clip starts and goes when it stops, so its slot
+                    // is always the same size.
+                    ZStack {
+                        if recorder.isRecording {
+                            readOutCapsule(
+                                HStack(spacing: Theme.space4) {
+                                    Circle().fill(.red)
+                                        .frame(width: recorderDot, height: recorderDot)
+                                    liveValue(Format.clock(recorder.elapsed),
+                                              font: Self.smallReadOutFont,
+                                              width: recorderClockSlot)
+                                }
+                            )
+                            .glassEffectID("reclock", in: glass)
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 9)
-                        .glassEffect(.regular, in: Capsule())
-                        .glassEffectID("reclock", in: glass)
                     }
+                    .frame(width: recorderSlot)
 
                     hudIcon(recorder.isRecording ? "stop.circle.fill" : "record.circle",
                             label: recorder.isRecording ? "Stop recording" : "Record a clip",
