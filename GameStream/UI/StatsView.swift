@@ -58,19 +58,15 @@ struct StatsView: View {
     }
 
     private var totals: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                StatChip(value: Format.duration(library.totalPlaytime),
-                         caption: "Total playtime", systemImage: "hourglass")
-                StatChip(value: Format.duration(library.playtimeThisWeek),
-                         caption: "Last 7 days", systemImage: "calendar")
-            }
-            HStack(spacing: 12) {
-                StatChip(value: "\(library.activity.count)",
-                         caption: "Sessions", systemImage: "play.rectangle.fill")
-                StatChip(value: "\(library.streakDays)",
-                         caption: "Day streak", systemImage: "flame.fill")
-            }
+        ResponsiveStatGrid {
+            StatChip(value: Format.duration(library.totalPlaytime),
+                     caption: "Total playtime", systemImage: "hourglass")
+            StatChip(value: Format.duration(library.playtimeThisWeek),
+                     caption: "Last 7 days", systemImage: "calendar")
+            StatChip(value: "\(library.activity.count)",
+                     caption: "Sessions", systemImage: "play.rectangle.fill")
+            StatChip(value: "\(library.streakDays)",
+                     caption: "Day streak", systemImage: "flame.fill")
         }
         .padding(.horizontal, Theme.pageInset)
     }
@@ -122,7 +118,7 @@ struct StatsView: View {
                         .frame(height: 88)
                     }
 
-                    HStack(spacing: 10) {
+                    ResponsiveStatGrid {
                         StatChip(value: "\(averageOf(measured, \.averageFPS))",
                                  caption: "Average FPS", systemImage: "speedometer")
                         StatChip(value: "\(averageOf(measured, \.averageLatencyMs)) ms",
