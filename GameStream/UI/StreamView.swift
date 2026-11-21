@@ -569,8 +569,8 @@ struct StreamView: View {
 
     private func readOutCapsule<V: View>(_ content: V) -> some View {
         content
-            .padding(.horizontal, Theme.readoutHorizontalPadding)
-            .padding(.vertical, Theme.readoutVerticalPadding)
+            .padding(.horizontal, Theme.space12)
+            .padding(.vertical, Theme.space8)
             .glassEffect(.regular, in: Capsule())
     }
 
