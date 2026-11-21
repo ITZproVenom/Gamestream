@@ -34,7 +34,27 @@ struct PageScroll<Content: View>: View {
                 content
             }
         }
-        .containerRelativeFrame(.horizontal)
+        .containerRelativeFrame(Axis.Set.horizontal)
+    }
+}
+
+/// One adaptive grid for Detail and Insights statistics. The minimum column
+/// width scales with the value's type role, so larger text removes columns
+/// instead of shrinking or clipping either label. StatChip fills each grid
+/// row's height, keeping cards on the same row equal.
+struct ResponsiveStatGrid<Content: View>: View {
+    @ScaledMetric(relativeTo: .title3) private var minimumColumnWidth = 144
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: minimumColumnWidth, maximum: 260),
+                               spacing: Theme.Spacing.xSmall, alignment: .top)],
+            alignment: .leading,
+            spacing: Theme.Spacing.xSmall
+        ) {
+            content
+        }
     }
 }
 
@@ -236,7 +256,7 @@ struct GameShelf: View {
             LazyHStack(alignment: .top, spacing: Theme.shelfGutter) {
                 ForEach(games) { game in
                     GameCard(game: game, width: width, caption: caption(game))
-                        .scrollTransition(axis: .horizontal) { content, phase in
+                        .scrollTransition(axis: Axis.horizontal) { content, phase in
                             content
                                 .opacity(phase.isIdentity ? 1 : 0.7)
                                 .scaleEffect(phase.isIdentity ? 1 : 0.94)

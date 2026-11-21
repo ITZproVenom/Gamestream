@@ -204,11 +204,8 @@ struct StatChip: View {
     let caption: String
     var systemImage: String?
 
-    @ScaledMetric(relativeTo: .title3) private var valueSlotHeight = 30
-    @ScaledMetric(relativeTo: .caption) private var captionSlotHeight = 32
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xxSmall) {
             Image(systemName: systemImage ?? "square")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.tint)
@@ -219,14 +216,13 @@ struct StatChip: View {
                 .font(.title3.weight(.bold))
                 .monospacedDigit()
                 .contentTransition(.numericText())
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .frame(height: valueSlotHeight, alignment: .topLeading)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Text(caption)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .frame(height: captionSlotHeight, alignment: .topLeading)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(Theme.groupedSurfaceInset)
