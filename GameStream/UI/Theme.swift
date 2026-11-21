@@ -27,36 +27,51 @@ enum Theme {
     static let tileShape = RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
     static let heroShape = RoundedRectangle(cornerRadius: heroRadius, style: .continuous)
 
-    /// The only spacing stops used by shared surfaces and their callers.
+    /// The one spacing scale the app uses: 4, 8, 12, 16, 20, 24, 32, 40.
+    static let space4: CGFloat = 4
+    static let space8: CGFloat = 8
+    static let space12: CGFloat = 12
+    static let space16: CGFloat = 16
+    static let space20: CGFloat = 20
+    static let space24: CGFloat = 24
+    static let space32: CGFloat = 32
+    static let space40: CGFloat = 40
+
+    /// The inset every page leaves around its content.
+    static let pageInset: CGFloat = space20
+
+    /// The widest a column of readable text is allowed to become.
+    static let readingWidth: CGFloat = 760
+
+    /// The same scale under its older names, kept so existing callers still compile.
     enum Spacing {
-        static let xxxSmall: CGFloat = 4
-        static let xxSmall: CGFloat = 8
-        static let xSmall: CGFloat = 12
-        static let small: CGFloat = 16
-        static let medium: CGFloat = 20
-        static let large: CGFloat = 24
-        static let xLarge: CGFloat = 32
-        static let xxLarge: CGFloat = 40
+        static let xxxSmall: CGFloat = Theme.space4
+        static let xxSmall: CGFloat = Theme.space8
+        static let xSmall: CGFloat = Theme.space12
+        static let small: CGFloat = Theme.space16
+        static let medium: CGFloat = Theme.space20
+        static let large: CGFloat = Theme.space24
+        static let xLarge: CGFloat = Theme.space32
+        static let xxLarge: CGFloat = Theme.space40
     }
 
     /// The shared spacing and surface guides used by scrolling screens.
-    static let sectionSpacing = Spacing.xLarge
-    static let headerSpacing = Spacing.xSmall
-    static let pageInset = Spacing.medium
-    static let playerControlInset = Spacing.small
-    static let cardContentInset = Spacing.xSmall
-    static let groupedSurfaceInset = Spacing.medium
-    static let shelfGutter = Spacing.small
-    static let pageBottomClearance = Spacing.xxLarge
-    static let iconSlotWidth = Spacing.large
-    static let iconLabelSpacing = Spacing.xSmall
-    static let badgeInset = Spacing.xxSmall
-    static let readableContentMaxWidth: CGFloat = 760
-    static let homeContentMaxWidth = readableContentMaxWidth
+    static let sectionSpacing = space32
+    static let headerSpacing = space12
+    static let playerControlInset = space16
+    static let cardContentInset = space12
+    static let groupedSurfaceInset = space20
+    static let shelfGutter = space16
+    static let pageBottomClearance = space40
+    static let iconSlotWidth = space24
+    static let iconLabelSpacing = space12
+    static let badgeInset = space8
+    static let readableContentMaxWidth: CGFloat = readingWidth
+    static let homeContentMaxWidth = readingWidth
 
     /// Concentric artwork corners inside an inset tile surface.
     static func nestedRadius(outer: CGFloat, inset: CGFloat) -> CGFloat {
-        max(4, outer - inset)
+        max(space4, outer - inset)
     }
 
     static var posterRadius: CGFloat {
@@ -205,7 +220,7 @@ struct StatChip: View {
     var systemImage: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xxSmall) {
+        VStack(alignment: .leading, spacing: Theme.space8) {
             Image(systemName: systemImage ?? "square")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.tint)
@@ -242,8 +257,8 @@ struct FilterChip: View {
         Button(action: action) {
             Text(title)
                 .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, Theme.space12)
+                .padding(.vertical, Theme.space8)
                 .foregroundStyle(isSelected ? Color.white : Color.primary)
                 // The chip was thirty-eight points tall, which is under
                 // Apple's minimum: a filter is tapped one-handed, so the
@@ -266,7 +281,7 @@ struct SectionHeader: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Theme.space4) {
                 Text(title)
                     .font(.title3.weight(.bold))
                 if let subtitle {
@@ -275,7 +290,7 @@ struct SectionHeader: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            Spacer(minLength: 8)
+            Spacer(minLength: Theme.space8)
             if let actionTitle, let action {
                 Button(actionTitle, action: action)
                     .font(.subheadline.weight(.semibold))
