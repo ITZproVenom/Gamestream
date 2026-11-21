@@ -1,10 +1,10 @@
 import SwiftUI
 import UIKit
 
-/// The reading container shared by scrolling pages.
+/// The reading container shared by fixed pages.
 ///
-/// It owns the page inset, the centred maximum width and the clearance below
-/// the last card so content never disappears under the home indicator.
+/// It owns the page inset and the centred maximum width so sheets and panels
+/// use the same guide as scrolling pages.
 struct PageContainer<Content: View>: View {
     var spacing: CGFloat = Theme.Spacing.large
     var alignment: HorizontalAlignment = .leading
@@ -15,8 +15,7 @@ struct PageContainer<Content: View>: View {
             content
         }
         .padding(.horizontal, Theme.pageInset)
-        .padding(.bottom, Theme.pageBottomClearance)
-        .frame(maxWidth: Theme.readableContentMaxWidth)
+        .frame(maxWidth: Theme.readingWidth)
         .frame(maxWidth: .infinity)
     }
 }
@@ -33,6 +32,7 @@ struct PageScroll<Content: View>: View {
             PageContainer(spacing: spacing, alignment: alignment) {
                 content
             }
+            .padding(.bottom, Theme.pageBottomClearance)
         }
         .containerRelativeFrame(Axis.Set.horizontal)
     }
