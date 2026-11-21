@@ -559,6 +559,21 @@ struct StreamView: View {
         return parts.joined(separator: ", ")
     }
 
+    private func liveValue(_ text: String, font: Font, width: CGFloat) -> some View {
+        Text(text)
+            .font(font.monospacedDigit())
+            .lineLimit(1)
+            .frame(minWidth: width, alignment: .center)
+            .clipped()
+    }
+
+    private func readOutCapsule<V: View>(_ content: V) -> some View {
+        content
+            .padding(.horizontal, Theme.space12)
+            .padding(.vertical, Theme.space8)
+            .glassEffect(.regular, in: Capsule())
+    }
+
     private func statChip(_ value: String, _ caption: String) -> some View {
         HStack(spacing: 3) {
             Text(value)
