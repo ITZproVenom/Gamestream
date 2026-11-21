@@ -137,8 +137,9 @@ struct StatsView: View {
     }
 
     private var weekChart: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SectionHeader(title: "This week", subtitle: "Minutes played per day")
+        GlassCard {
+            VStack(alignment: .leading, spacing: Theme.Spacing.small) {
+                SectionHeader(title: "This week", subtitle: "Minutes played per day")
             Chart(library.dailyTotals(days: 7)) { day in
                 BarMark(
                     x: .value("Day", day.day, unit: .day),
@@ -162,18 +163,18 @@ struct StatsView: View {
             .chartYAxis {
                 AxisMarks(position: .leading)
             }
-            .frame(height: 170)
+                .frame(height: 170)
+            }
         }
-        .padding(18)
-        .glassEffect(.regular, in: Theme.cardShape)
         .padding(.horizontal, Theme.pageInset)
     }
 
     private var topGames: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SectionHeader(title: "Most played")
+        GlassCard {
+            VStack(alignment: .leading, spacing: Theme.Spacing.small) {
+                SectionHeader(title: "Most played")
 
-            VStack(spacing: 14) {
+                VStack(spacing: Theme.Spacing.small) {
                 ForEach(Array(library.topGames(limit: 5).enumerated()), id: \.element.id) { index, total in
                     HStack(spacing: 13) {
                         Text("\(index + 1)")
@@ -193,8 +194,7 @@ struct StatsView: View {
                 }
             }
         }
-        .padding(18)
-        .glassEffect(.regular, in: Theme.cardShape)
+        }
         .padding(.horizontal, Theme.pageInset)
     }
 
@@ -221,19 +221,19 @@ struct StatsView: View {
     }
 
     private func longestCard(_ record: PlayRecord) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
-            Text("Longest session").font(.headline)
-            Text(record.title)
-                .font(.title3.weight(.bold))
-                .lineLimit(2)
-            Text("\(Format.duration(record.seconds)) on "
-                 + record.startedAt.formatted(date: .abbreviated, time: .shortened))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+        GlassCard {
+            VStack(alignment: .leading, spacing: Theme.Spacing.xxSmall) {
+                Text("Longest session").font(.headline)
+                Text(record.title)
+                    .font(.title3.weight(.bold))
+                    .lineLimit(2)
+                Text("\(Format.duration(record.seconds)) on "
+                     + record.startedAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
-        .glassEffect(.regular, in: Theme.cardShape)
         .padding(.horizontal, Theme.pageInset)
     }
 
