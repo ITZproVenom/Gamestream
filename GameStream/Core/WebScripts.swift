@@ -360,8 +360,8 @@ enum WebScripts {
 
     /// Extracts only Xbox Cloud Gaming's rendered search-result cards so the
     /// native Search tab can present live Xbox results without showing the site.
-    /// This intentionally reads rendered links instead of relying on an
-    /// undocumented search API; if Xbox changes its page markup, extraction
+    /// This intentionally reads the cards the site renders instead of relying on
+    /// an undocumented search API; if Xbox changes its page markup, extraction
     /// fails with a visible state rather than silently falling back locally.
     /// Reads the titles Xbox's own cloud pages list.
     ///
@@ -630,7 +630,7 @@ enum WebScripts {
             attempts++;
             // The results live in an element the site names. If it is
             // renamed - which it has been before - the whole page is read
-            // instead, and the same links are found in it.
+            // instead, and the same cards are found in it.
             var root = document.querySelector("#gamepass-root")
                 || document.querySelector("[id*=gamepass]")
                 || document.body;
@@ -648,6 +648,43 @@ enum WebScripts {
             }
             var seen = {};
             var items = [];
+
+            // The current site renders each result as a button or a div, not
+            // as a game link. Its product id is the stable part; the title and
+            // artwork live inside that card. A virtual grid also keeps an
+            // inert measuring copy of each card, which must not become the
+            // result in place of the visible one.
+            var cards = root.querySelectorAll("[data-product-id]");
+            for (var c = 0; c < cards.length; c++) {
+                var card = cards[c];
+                if (card.closest("[data-sentinel], [inert]")) continue;
+                var cardID = (card.getAttribute("data-product-id") || "").trim();
+                if (!/^[A-Za-z0-9]{8,20}$/.test(cardID) || seen[cardID.toUpperCase()]) continue;
+                var cardImage = card.querySelector("img.game-tile-primary-image")
+                    || card.querySelector("img");
+                var titleElement = card.querySelector('[id$="-title"]');
+                var cardTitle = titleElement
+                    ? (titleElement.innerText || titleElement.textContent || "").trim() : "";
+                if (!cardTitle && cardImage) {
+                    cardTitle = (cardImage.getAttribute("alt") || "").trim();
+                }
+                if (!cardTitle) {
+                    titleElement = card.querySelector('[class~="game-title"], [class~="gameTitle"]');
+                    cardTitle = titleElement
+                        ? (titleElement.innerText || titleElement.textContent || "").trim() : "";
+                }
+                if (!cardTitle) continue;
+                var normalized = cardTitle.normalize ? cardTitle.normalize("NFKD") : cardTitle;
+                var cardSlug = normalized.toLowerCase().replace(/[\u0300-\u036f]/g, "")
+                    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || cardID.toLowerCase();
+                seen[cardID.toUpperCase()] = true;
+                var cardImageURL = cardImage
+                    ? (cardImage.currentSrc || cardImage.src || "") : "";
+                items.push({ id: cardID, slug: cardSlug, title: cardTitle, image: cardImageURL });
+            }
+
+            // Keep reading the old link markup as well, so a market which
+            // has not received the new cards does not lose search.
             var links = root.querySelectorAll('a[href*="/play/games/"]');
             for (var i = 0; i < links.length; i++) {
                 var link = links[i];

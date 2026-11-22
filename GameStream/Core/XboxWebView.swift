@@ -471,8 +471,8 @@ struct XboxWebView: UIViewRepresentable {
                       let href = body["href"] as? String,
                       let sourceURL = URL(string: href),
                       sourceURL.scheme == "https",
-                      sourceURL.host == "www.xbox.com",
-                      sourceURL.path.contains("/play/search") else { return }
+                      sourceURL.host == "www.xbox.com" || sourceURL.host == "play.xbox.com",
+                      sourceURL.path.contains("/play/search") || sourceURL.path == "/search" else { return }
                 let status = body["status"] as? String ?? "error"
                 let message = body["message"] as? String ?? ""
                 var seen = Set<String>()
@@ -487,7 +487,9 @@ struct XboxWebView: UIViewRepresentable {
                           let title = row["title"] as? String, !title.isEmpty else { return nil }
                     let poster = (row["image"] as? String).flatMap { URL(string: $0) }
                     let safePoster = poster.flatMap {
-                        $0.scheme == "https" && $0.host == "store-images.s-microsoft.com" ? $0 : nil
+                        guard $0.scheme == "https" else { return nil }
+                        if $0.host == "store-images.s-microsoft.com" { return $0 }
+                        return $0.host == "play.xbox.com" && $0.path.hasPrefix("/media/images/") ? $0 : nil
                     }
                     return Game(id: id, slug: slug, title: title, tagline: "",
                                 genre: "Cloud", posterURL: safePoster)
