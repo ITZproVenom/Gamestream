@@ -188,7 +188,7 @@ struct GameCard: View {
     var caption: String?
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @ScaledMetric(relativeTo: .subheadline) private var defaultWidth = 144
+    @ScaledMetric(relativeTo: .subheadline) private var defaultWidth = 128
     @ScaledMetric(relativeTo: .subheadline) private var titleSlotHeight = 40
     @ScaledMetric(relativeTo: .caption) private var captionSlotHeight = 18
 
@@ -200,9 +200,8 @@ struct GameCard: View {
                 Text(game.title)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-                    .frame(maxWidth: .infinity, minHeight: titleSlotHeight,
+                    .frame(maxWidth: .infinity, height: titleSlotHeight,
                            alignment: .topLeading)
-                    .fixedSize(horizontal: false, vertical: dynamicTypeSize.isAccessibilitySize)
                 // A blank caption still occupies its row. This keeps every
                 // card bottom and every following shelf on the same guide.
                 Text(caption ?? " ")
