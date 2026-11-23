@@ -103,6 +103,29 @@ struct GameArtwork: View {
     }
 }
 
+/// Text in a card that keeps the row it reserves at ordinary text sizes and
+/// grows with the text at accessibility sizes.
+///
+/// The reserved height is what keeps every card in a shelf on the same
+/// guide, so it stays a minimum and never a limit. At accessibility sizes
+/// the text takes the lines it needs inside the card, and the card - and
+/// the button that holds it - grow to fit it, so nothing is cut off and
+/// nothing spills out over the card or the buttons beside it.
+private struct CardTextRow: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    var reservedHeight: CGFloat
+    var lines: Int
+    var fillsWidth: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : lines)
+            .frame(maxWidth: fillsWidth ? CGFloat.infinity : nil,
+                   minHeight: reservedHeight,
+                   alignment: .topLeading)
+    }
+}
+
 /// A poster with its title, used in every grid.
 ///
 /// The artwork link and the play button are siblings in a `ZStack`, never
@@ -114,7 +137,6 @@ struct GameTile: View {
     let play: () -> Void
 
     @EnvironmentObject private var library: LibraryStore
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .subheadline) private var titleSlotHeight = 40
     @ScaledMetric(relativeTo: .caption) private var captionSlotHeight = 18
 
@@ -163,15 +185,15 @@ struct GameTile: View {
             VStack(alignment: .leading, spacing: Theme.Spacing.xxxSmall) {
                 Text(game.title)
                     .font(.subheadline.weight(.semibold))
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-                    .frame(minHeight: titleSlotHeight, alignment: .topLeading)
-                    .fixedSize(horizontal: false, vertical: dynamicTypeSize.isAccessibilitySize)
+                    .modifier(CardTextRow(reservedHeight: titleSlotHeight,
+                                          lines: 2,
+                                          fillsWidth: false))
                 Text(game.genre.isEmpty ? " " : game.genre)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                    .frame(minHeight: captionSlotHeight, alignment: .topLeading)
-                    .fixedSize(horizontal: false, vertical: dynamicTypeSize.isAccessibilitySize)
+                    .modifier(CardTextRow(reservedHeight: captionSlotHeight,
+                                          lines: 1,
+                                          fillsWidth: false))
                     .accessibilityHidden(game.genre.isEmpty)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -187,7 +209,6 @@ struct GameCard: View {
     var width: CGFloat?
     var caption: String?
 
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .subheadline) private var defaultWidth = 128
     @ScaledMetric(relativeTo: .subheadline) private var titleSlotHeight = 40
     @ScaledMetric(relativeTo: .caption) private var captionSlotHeight = 18
@@ -199,18 +220,17 @@ struct GameCard: View {
                     .aspectRatio(3 / 4, contentMode: .fit)
                 Text(game.title)
                     .font(.subheadline.weight(.semibold))
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-                    .frame(maxWidth: .infinity, height: titleSlotHeight,
-                           alignment: .topLeading)
+                    .modifier(CardTextRow(reservedHeight: titleSlotHeight,
+                                          lines: 2,
+                                          fillsWidth: true))
                 // A blank caption still occupies its row. This keeps every
                 // card bottom and every following shelf on the same guide.
                 Text(caption ?? " ")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                    .frame(maxWidth: .infinity, minHeight: captionSlotHeight,
-                           alignment: .topLeading)
-                    .fixedSize(horizontal: false, vertical: dynamicTypeSize.isAccessibilitySize)
+                    .modifier(CardTextRow(reservedHeight: captionSlotHeight,
+                                          lines: 1,
+                                          fillsWidth: true))
                     .accessibilityHidden(caption == nil)
             }
             .padding(Theme.cardContentInset)
