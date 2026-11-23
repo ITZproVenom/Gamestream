@@ -472,7 +472,10 @@ struct XboxWebView: UIViewRepresentable {
                       let sourceURL = URL(string: href),
                       sourceURL.scheme == "https",
                       sourceURL.host == "www.xbox.com" || sourceURL.host == "play.xbox.com",
-                      sourceURL.path.contains("/play/search") || sourceURL.path == "/search" else { return }
+                      // The site redirects /play/search to a localized path
+                      // like /en-IN/play/search, so the exact path must not
+                      // be required.
+                      sourceURL.path.contains("/search") else { return }
                 let status = body["status"] as? String ?? "error"
                 let message = body["message"] as? String ?? ""
                 var seen = Set<String>()

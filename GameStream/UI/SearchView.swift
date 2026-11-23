@@ -193,11 +193,24 @@ struct SearchView: View {
         return nil
     }
 
+    /// Takes the answer from the search page.
+    ///
+    /// The site redirects the search page to a localized path such as
+    /// /en-IN/play/search, so the host and the path of the URL that comes
+    /// back are not the ones that were asked for. Only the query text
+    /// identifies the answer, so it is the query text that is compared.
     private func receiveXboxResults(_ sourceURL: URL, _ games: [Game],
                                    _ status: String, _ message: String) {
-        guard let returnedQuery = URLComponents(url: sourceURL, resolvingAgainstBaseURL: false)?
-                .queryItems?.first(where: { $0.name == "q" })?.value,
-              returnedQuery.caseInsensitiveCompare(submittedSearchQuery) == .orderedSame else { return }
+        // A search must be on screen for an answer to belong to it.
+        guard submittedSearchURL != nil else { return }
+        // When the page still carries the query text, it has to be the text
+        // that was searched for. The redirect can rewrite the URL and drop
+        // the query it carried, and then the answer is the one the search
+        // in flight is waiting for.
+        if let returnedQuery = URLComponents(url: sourceURL, resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "q" })?.value {
+            guard returnedQuery.caseInsensitiveCompare(submittedSearchQuery) == .orderedSame else { return }
+        }
         liveGames = games
         liveSearchStatus = status
         liveSearchMessage = message
